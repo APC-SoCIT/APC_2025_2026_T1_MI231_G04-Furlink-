@@ -1,0 +1,1 @@
+Access LogiTeh's Fully Dressed Use Cases through this [link](https://asiapacificcollege-my.sharepoint.com/:w:/g/personal/lcandaya2_student_apc_edu_ph/EWpsCCGU6dFGiK1kuJI1pRgBSydZbAun9KEr4f5txDkUzA?e=WNmRsF)
