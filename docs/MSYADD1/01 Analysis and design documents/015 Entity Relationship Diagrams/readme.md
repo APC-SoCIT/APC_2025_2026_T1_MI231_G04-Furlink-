@@ -1,0 +1,6 @@
+# LogiTeh Entity Relationship Diagram
+
+ERD First Draft (To be reviewed by adviser) - [LogiTeh ERD Draft 1](https://asiapacificcollege.sharepoint.com/:b:/r/sites/MSYADD1MI231T1AY2025-2026/Shared%20Documents/G04%20LogiTeh/Finals%20Deliverables/LogiTeh_ERD%20Draft%201.pdf?csf=1&web=1&e=FG0quc) </br>
+ERD Second Draft (Reviewed by adviser) - [LogiTeh ERD Draft 2](https://asiapacificcollege.sharepoint.com/:b:/r/sites/MSYADD1MI231T1AY2025-2026/Shared%20Documents/G04%20LogiTeh/Finals%20Deliverables/LogiTeh_ERD%20Draft%202.pdf?csf=1&web=1&e=YDwD3l)
+
+
