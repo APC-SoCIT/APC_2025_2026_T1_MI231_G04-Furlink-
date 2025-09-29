@@ -1,3 +1,4 @@
-# LogiTeh Realtime Cloud database
+# LogiTeh Realtime Cloud Database
 
 1. Supabase
+
