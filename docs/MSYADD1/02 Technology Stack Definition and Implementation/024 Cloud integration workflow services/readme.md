@@ -1,3 +1,4 @@
 # LogiTeh Clound Integration Workflow Services
 
-Not Implemented
+1. Supabase Auth
+2. Supabase Storage
