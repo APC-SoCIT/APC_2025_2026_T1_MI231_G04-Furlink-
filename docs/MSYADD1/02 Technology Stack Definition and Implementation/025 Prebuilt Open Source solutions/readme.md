@@ -2,5 +2,5 @@
 
 1. Supabase
 2. React Router
-3. Express.js
-4. React Icons
+3. React Icons
+
