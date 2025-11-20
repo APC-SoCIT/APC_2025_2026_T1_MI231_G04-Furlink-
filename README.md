@@ -1,2 +1,2 @@
 # apc-msyadd1-template
-Template repository for APC SMSYADD1
+[furlink repository](https://github.com/afgsdoria/furlink-petcare-booking)
