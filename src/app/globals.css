@@ -31,9 +31,14 @@ a {
   text-decoration: none;
 }
 
-/* App Layout Wrapper */
+/* App Layout Wrapper - Updated to allow section backgrounds to bleed edge-to-edge */
 .main-wrapper {
   flex-grow: 1;
+  width: 100%;
+}
+
+/* Centered content utility container - keeps layout contents aligned to 1280px grid */
+.content-container {
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
@@ -45,6 +50,7 @@ a {
 /* Header Component Styling */
 .site-header {
   padding: 24px 24px 0 24px;
+  width: 100%;
 }
 
 .header-container {
@@ -184,6 +190,83 @@ a {
   height: 100%;
 }
 
+/* --- Seamless Edge-to-Edge "How To Use" Section --- */
+.howto-section {
+  background-color: #f9fafb; /* True full-bleed background */
+  padding: 4rem 1rem;
+  width: 100%;
+  text-align: center;
+  margin-top: 60px;
+}
+
+.howto-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--btn-dark-blue); 
+  margin-bottom: 40px;
+}
+
+.cards-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* 3D Flip Card Architecture - Set to an exact 16:9 pixel scale */
+.flip-card {
+  background-color: transparent;
+  width: 436px;
+  height: 275px; 
+  perspective: 1000px;
+  cursor: pointer;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
+}
+
+.flip-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+  background-color: #f9fafb;
+}
+
+.card-back {
+  transform: rotateY(180deg);
+}
+
+.card-asset {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain; 
+}
+
+/* Keep both cards on a single flat line for larger viewports */
+@media (min-width: 992px) {
+  .cards-container {
+    flex-wrap: nowrap;
+  }
+}
+
 /* UI RBAC Placeholders Layout */
 .placeholder-card {
   padding: 32px;
@@ -202,6 +285,7 @@ a {
   border-radius: 8px;
 }
 
+/* Media Queries */
 @media (max-width: 968px) {
   .landing-grid {
     grid-template-columns: 1fr;
