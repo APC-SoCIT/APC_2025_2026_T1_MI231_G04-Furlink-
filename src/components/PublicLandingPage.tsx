@@ -1,10 +1,20 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 
 export default function PublicLandingPage() {
+  // Tracks which card index is flipped; null means no cards are flipped
+  const [flippedIndex, setFlippedIndex] = useState<number | null>(null);
+
+  const toggleFlip = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation(); 
+    setFlippedIndex((prev) => (prev === index ? null : index));
+  };
+
   return (
     <div style={{ width: '100%' }}>
-      
-      {/* Container wraps your Hero components to isolate formatting width rules */}
+      {/* Hero Section */}
       <div className="content-container">
         <div className="landing-grid">
           <section className="content-section">
@@ -18,16 +28,7 @@ export default function PublicLandingPage() {
             </p>
             <Link href="/login" className="cta-button">
               <span>Book now</span>
-              <svg 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2.5" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
@@ -36,50 +37,50 @@ export default function PublicLandingPage() {
 
           <section className="image-section">
             <div className="hero-card">
-              <img 
-                src="/images/pet-img-homepage.png" 
-                alt="Cat and dog getting clean grooming service treatment" 
-                className="hero-image"
-              />
+              <img src="/images/pet-img-homepage.png" alt="Pet service" className="hero-image" />
             </div>
           </section>
         </div>
       </div>
 
-      {/* Full-width block element sits out here completely fluid */}
+      {/* How to Use Section */}
       <section className="howto-section">
-        {/* We use content-container here to keep the title and flip-cards centered on the background strip */}
         <div className="content-container" style={{ flexDirection: 'column' }}>
           <h2 className="howto-title">How to use furlink</h2>
           
           <div className="cards-container">
-            {/* Card 1 */}
-            <div className="flip-card">
+            {/* Card 1: Pet Owner*/}
+            <div 
+              className={`flip-card ${flippedIndex === 0 ? 'is-flipped' : ''}`}
+              onClick={(e) => toggleFlip(e, 0)} 
+            >
               <div className="flip-card-inner">
                 <div className="card-front">
-                  <img src="/images/howto-petowner-front.png" alt="Pet Owner Front View" className="card-asset" />
+                  <img src="/images/howto-petowner-front.png" alt="Pet Owner Front" className="card-asset" />
                 </div>
                 <div className="card-back">
-                  <img src="/images/howto-petowner-back.png" alt="Pet Owner Back View" className="card-asset" />
+                  <img src="/images/howto-petowner-back.png" alt="Pet Owner Back" className="card-asset" />
                 </div>
               </div>
             </div>
 
-            {/* Card 2 */}
-            <div className="flip-card">
+            {/* Card 2: Service Provider*/}
+            <div 
+              className={`flip-card ${flippedIndex === 1 ? 'is-flipped' : ''}`}
+              onClick={(e) => toggleFlip(e, 1)}
+            >
               <div className="flip-card-inner">
                 <div className="card-front">
-                  <img src="/images/howto-provider-front.png" alt="Service Provider Front View" className="card-asset" />
+                  <img src="/images/howto-provider-front.png" alt="Provider Front" className="card-asset" />
                 </div>
                 <div className="card-back">
-                  <img src="/images/howto-provider-back.png" alt="Service Provider Back View" className="card-asset" />
+                  <img src="/images/howto-provider-back.png" alt="Provider Back" className="card-asset" />
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
-
     </div>
   );
 }

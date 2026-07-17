@@ -1,4 +1,6 @@
-/* Core Variables & Resets */
+/* ==========================================================================
+   CORE VARIABLES & RESETS
+   ========================================================================== */
 :root {
   --bg-dark-blue: #0a217a;      
   --btn-dark-blue: #0e2994;     
@@ -31,13 +33,11 @@ a {
   text-decoration: none;
 }
 
-/* App Layout Wrapper - Updated to allow section backgrounds to bleed edge-to-edge */
 .main-wrapper {
   flex-grow: 1;
   width: 100%;
 }
 
-/* Centered content utility container - keeps layout contents aligned to 1280px grid */
 .content-container {
   max-width: 1280px;
   width: 100%;
@@ -47,7 +47,9 @@ a {
   align-items: center;
 }
 
-/* Header Component Styling */
+/* ==========================================================================
+  HEADER COMPONENT STYLING
+   ========================================================================== */
 .site-header {
   padding: 24px 24px 0 24px;
   width: 100%;
@@ -64,6 +66,7 @@ a {
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  position: relative; 
 }
 
 .logo-container {
@@ -107,14 +110,138 @@ a {
   font-size: 14px;
   font-weight: 600;
   transition: background-color 0.2s;
+  display: inline-block;
+  text-align: center;
 }
 
 .nav-btn-link:hover {
   background-color: #071966;
 }
 
-/* Public Landing Page Grid Layout */
-.landing-grid {
+.view-toggle-wrapper {
+  display: flex;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 20px;
+}
+
+.toggle-btn {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  background: transparent;
+  color: var(--btn-dark-blue);
+  transition: all 0.2s ease;
+}
+
+.toggle-btn.active-toggle {
+  background: var(--btn-dark-blue);
+  color: var(--text-white);
+}
+
+/* Hides the hamburger on bigger screens*/
+.hamburger-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 24px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 110;
+}
+
+.hamburger-toggle span {
+  width: 100%;
+  height: 3px;
+  background-color: var(--btn-dark-blue);
+  border-radius: px;
+  transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   RESPONSIVE TABLET & MOBILE BREAKS (< 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .hamburger-toggle {
+    display: flex;
+  }
+  .hamburger-toggle.open span:nth-child(1) {
+    transform: translateY(7.5px) rotate(45deg);
+  }
+  .hamburger-toggle.open span:nth-child(2) {
+    opacity: 0;
+  }
+  .hamburger-toggle.open span:nth-child(3) {
+    transform: translateY(-7.5px) rotate(-45deg);
+  }
+
+  .nav-menu {
+    position: absolute;
+    top: 76px; 
+    left: 0;
+    right: 0;
+    background-color: #f9fafb;
+    border-radius: 10px; 
+    padding: 24px;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  .nav-menu.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .view-toggle-wrapper {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav-text-link, .nav-btn-link {
+    width: 100%;
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  .nav-menu .signup-mobile-text {
+    background-color: transparent;
+    color: var(--btn-dark-blue);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 0;
+    padding: 12px 0;
+    transition: none;
+  }
+
+  .nav-menu .signup-mobile-text:hover {
+    background-color: transparent;
+    opacity: 0.8;
+  }
+
+  .nav-menu .nav-btn-link {
+    background-color: var(--btn-dark-blue);
+    color: var(--text-white);
+    border-radius: 24px; 
+    margin-top: 4px;
+  }
+}
+
+/* ==========================================================================
+    PUBLIC LANDING PAGE GRID LAYOUT
+   ========================================================================== */
+  .landing-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 48px;
@@ -190,9 +317,11 @@ a {
   height: 100%;
 }
 
-/* --- Seamless Edge-to-Edge "How To Use" Section --- */
+/* ==========================================================================
+   HOW TO USE SECTION
+   ========================================================================== */
 .howto-section {
-  background-color: #f9fafb; /* True full-bleed background */
+  background-color: #f9fafb;
   padding: 4rem 1rem;
   width: 100%;
   text-align: center;
@@ -202,7 +331,7 @@ a {
 .howto-title {
   font-size: 36px;
   font-weight: 800;
-  color: var(--btn-dark-blue); 
+  color: var(--btn-dark-blue);
   margin-bottom: 40px;
 }
 
@@ -215,11 +344,12 @@ a {
   width: 100%;
 }
 
-/* 3D Flip Card Architecture - Set to an exact 16:9 pixel scale */
+/* 3D Flip Card Architecture */
 .flip-card {
   background-color: transparent;
-  width: 436px;
-  height: 275px; 
+  width: 100%;
+  max-width: 436px;
+  aspect-ratio: 436 / 275;
   perspective: 1000px;
   cursor: pointer;
 }
@@ -233,7 +363,15 @@ a {
   transform-style: preserve-3d;
 }
 
-.flip-card:hover .flip-card-inner {
+/* Desktop Hover for larger screens */
+@media (min-width: 992px) {
+  .flip-card:hover .flip-card-inner {
+    transform: rotateY(180deg);
+  }
+}
+
+/* Mobile/Tablet Click for smaller screens*/
+.flip-card.is-flipped .flip-card-inner {
   transform: rotateY(180deg);
 }
 
@@ -246,7 +384,7 @@ a {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-  background-color: #f9fafb;
+  background-color: transparent;
 }
 
 .card-back {
@@ -257,10 +395,10 @@ a {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain; 
+  object-fit: cover;
 }
 
-/* Keep both cards on a single flat line for larger viewports */
+/* Wraps container on desktop */
 @media (min-width: 992px) {
   .cards-container {
     flex-wrap: nowrap;

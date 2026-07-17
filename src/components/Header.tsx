@@ -8,6 +8,7 @@ export default function Header() {
   const supabase = createClientComponentClient();
   const [role, setRole] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // Tracks responsive menu dropdown state
 
   useEffect(() => {
     const fetchUserContext = async () => {
@@ -16,7 +17,6 @@ export default function Header() {
         const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
         setRole(data?.role || null);
         
-        // Read or initialize the preferred view mode local storage token state
         const preservedView = localStorage.getItem('furlink_preferred_view');
         if (preservedView) {
           setActiveView(preservedView);
@@ -30,11 +30,10 @@ export default function Header() {
     fetchUserContext();
   }, [supabase]);
 
-  // View toggle function for hybrid user accounts
   const handleToggleView = (targetView: string) => {
     setActiveView(targetView);
     localStorage.setItem('furlink_preferred_view', targetView);
-    window.dispatchEvent(new Event('furlink_view_changed')); // Dispatches cross-component updates
+    window.dispatchEvent(new Event('furlink_view_changed'));
   };
 
   return (
@@ -43,31 +42,41 @@ export default function Header() {
         <Link href="/" className="logo-container" style={{ display: 'flex', alignItems: 'center' }}>
           <img 
             src={brandIcon.src} 
-            alt="furlink Logo" 
-            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+            alt="Furlink Brand Logo" 
+            style={{ width: '80px', height: '80px', objectFit: 'contain' }} 
           />
         </Link>
         
-        <nav className="nav-menu">
-          {activeView && <Link href="/dashboard" className="nav-link">Home Dashboard</Link>}
+        {/* Responsive Hamburger Toggle Button */}
+        <button 
+          className={`hamburger-toggle ${isMenuOpen ? 'open' : ''}`}
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          aria-label="Toggle navigation menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
 
-          {/* Render contextual path elements based on active layout view */}
-          {activeView === 'pet_owner' && <Link href="/pets" className="nav-link">My Pets</Link>}
-          {activeView === 'service_provider' && <Link href="/services" className="nav-link">My Listings</Link>}
-          {activeView === 'admin' && <Link href="/admin/users" className="nav-link admin-link">Moderate System</Link>}
+        {/* Navigation Menu Wrapper - Toggles active visibility state */}
+        <nav className={`nav-menu ${isMenuOpen ? 'active' : ''}`}>
+          {activeView && <Link href="/dashboard" className="nav-link" onClick={() => setIsMenuOpen(false)}>Home Dashboard</Link>}
 
-          {/* Toggle Button for hybrid profiles */}
+          {activeView === 'pet_owner' && <Link href="/pets" className="nav-link" onClick={() => setIsMenuOpen(false)}>My Pets</Link>}
+          {activeView === 'service_provider' && <Link href="/services" className="nav-link" onClick={() => setIsMenuOpen(false)}>My Listings</Link>}
+          {activeView === 'admin' && <Link href="/admin/users" className="nav-link admin-link" onClick={() => setIsMenuOpen(false)}>Moderate System</Link>}
+
           {role === 'both' && (
-            <div className="view-toggle-wrapper" style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '20px' }}>
+            <div className="view-toggle-wrapper">
               <button 
-                onClick={() => handleToggleView('pet_owner')} 
-                style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: activeView === 'pet_owner' ? '#0e2994' : 'transparent', color: activeView === 'pet_owner' ? '#fff' : '#0e2994' }}
+                onClick={() => { handleToggleView('pet_owner'); setIsMenuOpen(false); }} 
+                className={`toggle-btn ${activeView === 'pet_owner' ? 'active-toggle' : ''}`}
               >
                 Owner View
               </button>
               <button 
-                onClick={() => handleToggleView('service_provider')} 
-                style={{ padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: activeView === 'service_provider' ? '#0e2994' : 'transparent', color: activeView === 'service_provider' ? '#fff' : '#0e2994' }}
+                onClick={() => { handleToggleView('service_provider'); setIsMenuOpen(false); }} 
+                className={`toggle-btn ${activeView === 'service_provider' ? 'active-toggle' : ''}`}
               >
                 Provider View
               </button>
@@ -77,7 +86,8 @@ export default function Header() {
           {!activeView && (
             <>
               <Link href="/about" className="nav-text-link">About furlink</Link>
-              <Link href="/login" className="nav-btn-link">Log in or Sign Up</Link>
+              <Link href="/signup" className="nav-text-link signup-mobile-text">Sign Up</Link>
+              <Link href="/login" className="nav-btn-link">Log In</Link>
             </>
           )}
         </nav>
