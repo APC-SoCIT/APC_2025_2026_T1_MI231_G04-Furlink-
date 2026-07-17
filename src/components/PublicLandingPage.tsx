@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Footer from '../components/Footer';
 
 export default function PublicLandingPage() {
   // Tracks which card index is flipped; null means no cards are flipped
@@ -81,6 +82,8 @@ export default function PublicLandingPage() {
           </div>
         </div>
       </section>
+
+      <Footer />
     </div>
   );
 }

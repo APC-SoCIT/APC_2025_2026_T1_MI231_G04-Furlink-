@@ -48,7 +48,7 @@ a {
 }
 
 /* ==========================================================================
-  HEADER COMPONENT STYLING
+  HEADER COMPONENT
    ========================================================================== */
 .site-header {
   padding: 24px 24px 0 24px;
@@ -442,5 +442,63 @@ a {
   }
   .main-heading {
     font-size: 40px;
+  }
+}
+
+/* ==========================================================================
+   FOOTER COMPONENT
+   ========================================================================== */
+.site-footer {
+  background-color: #f9fafb;
+  width: 100%;
+  padding: 2rem 24px;
+  color: var(--btn-dark-blue);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-left {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.footer-right {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.social-icon-link {
+  color: var(--btn-dark-blue); 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.social-icon-link:hover {
+  opacity: 0.7;
+  transform: translateY(-2px);
+}
+
+.footer-left a:hover, .footer-right a:hover {
+  opacity: 0.7;
+}
+
+/* Responsive adjustment for small screens */
+@media (max-width: 768px) {
+  .footer-container {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
   }
 }
