@@ -86,7 +86,7 @@ export default function Header() {
           {!activeView && (
             <>
               <Link href="/about" className="nav-text-link">About furlink</Link>
-              <Link href="/signup" className="nav-text-link signup-mobile-text">Sign Up</Link>
+              <Link href="/auth/signup" className="nav-text-link signup-mobile-text">Sign Up</Link>
               <Link href="/login" className="nav-btn-link">Log In</Link>
             </>
           )}

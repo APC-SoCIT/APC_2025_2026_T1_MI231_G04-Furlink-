@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import './globals.css';
+import './auth/auth.css';
 
 export const metadata: Metadata = {
   title: 'furlink',
