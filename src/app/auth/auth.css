@@ -70,6 +70,76 @@ body {
   outline: none; 
 }
 
+/* Base style for all input wrappers and standard inputs */
+.input-group input, 
+.phone-input-container {
+    border: 2px solid #00008B; /* Dark blue border as per your design */
+    border-radius: 8px;
+    padding: 0.85rem;
+    height: 50px; /* Consistent height */
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background-color: white;
+}
+
+/* Specific styling for the phone container layout */
+.phone-input-container {
+    padding: 0 12px; /* Adjust internal spacing */
+}
+
+.phone-prefix {
+    font-weight: 500;
+    color: #4a5568;
+    margin-right: 8px;
+}
+
+.phone-divider {
+    width: 1.5px;
+    height: 24px;
+    background-color: #00008B; /* Match border color */
+    margin-right: 8px;
+}
+
+.phone-input-container input {
+    border: none;
+    outline: none;
+    padding: 0;
+    height: 100%;
+}
+
+/* Container styling remains the same */
+.date-input-container {
+    display: flex;
+    align-items: center;
+    border: 2px solid #00008B; /* Dark blue border */
+    border-radius: 8px;
+    padding: 0 12px;
+    height: 50px;
+    background-color: white;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Force the internal input to inherit container properties */
+.date-input-container input {
+    border: none;         /* Removes the red border */
+    outline: none;        /* Removes focus outline */
+    flex: 1;              /* Makes input fill width */
+    font-size: 1rem;
+    color: #4a5568;
+    background: transparent;
+    height: 100%;
+    padding: 0;           /* Resets default padding */
+}
+
+/* Hides default native icon so you can control layout */
+.date-input-container input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6; /* You can adjust this to style the icon */
+}
+
 .role-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;

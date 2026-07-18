@@ -62,8 +62,8 @@ export default function SignupPage() {
     };
 
    const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
   const { data, error } = await supabase.auth.signUp({
             email: formData.email,
@@ -98,6 +98,11 @@ export default function SignupPage() {
         return agreedToTerms && !hasErrors && allFieldsFilled;
     };
 
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
     console.log("Current Errors:", errors);
     console.log("Is button disabled?", loading || Object.values(errors).some(err => err !== "") || !agreedToTerms);
 
@@ -130,11 +135,28 @@ export default function SignupPage() {
 
             <div className="form-row">
             <div className="input-group">
-                <input name="mobile" placeholder="Mobile Number (e.g., 9123456789)" onChange={(e) => setFormData({...formData, mobile: e.target.value})} onBlur={handleBlur} className={errors.mobile ? "input-error" : ""} />
+                <div className="phone-input-container">
+                    <span className="phone-prefix">+63</span>
+                    <div className="phone-divider"></div>
+                    <input 
+                        name="mobile" 
+                        placeholder="9XXXXXXXXX" 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                    />
+                </div>
                 {touched.mobile && errors.mobile && <span className="error-text">{errors.mobile}</span>}
             </div>
             <div className="input-group">
-                <input name="dob" type="date" onChange={(e) => setFormData({...formData, dob: e.target.value})} onBlur={handleBlur} className={errors.dob ? "input-error" : ""} />
+                <div className="date-input-container">
+                    <input 
+                        type="date" 
+                        name="dob" 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        className={errors.dob ? "input-error" : ""} 
+                    />
+                </div>
                 {touched.dob && errors.dob && <span className="error-text">{errors.dob}</span>}
             </div>
             </div>
@@ -183,7 +205,7 @@ export default function SignupPage() {
             <div className="terms-container">
             <input type="checkbox" id="termsCheckbox" onChange={(e) => setAgreedToTerms(e.target.checked)} />
             <label htmlFor="termsCheckbox">
-                I agree to the <Link href="/terms" className="terms-link">Terms</Link> and <Link href="/privacy" className="terms-link">Privacy Policy</Link> of furlink.
+                I agree to the <Link href="/terms" className="terms-link">Terms and Conditions</Link> and <Link href="/privacy" className="terms-link">Privacy Policy</Link> of furlink.
             </label>
             {errors.terms && <span className="error-text">{errors.terms}</span>}
             </div>

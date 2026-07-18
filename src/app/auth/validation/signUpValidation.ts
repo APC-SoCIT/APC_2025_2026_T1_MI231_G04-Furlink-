@@ -8,6 +8,9 @@ export const validateSignup = (formData: any, agreedToTerms: boolean) => {
   if (!formData.username) errors.username = "Username is required.";
   else if (!/^[a-zA-Z0-9_]{4,15}$/.test(formData.username)) errors.username = "Username is invalid.";
 
+  // Ensure it starts with 9 and has 10 digits total
+  else if (!/^9\d{9}$/.test(formData.mobile)) errors.mobile = "Mobile number must be a Philippine mobile number.";
+
   // Email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!formData.email) errors.email = "Email is required.";
