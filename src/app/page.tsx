@@ -4,11 +4,7 @@ import { redirect } from 'next/navigation';
 import PublicLandingPage from '@/components/PublicLandingPage';
 
 export default async function IndexPage() {
-  // 1. Await the cookies promise
   const cookieStore = await cookies();
-  
-  // 2. Wrap it in a way that satisfies the older library
-  // We use 'as any' to bypass the TypeScript type mismatch error
   const supabase = createServerComponentClient({ 
     cookies: () => cookieStore as any 
   });
@@ -19,5 +15,15 @@ export default async function IndexPage() {
     return <PublicLandingPage />;
   }
 
-  redirect('/dashboard');
+  // DEBUG: Check what metadata exists
+  console.log("User metadata:", session.user.user_metadata);
+
+  const role = session.user.user_metadata?.role;
+
+  // If role is missing, default to pet_owner or handle error
+  if (role === 'service_provider') {
+    redirect('/service_provider');
+  } else {
+    redirect('/pet_owner');
+  }
 }

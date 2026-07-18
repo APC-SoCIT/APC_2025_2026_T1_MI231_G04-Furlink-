@@ -125,7 +125,14 @@ export default function SignupPage() {
         console.error("Signup error:", error);
         alert(error.message);
       } else {
-        router.push("/");
+        router.refresh();
+
+        // THIS IS THE REDIRECTION LOGIC
+        if (formData.roleChoice === 'service_provider') {
+          router.push('/service_provider');
+        } else {
+          router.push('/pet_owner');
+        }
       }
     } catch (err) {
       console.error("Unexpected signup error:", err);
