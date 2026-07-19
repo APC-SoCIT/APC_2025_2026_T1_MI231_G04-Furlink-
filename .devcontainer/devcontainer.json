@@ -1,9 +1,6 @@
 {
   "name": "furlink Workspace - LogiTeh",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
-  "features": {
-    "ghcr.io/devcontainers/features/supabase-cli:1": {}
-  },
   "forwardPorts": [3000],
   "customizations": {
     "vscode": {
