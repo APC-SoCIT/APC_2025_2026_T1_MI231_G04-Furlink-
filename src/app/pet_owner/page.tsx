@@ -1,7 +1,7 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Header from "@/components/Header"; // Aayusin ko pa sa kabilang branch
+import Header from "@/components/HeaderLoggedIn"; // Aayusin ko pa sa kabilang branch
 import Footer from "@/components/Footer"; // Aayusin ko pa sa kabilang branch
 // Need pa mag import for src/app/pet_owner/layout.tsx
 

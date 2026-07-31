@@ -37,13 +37,13 @@ export default function Header() {
               About furlink
             </Link>
           )}
-          {pathname !== '/signup' && (
-            <Link href="/signup" className="nav-text-link signup-mobile-text" onClick={() => setIsMenuOpen(false)}>
+          {pathname !== '/auth/signup' && (
+            <Link href="/auth/signup" className="nav-text-link signup-mobile-text" onClick={() => setIsMenuOpen(false)}>
               Sign Up
             </Link>
           )}
-          {pathname !== '/login' && (
-            <Link href="/login" className="nav-btn-link" onClick={() => setIsMenuOpen(false)}>
+          {pathname !== '/auth/login' && (
+            <Link href="/auth/login" className="nav-btn-link" onClick={() => setIsMenuOpen(false)}>
               Log In
             </Link>
           )}
@@ -52,3 +52,4 @@ export default function Header() {
     </header>
   );
 }
+
