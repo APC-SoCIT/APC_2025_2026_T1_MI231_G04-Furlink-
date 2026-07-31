@@ -4,10 +4,10 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
-import { validateSignup } from "../validation/signUpValidation";
-import { checkFieldExists } from "../validation-db";
+import { validateSignup } from "@/app/(public)/auth/validation/signUpValidation";
+import { checkFieldExists } from "@/app/(public)/auth/validation-db";
 import { supabase } from "@/lib/supabase";
-import "../auth.css";
+import "@/app/(public)/auth/auth.css";
 
 export default function SignupPage() {
   const router = useRouter();

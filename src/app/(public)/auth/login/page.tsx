@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
-import { validateLogin } from "../validation/loginValidation";
-import "../auth.css";
+import { validateLogin } from "@/app/(public)/auth/validation/loginValidation";
+import "@/app/(public)/auth/auth.css";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ identifier: "", password: "" });

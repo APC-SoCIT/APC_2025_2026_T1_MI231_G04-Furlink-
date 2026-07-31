@@ -1,4 +1,3 @@
-// src/app/auth/validation/loginValidation.ts
 export const validateLogin = (data: any) => {
   const errors: any = {};
 
