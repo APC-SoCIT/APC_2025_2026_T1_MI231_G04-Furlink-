@@ -1,9 +1,8 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Header from "@/components/HeaderLoggedIn"; // Aayusin ko pa sa kabilang branch
-import Footer from "@/components/Footer"; // Aayusin ko pa sa kabilang branch
-// Need pa mag import for src/app/pet_owner/layout.tsx
+import HeaderLoggedIn from "@/components/HeaderLoggedIn";
+import Footer from "@/components/Footer";
 
 export default async function PetOwnerPage() {
   const cookieStore = await cookies();
@@ -19,8 +18,8 @@ export default async function PetOwnerPage() {
 
   return (
     <div className="page-container">
-      {/* Pass the session or username if your Header needs to display it */}
-      <Header /> 
+      {/* Using the logged-in specific header component */}
+      <HeaderLoggedIn /> 
       
       <main className="content">
         <h1>Welcome to Furlink, @{username}!</h1>
