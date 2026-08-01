@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import { validateLogin } from "@/app/(public)/auth/validation/loginValidation";
+import { ROUTES } from "@/config/routes";
 import "@/app/(public)/auth/auth.css";
 
 export default function LoginPage() {
@@ -27,20 +28,29 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: formData.identifier,
       password: formData.password,
     });
 
     if (error) {
-      // Set the generic error message as requested
       setErrors({ form: "Invalid email or password. Please try again." });
+      setLoading(false);
     } else {
+      // Fetch user role from user metadata or profile table
+      const user = data.user;
+      const role = user?.user_metadata?.role;
+
       router.refresh();
-      router.push('/');
+
+      // Role-based routing matching the signup flow
+      if (role === 'service_provider') {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else {
+        // Handles 'pet_owner' and 'both_sp_po'
+        router.push(ROUTES.PET_OWNER.DASHBOARD);
+      }
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -71,17 +81,14 @@ export default function LoginPage() {
             onClick={() => setShowPassword(!showPassword)}
           >
             {showPassword ? (
-              /* Eye icon (visible state) */
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             ) : (
-              /* Eye icon (hidden state - same icon works) */
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             )}
           </button>
         </div>
         {errors.password && <span className="error-text">{errors.password}</span>}
 
-        {/* Error message at the bottom after the password section */}
         {errors.form && <p className="error">{errors.form}</p>}
 
         <button type="submit" disabled={loading}>
