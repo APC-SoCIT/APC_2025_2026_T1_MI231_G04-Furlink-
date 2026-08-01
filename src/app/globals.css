@@ -916,3 +916,39 @@ a {
   color: var(--admin-accent);
   cursor: pointer;
 }
+
+/* ==========================================================================
+   ABOUT PAGE
+   ========================================================================== */
+
+.about-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4rem 2rem;
+  min-height: calc(100vh - 120px);
+}
+
+.about-content {
+  max-width: 800px;
+}
+
+.about-content h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  font-style: italic;
+  margin-bottom: 1.5rem;
+}
+
+.about-content .brand-highlight {
+  color: var(--accent-yellow);
+}
+
+.about-content p {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #ffffff;
+  text-align: justify;
+}
