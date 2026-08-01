@@ -13,6 +13,8 @@ export default function Header() {
     setMounted(true);
   }, []);
 
+  const isLoginPage = mounted && pathname === '/auth/login';
+
   return (
     <header className="site-header">
       <div className="header-container">
@@ -37,14 +39,18 @@ export default function Header() {
 
         {/* Navigation Menu Wrapper*/}
         <nav className={`nav-menu ${isMenuOpen ? 'active' : ''}`}>
-          {/* Render links normally after mount to prevent SSR pathname mismatch */}
           {(!mounted || pathname !== '/about') && (
             <Link href="/about" className="nav-text-link" onClick={() => setIsMenuOpen(false)}>
               About furlink
             </Link>
           )}
           {(!mounted || pathname !== '/auth/signup') && (
-            <Link href="/auth/signup" className="nav-text-link signup-mobile-text" onClick={() => setIsMenuOpen(false)}>
+            <Link 
+              href="/auth/signup" 
+              // Use 'nav-text-link' normally, and only switch to 'nav-btn-link' (blue background) when on the login page
+              className={isLoginPage ? "nav-btn-link" : "nav-text-link signup-mobile-text"} 
+              onClick={() => setIsMenuOpen(false)}
+            >
               Sign Up
             </Link>
           )}

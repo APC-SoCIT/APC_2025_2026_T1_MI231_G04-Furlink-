@@ -116,6 +116,7 @@ a {
 
 .nav-btn-link:hover {
   background-color: #071966;
+  color: var(--accent-yellow)
 }
 
 .view-toggle-wrapper {
