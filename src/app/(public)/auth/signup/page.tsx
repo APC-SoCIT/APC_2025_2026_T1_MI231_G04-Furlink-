@@ -8,6 +8,7 @@ import { validateSignup } from "@/app/(public)/auth/validation/signUpValidation"
 import { checkFieldExists } from "@/app/(public)/auth/validation-db";
 import { supabase } from "@/lib/supabase";
 import "@/app/(public)/auth/auth.css";
+import { ROUTES } from "@/config/routes";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -127,11 +128,12 @@ export default function SignupPage() {
       } else {
         router.refresh();
 
-        // THIS IS THE REDIRECTION LOGIC
+        // UPDATED REDIRECTION LOGIC
         if (formData.roleChoice === 'service_provider') {
-          router.push('/service_provider');
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
         } else {
-          router.push('/pet_owner');
+          // Handles 'pet_owner' and 'both_sp_po'
+          router.push(ROUTES.PET_OWNER.DASHBOARD);
         }
       }
     } catch (err) {

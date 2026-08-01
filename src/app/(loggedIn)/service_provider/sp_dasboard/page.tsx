@@ -31,7 +31,7 @@ export default function ServiceProviderDashboardPage() {
       
       <div className="bg-white shadow-md rounded-lg p-6">
         <p className="text-gray-600">
-          Your service provider dashboard is ready. Display and manage your business listings or services here!
+          Your service provider dashboard is ready. FOR APPOINTMENTS GANERN
         </p>
       </div>
     </div>

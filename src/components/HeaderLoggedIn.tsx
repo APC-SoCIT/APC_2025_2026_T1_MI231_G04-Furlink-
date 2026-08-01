@@ -149,7 +149,7 @@ export default function HeaderLoggedIn() {
     }
     if (userRole === 'service_provider') {
       return (
-        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.PET_OWNER.ONBOARDING)}>
+        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.AUTH.MANAGE_ACCOUNT)}>
           Become a Pet Owner
         </button>
       );
