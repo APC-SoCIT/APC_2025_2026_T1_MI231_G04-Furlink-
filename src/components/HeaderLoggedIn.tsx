@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import {
   FaBell,
@@ -15,6 +15,7 @@ import {
   FaTimes
 } from "react-icons/fa";
 import brandIcon from "../app/icon.png";
+import { ROUTES } from "@/config/routes";
 
 type Notification = {
   id: string;
@@ -34,6 +35,7 @@ type Profile = {
 export default function HeaderLoggedIn() {
   const supabase = createClientComponentClient();
   const router = useRouter();
+  const pathname = usePathname();
 
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -106,7 +108,7 @@ export default function HeaderLoggedIn() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem("token");
-    router.push("/");
+    router.push(ROUTES.HOME);
   };
 
   const handleNavClick = (path: string) => {
@@ -120,7 +122,7 @@ export default function HeaderLoggedIn() {
       await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
       setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
       setShowNotif(false);
-      router.push(notif.link || "/dashboard");
+      router.push(notif.link || ROUTES.PET_OWNER.DASHBOARD);
     } catch (err) {
       console.error("Error marking notification as read:", err);
     }
@@ -140,22 +142,24 @@ export default function HeaderLoggedIn() {
   const RoleActionButton = () => {
     if (userRole === 'pet_owner') {
       return (
-        <button className="header-action-btn-outline" onClick={() => handleNavClick("/service_provider/onboarding")}>
+        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.SERVICE_PROVIDER.ONBOARDING)}>
           Become a Service Provider
         </button>
       );
     }
     if (userRole === 'service_provider') {
       return (
-        <button className="header-action-btn-outline" onClick={() => handleNavClick("/pet_owner/onboarding")}>
+        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.PET_OWNER.ONBOARDING)}>
           Become a Pet Owner
         </button>
       );
     }
     if (isBoth) {
+      const isCurrentlyPetOwner = pathname.includes("/pet_owner");
+
       return (
-        <button className="header-action-btn" onClick={() => handleNavClick("/switch-business")}>
-          Switch View
+        <button className="header-action-btn" onClick={() => handleNavClick(ROUTES.SHARED.SWITCH_BUSINESS)}>
+          {isCurrentlyPetOwner ? "Switch to Business" : "Switch to Pet Owner"}
         </button>
       );
     }
@@ -167,20 +171,20 @@ export default function HeaderLoggedIn() {
   const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => (
     <>
       {/* Manage Account is available to every role, including admin */}
-      <button className="profile-dropdown-item" onClick={() => onNavigate("/auth/manage_account/profile")}>
+      <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
         <FaUser /> <span>Manage Account</span>
       </button>
 
       {/* Manage Listing accessible for service providers and dual roles */}
       {isServiceProvider && (
-        <button className="profile-dropdown-item" onClick={() => onNavigate("/manage_listing/ViewListing")}>
+        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING)}>
           <FaStore /> <span>Manage Listing</span>
         </button>
       )}
 
       {/* Manage Bookings accessible for pet owners and dual roles */}
       {isPetOwner && (
-        <button className="profile-dropdown-item" onClick={() => onNavigate("/pet_owner/manage_bookings/po_dashboard")}>
+        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
           <FaCalendarAlt /> <span>Manage Bookings</span>
         </button>
       )}
@@ -227,7 +231,7 @@ export default function HeaderLoggedIn() {
         <div className="header-container">
 
           <div className="logo-container">
-            <Link href="/">
+            <Link href={ROUTES.HOME}>
               <img
                 src={brandIcon.src}
                 alt="Furlink Brand Logo"
