@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { 
-  FaBell, 
-  FaUserCircle, 
-  FaSignOutAlt, 
-  FaStore, 
+import {
+  FaBell,
+  FaUserCircle,
+  FaSignOutAlt,
+  FaStore,
   FaCalendarAlt,
   FaUser,
   FaBars,
@@ -16,17 +16,31 @@ import {
 } from "react-icons/fa";
 import brandIcon from "../app/icon.png";
 
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+  link?: string;
+};
+
+type Profile = {
+  first_name?: string;
+  last_name?: string;
+  role?: 'pet_owner' | 'service_provider' | 'both_sp_po' | 'admin';
+};
+
 export default function HeaderLoggedIn() {
   const supabase = createClientComponentClient();
   const router = useRouter();
-  const pathname = usePathname();
-  
+
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null);
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const desktopNotifRef = useRef<HTMLDivElement>(null);
   const mobileNotifRef = useRef<HTMLDivElement>(null);
@@ -38,22 +52,21 @@ export default function HeaderLoggedIn() {
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error || !user) return;
 
-        // Fetch User Profile Role
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("first_name, role") 
+          .select("first_name, last_name, role")
           .eq("id", user.id)
           .single();
+
         setProfile(profileData);
 
-        // Fetch Notifications
         const { data: notifData } = await supabase
           .from("notifications")
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(10);
-        
+
         setNotifications(notifData || []);
       } catch (err) {
         console.error("Auth fetch error:", err);
@@ -67,7 +80,7 @@ export default function HeaderLoggedIn() {
     const handleClickOutside = (e: MouseEvent) => {
       const outsideDesktop = desktopNotifRef.current && !desktopNotifRef.current.contains(e.target as Node);
       const outsideMobile = mobileNotifRef.current && !mobileNotifRef.current.contains(e.target as Node);
-      
+
       if (outsideDesktop && outsideMobile) {
         setShowNotif(false);
       }
@@ -80,7 +93,15 @@ export default function HeaderLoggedIn() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const userRole = profile?.role; // 'pet_owner', 'service_provider', 'both', 'admin'
+  const userRole = profile?.role;
+
+  // 'both_sp_po' is the only dual-role value your schema allows (see profiles_role_check)
+  const isBoth = userRole === 'both_sp_po';
+  const isServiceProvider = userRole === 'service_provider' || isBoth;
+  const isPetOwner = userRole === 'pet_owner' || isBoth;
+
+  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -94,120 +115,210 @@ export default function HeaderLoggedIn() {
     router.push(path);
   };
 
+  const handleNotifClick = async (notif: Notification) => {
+    try {
+      await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
+      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
+      setShowNotif(false);
+      router.push(notif.link || "/dashboard");
+    } catch (err) {
+      console.error("Error marking notification as read:", err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (err) {
+      console.error("Error marking all as read:", err);
+    }
+  };
+
+  const RoleActionButton = () => {
+    if (userRole === 'pet_owner') {
+      return (
+        <button className="header-action-btn-outline" onClick={() => handleNavClick("/service_provider/onboarding")}>
+          Become a Service Provider
+        </button>
+      );
+    }
+    if (userRole === 'service_provider') {
+      return (
+        <button className="header-action-btn-outline" onClick={() => handleNavClick("/pet_owner/onboarding")}>
+          Become a Pet Owner
+        </button>
+      );
+    }
+    if (isBoth) {
+      return (
+        <button className="header-action-btn" onClick={() => handleNavClick("/switch-business")}>
+          Switch View
+        </button>
+      );
+    }
+    // admin gets no role button - none of the above match
+    return null;
+  };
+
+  // Shared between the desktop dropdown and the mobile drawer
+  const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => (
+    <>
+      {/* Manage Account is available to every role, including admin */}
+      <button className="profile-dropdown-item" onClick={() => onNavigate("/auth/manage_account/profile")}>
+        <FaUser /> <span>Manage Account</span>
+      </button>
+
+      {/* Manage Listing accessible for service providers and dual roles */}
+      {isServiceProvider && (
+        <button className="profile-dropdown-item" onClick={() => onNavigate("/manage_listing/ViewListing")}>
+          <FaStore /> <span>Manage Listing</span>
+        </button>
+      )}
+
+      {/* Manage Bookings accessible for pet owners and dual roles */}
+      {isPetOwner && (
+        <button className="profile-dropdown-item" onClick={() => onNavigate("/pet_owner/manage_bookings/po_dashboard")}>
+          <FaCalendarAlt /> <span>Manage Bookings</span>
+        </button>
+      )}
+    </>
+  );
+
   const NotificationDropdown = () => (
-    <div className="dropdown notif-dropdown">
+    <div className="notif-dropdown">
       <div className="notif-header">
         <h3>Notifications</h3>
+        {unreadCount > 0 && (
+          <button className="notif-mark-read" onClick={handleMarkAllAsRead}>
+            Mark all as read
+          </button>
+        )}
       </div>
       <div className="notif-list">
         {notifications.length > 0 ? (
-          notifications.map((n, index) => (
-            <div key={n.id} className={`notif-item ${!n.read ? "unread" : ""}`}>
-              <div className="notif-content">
+          notifications.map((n) => (
+            <div
+              key={n.id}
+              className={`notif-item ${!n.read ? "unread" : ""}`}
+              onClick={() => handleNotifClick(n)}
+            >
+              <div className="notif-title-row">
                 <span className="notif-title">{n.title}</span>
-                <p className="notif-message">{n.message}</p>
+                <span className="notif-date">
+                  {new Date(n.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                </span>
               </div>
+              <p className="notif-message">{n.message}</p>
             </div>
           ))
         ) : (
-          <div className="no-notif-empty">
-            <p>All caught up!</p>
-          </div>
+          <div className="notif-empty">All caught up!</div>
         )}
       </div>
     </div>
   );
 
   return (
-    <header className="site-header">
-      <div className="header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        
-        {/* Left Side: Notification Icon, Role Button, Profile Icon */}
-        <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          
-          {/* Notification Icon */}
-          <div ref={desktopNotifRef} className="notif-wrapper">
-            <button className="icon-btn" onClick={() => setShowNotif(!showNotif)}>
-              <FaBell className="icon" />
-              {notifications.filter(n => !n.read).length > 0 && (
-                <span className="notif-badge">{notifications.filter(n => !n.read).length}</span>
+    <>
+      <header className="site-header">
+        <div className="header-container">
+
+          <div className="logo-container">
+            <Link href="/">
+              <img
+                src={brandIcon.src}
+                alt="Furlink Brand Logo"
+                style={{ width: '60px', height: '60px', objectFit: 'contain' }}
+              />
+            </Link>
+          </div>
+
+          {/* Desktop: role button, notifications, profile dropdown */}
+          <div className="header-right desktop-only-group">
+            <RoleActionButton />
+
+            <div ref={desktopNotifRef} className="notif-wrapper">
+              <button className="icon-box-btn" onClick={() => setShowNotif(!showNotif)} aria-label="Notifications">
+                <FaBell />
+                {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
+              </button>
+              {showNotif && <NotificationDropdown />}
+            </div>
+
+            <div ref={menuRef} className="profile-menu">
+              <button className="icon-box-btn" onClick={() => setShowMenu(!showMenu)} aria-label="Account menu">
+                <FaUserCircle />
+              </button>
+
+              {showMenu && (
+                <div className="profile-dropdown">
+                  <div className="profile-dropdown-header">Hi, {fullName || "there"}</div>
+                  <ProfileMenuItems onNavigate={handleNavClick} />
+                  <button className="profile-dropdown-item logout" onClick={handleLogout}>
+                    <FaSignOutAlt /> <span>Log out</span>
+                  </button>
+                </div>
               )}
-            </button>
-            {showNotif && <NotificationDropdown />}
+            </div>
           </div>
 
-          {/* Role-Specific Action Buttons */}
-          {userRole === 'pet_owner' && (
-            <button className="header-action-btn" onClick={() => router.push("/service_provider/onboarding")}>
-              Become a Service Provider
+          {/* Mobile: hamburger + notifications */}
+          <div className="header-right mobile-only-group">
+            <div ref={mobileNotifRef} className="notif-wrapper">
+              <button className="icon-box-btn" onClick={() => setShowNotif(!showNotif)} aria-label="Notifications">
+                <FaBell />
+                {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
+              </button>
+              {showNotif && <NotificationDropdown />}
+            </div>
+
+            <button className="icon-btn mobile-menu-btn" onClick={() => setShowMobileMenu(true)} aria-label="Open menu">
+              <FaBars />
             </button>
-          )}
-
-          {userRole === 'service_provider' && (
-            <button className="header-action-btn" onClick={() => router.push("/pet_owner/onboarding")}>
-              Become a Pet Owner
-            </button>
-          )}
-
-          {userRole === 'both' && (
-            <button className="header-action-btn" onClick={() => router.push("/switch-business")}>
-              Switch to Business
-            </button>
-          )}
-
-          {/* Profile Icon & Dropdown */}
-          <div ref={menuRef} className="profile-wrapper" style={{ position: 'relative' }}>
-            <button className="icon-btn profile-icon-btn" onClick={() => setShowMenu(!showMenu)}>
-              <FaUserCircle className="icon" />
-            </button>
-            
-            {showMenu && (
-              <div className="dropdown profile-dropdown" style={{ position: 'absolute', right: 0, top: '100%', background: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '8px 0', minWidth: '180px', zIndex: 100 }}>
-                <p className="user-name" style={{ padding: '8px 16px', fontWeight: 'bold', borderBottom: '1px solid #eee', color: '#333' }}>
-                  Hi, {profile?.first_name || "User"}
-                </p>
-
-                {/* Manage Account (All roles) */}
-                <button className="menu-item-btn" onClick={() => handleNavClick("/auth/manage_account/profile")} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', color: '#333' }}>
-                  <FaUser /> Manage Account
-                </button>
-
-                {/* Manage Listing (Service Provider & Both) */}
-                {(userRole === 'service_provider' || userRole === 'both') && (
-                  <button className="menu-item-btn" onClick={() => handleNavClick("/service_provider/manage_listing/ViewListing")} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', color: '#333' }}>
-                    <FaStore /> Manage Listing
-                  </button>
-                )}
-
-                {/* Manage Bookings (Pet Owner & Both) */}
-                {(userRole === 'pet_owner' || userRole === 'both') && (
-                  <button className="menu-item-btn" onClick={() => handleNavClick("/pet_owner/manage_bookings/po_dashboard")} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', color: '#333' }}>
-                    <FaCalendarAlt /> Manage Booking
-                  </button>
-                )}
-
-                {/* Log Out */}
-                <button className="logout-btn" onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', color: '#ef4444', borderTop: '1px solid #eee' }}>
-                  <FaSignOutAlt /> Log out
-                </button>
-              </div>
-            )}
           </div>
 
         </div>
+      </header>
 
-        {/* Right Side: Logo */}
-        <div className="header-right logo-container">
-          <Link href="/" style={{ display: 'flex', alignItems: 'center' }}>
-            <img 
-              src={brandIcon.src} 
-              alt="Furlink Brand Logo" 
-              style={{ width: '60px', height: '60px', objectFit: 'contain' }} 
-            />
-          </Link>
+      {/* Mobile drawer */}
+      <div className={`mobile-drawer-overlay ${showMobileMenu ? 'active' : ''}`} onClick={() => setShowMobileMenu(false)}></div>
+      <div className={`mobile-drawer ${showMobileMenu ? 'active' : ''}`}>
+        <div className="mobile-drawer-header">
+          <img src={brandIcon.src} alt="Furlink Brand Logo" className="mobile-drawer-logo" />
+          <button className="close-drawer-btn" onClick={() => setShowMobileMenu(false)} aria-label="Close menu">
+            <FaTimes />
+          </button>
         </div>
 
+        <div className="mobile-drawer-content">
+          <div className="drawer-user-card">
+            <FaUserCircle className="drawer-user-icon" />
+            <div>
+              <p className="drawer-welcome">Welcome back,</p>
+              <p className="drawer-username">{fullName || "there"}</p>
+            </div>
+          </div>
+
+          {(userRole === 'pet_owner' || userRole === 'service_provider' || isBoth) && (
+            <div className="drawer-section">
+              <RoleActionButton />
+            </div>
+          )}
+
+          <div className="drawer-links">
+            <ProfileMenuItems onNavigate={handleNavClick} />
+          </div>
+
+          <div className="drawer-footer">
+            <button className="drawer-logout-btn" onClick={handleLogout}>
+              <FaSignOutAlt /> Logout
+            </button>
+          </div>
+        </div>
       </div>
-    </header>
+    </>
   );
 }
