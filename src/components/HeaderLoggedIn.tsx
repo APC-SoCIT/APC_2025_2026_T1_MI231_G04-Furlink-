@@ -43,6 +43,7 @@ export default function HeaderLoggedIn() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [homeRoute, setHomeRoute] = useState<string>(ROUTES.HOME);
 
   const desktopNotifRef = useRef<HTMLDivElement>(null);
   const mobileNotifRef = useRef<HTMLDivElement>(null);
@@ -61,6 +62,17 @@ export default function HeaderLoggedIn() {
           .single();
 
         setProfile(profileData);
+
+        if (profileData?.role) {
+          const role = profileData.role;
+          if (role === 'pet_owner' || role === 'both_sp_po') {
+            setHomeRoute(ROUTES.PET_OWNER.DASHBOARD); // Evaluates to "/pet_owner/manage_bookings"
+          } else if (role === 'service_provider') {
+            setHomeRoute(ROUTES.SERVICE_PROVIDER.ONBOARDING); // Evaluates to "/service_provider/manage_listing/onboarding"
+          } else if (role === 'admin') {
+            setHomeRoute(ROUTES.ADMIN.ADMIN_DASHBOARD);
+          }
+        }
 
         const { data: notifData } = await supabase
           .from("notifications")
@@ -97,7 +109,7 @@ export default function HeaderLoggedIn() {
 
   const userRole = profile?.role;
 
-  // 'both_sp_po' is the only dual-role value your schema allows (see profiles_role_check)
+  // 'both_sp_po' is the only dual-role value your schema allows
   const isBoth = userRole === 'both_sp_po';
   const isServiceProvider = userRole === 'service_provider' || isBoth;
   const isPetOwner = userRole === 'pet_owner' || isBoth;
@@ -163,26 +175,21 @@ export default function HeaderLoggedIn() {
         </button>
       );
     }
-    // admin gets no role button - none of the above match
     return null;
   };
 
-  // Shared between the desktop dropdown and the mobile drawer
   const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => (
     <>
-      {/* Manage Account is available to every role, including admin */}
       <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
         <FaUser /> <span>Manage Account</span>
       </button>
 
-      {/* Manage Listing accessible for service providers and dual roles */}
       {isServiceProvider && (
         <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING)}>
           <FaStore /> <span>Manage Listing</span>
         </button>
       )}
 
-      {/* Manage Bookings accessible for pet owners and dual roles */}
       {isPetOwner && (
         <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
           <FaCalendarAlt /> <span>Manage Bookings</span>
@@ -231,7 +238,7 @@ export default function HeaderLoggedIn() {
         <div className="header-container">
 
           <div className="logo-container">
-            <Link href={ROUTES.HOME}>
+            <Link href={homeRoute}>
               <img
                 src={brandIcon.src}
                 alt="Furlink Brand Logo"
@@ -240,7 +247,6 @@ export default function HeaderLoggedIn() {
             </Link>
           </div>
 
-          {/* Desktop: role button, notifications, profile dropdown */}
           <div className="header-right desktop-only-group">
             <RoleActionButton />
 
@@ -269,7 +275,6 @@ export default function HeaderLoggedIn() {
             </div>
           </div>
 
-          {/* Mobile: hamburger + notifications */}
           <div className="header-right mobile-only-group">
             <div ref={mobileNotifRef} className="notif-wrapper">
               <button className="icon-box-btn" onClick={() => setShowNotif(!showNotif)} aria-label="Notifications">
@@ -287,7 +292,6 @@ export default function HeaderLoggedIn() {
         </div>
       </header>
 
-      {/* Mobile drawer */}
       <div className={`mobile-drawer-overlay ${showMobileMenu ? 'active' : ''}`} onClick={() => setShowMobileMenu(false)}></div>
       <div className={`mobile-drawer ${showMobileMenu ? 'active' : ''}`}>
         <div className="mobile-drawer-header">

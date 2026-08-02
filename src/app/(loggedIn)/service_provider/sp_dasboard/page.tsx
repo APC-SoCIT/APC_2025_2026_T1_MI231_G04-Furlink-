@@ -15,7 +15,7 @@ export default function ServiceProviderDashboardPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
-        <p className="text-gray-500">Loading service provider listings...</p>
+        <p className="text-gray-500"> BASTA YUNG SP Dashboard na hindi business dashboard Loading service provider listings...</p>
       </div>
     );
   }
