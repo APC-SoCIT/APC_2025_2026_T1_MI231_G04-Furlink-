@@ -60,7 +60,7 @@ export default function ServiceProviderOnboardingPage() {
       <div className="bg-white shadow-md rounded-lg p-8">
         <h1 className="text-2xl font-bold mb-2">Service Provider Onboarding</h1>
         <p className="text-gray-600 mb-6">
-          Please provide your business details to get your listings up and running.
+          Please provide your business details to get your listings up and running!
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
