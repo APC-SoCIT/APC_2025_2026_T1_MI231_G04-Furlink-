@@ -9,6 +9,7 @@ export const ROUTES = {
   },
   PET_OWNER: {
     DASHBOARD: "/pet_owner/manage_bookings",
+    MANAGE_PET: "/pet_owner/manage_pet",
   },
   SERVICE_PROVIDER: {
     ONBOARDING: "/service_provider/manage_listing/onboarding",

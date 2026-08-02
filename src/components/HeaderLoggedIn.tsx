@@ -10,6 +10,7 @@ import {
   FaSignOutAlt,
   FaStore,
   FaCalendarAlt,
+  FaPaw,
   FaUser,
   FaBars,
   FaTimes
@@ -191,9 +192,14 @@ export default function HeaderLoggedIn() {
       )}
 
       {isPetOwner && (
-        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
-          <FaCalendarAlt /> <span>Manage Bookings</span>
-        </button>
+        <>
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
+            <FaCalendarAlt /> <span>Manage Bookings</span>
+          </button>
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
+            <FaPaw /> <span>Manage Pet</span>
+          </button>
+        </>
       )}
     </>
   );
