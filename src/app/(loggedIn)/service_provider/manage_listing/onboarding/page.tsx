@@ -89,7 +89,7 @@ export default function ServiceProviderOnboardingPage() {
               <option value="">Select a service type</option>
               <option value="grooming">Pet Grooming</option>
               <option value="boarding">Pet Boarding</option>
-              <option value="veterinary">Veterinary Services</option>
+              
             </select>
           </div>
 
