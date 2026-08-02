@@ -8,7 +8,8 @@ export const ROUTES = {
     MANAGE_ACCOUNT: "/both_sp_po/manage_account",
   },
   PET_OWNER: {
-    DASHBOARD: "/pet_owner/manage_bookings",
+    DASHBOARD: "/pet_owner",
+    MANAGE_BOOKING: "/pet_owner/manage_bookings",
     MANAGE_PET: "/pet_owner/manage_pet",
   },
   SERVICE_PROVIDER: {
