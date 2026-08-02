@@ -17,6 +17,9 @@ export const ROUTES = {
     EDIT_LISTING: "/service_provider/manage_listing/edit_listing",
     EDIT_BUSINESS_INFO: "/service_provider/manage_listing/edit_business_info",
   },
+  ADMIN: {
+    ADMIN_DASHBOARD: "/admin/dashboard",
+  },
   SHARED: {
     SWITCH_BUSINESS: "/switch-business",
   }

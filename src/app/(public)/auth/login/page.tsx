@@ -37,18 +37,34 @@ export default function LoginPage() {
       setErrors({ form: "Invalid email or password. Please try again." });
       setLoading(false);
     } else {
-      // Fetch user role from user metadata or profile table
       const user = data.user;
-      const role = user?.user_metadata?.role;
 
-      router.refresh();
+      if (user) {
+        // Fetch the user's role directly from your profiles table
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
 
-      // Role-based routing matching the signup flow
-      if (role === 'service_provider') {
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-      } else {
-        // Handles 'pet_owner' and 'both_sp_po'
-        router.push(ROUTES.PET_OWNER.DASHBOARD);
+        if (profileError || !profileData) {
+          setErrors({ form: "Failed to fetch user profile role." });
+          setLoading(false);
+          return;
+        }
+
+        const role = profileData.role;
+        console.log("DEBUG: Retrieved user role from database is ->", role);
+        router.refresh();
+
+        // Role-based routing matching your configuration
+        if (role === 'service_provider') {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        } else if (role === 'admin') {
+          router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
+        } else {
+          router.push(ROUTES.PET_OWNER.DASHBOARD);
+        }
       }
     }
   };
