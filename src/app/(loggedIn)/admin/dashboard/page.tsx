@@ -60,6 +60,13 @@ export default function AdminDashboardPage() {
     fetchDashboardCounts();
   }, []);
 
+  useEffect(() => {
+    const savedFilter = localStorage.getItem("adminDashboardFilter") as FilterType;
+    if (savedFilter) {
+      setCurrentFilter(savedFilter);
+    }
+  }, []);
+
   //Fetch the list whenever the selected card changes (runs on mount too, since default is "pending")
   useEffect(() => {
     if (currentFilter === "pending") {
@@ -255,6 +262,9 @@ export default function AdminDashboardPage() {
 
   const handleCardClick = (filter: FilterType) => {
     setCurrentFilter(filter);
+    if (filter) {
+      localStorage.setItem("adminDashboardFilter", filter);
+    }
   };
 
   const getListTitle = () => {
