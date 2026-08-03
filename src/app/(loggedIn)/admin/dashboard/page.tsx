@@ -81,7 +81,6 @@ export default function AdminDashboardPage() {
 
     if (user) {
       const { data } = await supabase
-        .schema("auth_module")
         .from("profiles")
         .select("first_name")
         .eq("id", user.id)
@@ -111,7 +110,6 @@ export default function AdminDashboardPage() {
 
       // profiles
       const { count: users } = await supabase
-        .schema("auth_module")
         .from("profiles")
         .select("*", { count: "exact", head: true })
         .neq("role", "admin");
@@ -218,17 +216,23 @@ export default function AdminDashboardPage() {
   //Fetch just the registred users list
   const fetchUsersList = async () => {
     setLoading(true);
+    setTableData([]);
+
     try {
       const { data, error } = await supabase
-        .schema("auth_module")
         .from("profiles")
         .select("id, first_name, last_name, username, mobile_number, role, created_at")
         .neq("role", "admin")
         .order("created_at", { ascending: false });
 
-      if (!error) setTableData(data || []);
+      if (!error) {
+        setTableData(data || []);
+      } else {
+        console.error("Supabase error:", JSON.stringify(error, null, 2));        setTableData([]); 
+      }
     } catch (err) {
       console.error("Error fetching users list:", err);
+      setTableData([]);
     } finally {
       setLoading(false);
     }
