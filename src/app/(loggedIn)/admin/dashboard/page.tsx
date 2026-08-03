@@ -19,20 +19,19 @@ type FilterType = "pending" | "active" | "rejected" | "users" | null;
 interface ProviderRow {
   id: string;
   business_name: string;
-  city: string | null;
-  province: string | null;
-  status: string;
+  business_city: string | null;
+  business_province: string | null;
+  registration_status: string;
   created_at: string | null;
   updated_at: string | null;
-  approved_at?: string | null;
+  registration_approved_at?: string | null;
 }
 
 interface UserRow {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  display_name: string | null;
-  email: string | null;
+  username: string | null;
   mobile_number: string | null;
   role: string | null;
   created_at: string | null;
@@ -82,6 +81,7 @@ export default function AdminDashboardPage() {
 
     if (user) {
       const { data } = await supabase
+        .schema("auth_module")
         .from("profiles")
         .select("first_name")
         .eq("id", user.id)
@@ -97,19 +97,21 @@ export default function AdminDashboardPage() {
       const { count: pending } = await supabase
         .from("sp_general_info")
         .select("id, sp_services!inner(id)", { count: "exact", head: true })
-        .eq("status", "pending");
+        .eq("registration_status", "pending");
 
       const { count: approved } = await supabase
         .from("sp_general_info")
         .select("*", { count: "exact", head: true })
-        .eq("status", "approved");
+        .eq("registration_status", "approved");
 
       const { count: rejected } = await supabase
         .from("sp_general_info")
         .select("*", { count: "exact", head: true })
-        .eq("status", "rejected");
+        .eq("registration_status", "rejected");
 
+      // profiles
       const { count: users } = await supabase
+        .schema("auth_module")
         .from("profiles")
         .select("*", { count: "exact", head: true })
         .neq("role", "admin");
@@ -117,15 +119,15 @@ export default function AdminDashboardPage() {
       // Average approval time
       const { data: approvals } = await supabase
         .from("sp_general_info")
-        .select("created_at, approved_at")
-        .eq("status", "approved")
-        .not("approved_at", "is", null);
+        .select("created_at, registration_approved_at")
+        .eq("registration_status", "approved")
+        .not("registration_approved_at", "is", null);
 
       let avgStr = "-";
       if (approvals && approvals.length > 0) {
         const totalMs = approvals.reduce((sum, row) => {
           const start = new Date(row.created_at).getTime();
-          const end = new Date(row.approved_at).getTime();
+          const end = new Date(row.registration_approved_at).getTime();
           return sum + (end - start);
         }, 0);
 
@@ -160,9 +162,9 @@ export default function AdminDashboardPage() {
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(
-          "id, business_name, city, province, status, created_at, updated_at, sp_services!inner(id)"
+          "id, business_name, business_city, business_province, registration_status, created_at, updated_at, sp_services!inner(id)"
         )
-        .eq("status", "pending")
+        .eq("registration_status", "pending")
         .order("created_at", { ascending: true });
 
       if (!error) setTableData(data || []);
@@ -180,10 +182,10 @@ export default function AdminDashboardPage() {
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(
-          "id, business_name, city, province, status, created_at, updated_at, approved_at"
+          "id, business_name, business_city, business_province, registration_status, created_at, updated_at, registration_approved_at"
         )
-        .eq("status", "approved")
-        .order("approved_at", { ascending: false });
+        .eq("registration_status", "approved")
+        .order("registration_approved_at", { ascending: false });
 
       if (!error) setTableData(data || []);
     } catch (err) {
@@ -200,9 +202,9 @@ export default function AdminDashboardPage() {
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(
-          "id, business_name, city, province, status, created_at, updated_at"
+          "id, business_name, business_city, business_province, registration_status, created_at, updated_at"
         )
-        .eq("status", "rejected")
+        .eq("registration_status", "rejected")
         .order("updated_at", { ascending: false });
 
       if (!error) setTableData(data || []);
@@ -213,15 +215,14 @@ export default function AdminDashboardPage() {
     }
   };
 
-  //Fetch just the registered users list
+  //Fetch just the registred users list
   const fetchUsersList = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
+        .schema("auth_module")
         .from("profiles")
-        .select(
-          "id, first_name, last_name, display_name, email, mobile_number, role, created_at"
-        )
+        .select("id, first_name, last_name, username, mobile_number, role, created_at")
         .neq("role", "admin")
         .order("created_at", { ascending: false });
 
@@ -389,8 +390,7 @@ export default function AdminDashboardPage() {
                       <tr>
                         <th>First Name</th>
                         <th>Last Name</th>
-                        <th>Display Name</th>
-                        <th>Email</th>
+                        <th>Username</th>
                         <th>Contact Number</th>
                         <th>Role</th>
                         <th>Action</th>
@@ -419,8 +419,7 @@ export default function AdminDashboardPage() {
                           <tr key={item.id}>
                             <td className="fw-bold">{item.first_name || "-"}</td>
                             <td className="fw-bold">{item.last_name || "-"}</td>
-                            <td>{item.display_name || "N/A"}</td>
-                            <td>{item.email || "-"}</td>
+                            <td>{item.username || "-"}</td>
                             <td>{item.mobile_number || "-"}</td>
                             <td style={{ textTransform: "capitalize" }}>
                               {item.role ? item.role.replace(/_/g, " ") : "-"}
@@ -437,22 +436,24 @@ export default function AdminDashboardPage() {
                           <tr key={item.id}>
                             <td className="fw-bold">{item.business_name}</td>
                             <td>
-                              {item.city}
-                              {item.city && item.province ? ", " : ""}
-                              {item.province}
+                              {item.business_city}
+                              {item.business_city && item.business_province ? ", " : ""}
+                              {item.business_province}
                             </td>
                             <td>
                               {formatDate(
                                 currentFilter === "pending"
                                   ? item.created_at
                                   : currentFilter === "active"
-                                  ? item.approved_at
+                                  ? item.registration_approved_at
                                   : item.updated_at
                               )}
                             </td>
                             <td>
-                              <span className={`status-pill ${item.status}`}>
-                                {item.status}
+                              <span
+                                className={`status-pill ${item.registration_status}`}
+                              >
+                                {item.registration_status}
                               </span>
                             </td>
                             <td>
