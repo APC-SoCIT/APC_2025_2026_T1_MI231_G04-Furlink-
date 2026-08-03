@@ -225,13 +225,32 @@
   font-size: 1.1rem;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
+/*Responsiveness */
+/*KPI Cards*/
+@media (max-width: 768px) {
   .stats-grid {
-    grid-template-columns: repeat(3, 1fr); /* 3 cols on tablet */
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 14px;
+    padding-bottom: 8px;
+    margin-bottom: 30px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .stat-card {
+    flex: 0 0 42%;
+    scroll-snap-align: start;
   }
 }
 
+@media (max-width: 480px) {
+  .stat-card {
+    flex: 0 0 65%;
+  }
+}
+
+/*Button*/
 @media (max-width: 768px) {
   .report-button-container {
     flex-direction: column;
