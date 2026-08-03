@@ -14,7 +14,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import "./page.css";
 
-type FilterType = "pending" | "active" | null;
+type FilterType = "pending" | "active" | "rejected" | "users" | null;
 
 interface ProviderRow {
   id: string;
@@ -25,6 +25,17 @@ interface ProviderRow {
   created_at: string | null;
   updated_at: string | null;
   approved_at?: string | null;
+}
+
+interface UserRow {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  email: string | null;
+  mobile_number: string | null;
+  role: string | null;
+  created_at: string | null;
 }
 
 export default function AdminDashboardPage() {
@@ -42,7 +53,7 @@ export default function AdminDashboardPage() {
 
   // --- PENDING APPROVALS LIST ---
   const [currentFilter, setCurrentFilter] = useState<FilterType>("pending");
-  const [tableData, setTableData] = useState<ProviderRow[]>([]);
+  const [tableData, setTableData] = useState<(ProviderRow | UserRow)[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,12 +61,16 @@ export default function AdminDashboardPage() {
     fetchDashboardCounts();
   }, []);
 
-  //Fetch the list only when a clickable card has been selected
+  //Fetch the list whenever the selected card changes (runs on mount too, since default is "pending")
   useEffect(() => {
     if (currentFilter === "pending") {
       fetchPendingList();
     } else if (currentFilter === "active") {
       fetchActiveList();
+    } else if (currentFilter === "rejected") {
+      fetchRejectedList();
+    } else if (currentFilter === "users") {
+      fetchUsersList();
     }
   }, [currentFilter]);
 
@@ -178,7 +193,48 @@ export default function AdminDashboardPage() {
     }
   };
 
+  //Fetch just the rejected listings
+  const fetchRejectedList = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("sp_general_info")
+        .select(
+          "id, business_name, city, province, status, created_at, updated_at"
+        )
+        .eq("status", "rejected")
+        .order("updated_at", { ascending: false });
+
+      if (!error) setTableData(data || []);
+    } catch (err) {
+      console.error("Error fetching rejected list:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  //Fetch just the registered users list
+  const fetchUsersList = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(
+          "id, first_name, last_name, display_name, email, mobile_number, role, created_at"
+        )
+        .neq("role", "admin")
+        .order("created_at", { ascending: false });
+
+      if (!error) setTableData(data || []);
+    } catch (err) {
+      console.error("Error fetching users list:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Helpers
+
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -202,6 +258,10 @@ export default function AdminDashboardPage() {
         return "Pending Approvals (Complete Applications)";
       case "active":
         return "Active Listings";
+      case "rejected":
+        return "Rejected Listings";
+      case "users":
+        return "Registered Users";
       default:
         return "";
     }
@@ -267,7 +327,12 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="stat-card non-clickable">
+          <div
+            className={`stat-card ${
+              currentFilter === "rejected" ? "active-filter" : ""
+            }`}
+            onClick={() => handleCardClick("rejected")}
+          >
             <div className="stat-icon-wrapper rejected">
               <FaTimesCircle size={24} />
             </div>
@@ -287,7 +352,12 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="stat-card non-clickable">
+          <div
+            className={`stat-card ${
+              currentFilter === "users" ? "active-filter" : ""
+            }`}
+            onClick={() => handleCardClick("users")}
+          >
             <div className="stat-icon-wrapper users">
               <FaUsers size={24} />
             </div>
@@ -298,7 +368,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* List only shows once Pending or Active has been clicked */}
+        {/* List shows the currently selected card's data (defaults to Pending) */}
         {currentFilter && (
           <div className="dashboard-list-container">
             <div className="list-header">
@@ -315,46 +385,84 @@ export default function AdminDashboardPage() {
               ) : (
                 <table className="providers-table">
                   <thead>
-                    <tr>
-                      <th>Business Name</th>
-                      <th>Location</th>
-                      <th>
-                        Date {currentFilter === "pending" ? "Submitted" : "Approved"}
-                      </th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
+                    {currentFilter === "users" ? (
+                      <tr>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Display Name</th>
+                        <th>Email</th>
+                        <th>Contact Number</th>
+                        <th>Role</th>
+                        <th>Action</th>
+                      </tr>
+                    ) : (
+                      <tr>
+                        <th>Business Name</th>
+                        <th>Location</th>
+                        <th>
+                          Date{" "}
+                          {currentFilter === "pending"
+                            ? "Submitted"
+                            : currentFilter === "active"
+                            ? "Approved"
+                            : "Updated"}
+                        </th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    )}
                   </thead>
 
                   <tbody>
-                    {tableData.map((item) => (
-                      <tr key={item.id}>
-                        <td className="fw-bold">{item.business_name}</td>
-                        <td>
-                          {item.city}
-                          {item.city && item.province ? ", " : ""}
-                          {item.province}
-                        </td>
-                        <td>
-                          {formatDate(
-                            currentFilter === "pending"
-                              ? item.created_at
-                              : item.approved_at
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-pill ${item.status}`}>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td>
-                          <button className="btn-view-details" disabled>
-                            View Details{" "}
-                            <FaArrowRight size={12} style={{ marginLeft: 5 }} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {currentFilter === "users"
+                      ? (tableData as UserRow[]).map((item) => (
+                          <tr key={item.id}>
+                            <td className="fw-bold">{item.first_name || "-"}</td>
+                            <td className="fw-bold">{item.last_name || "-"}</td>
+                            <td>{item.display_name || "N/A"}</td>
+                            <td>{item.email || "-"}</td>
+                            <td>{item.mobile_number || "-"}</td>
+                            <td style={{ textTransform: "capitalize" }}>
+                              {item.role ? item.role.replace(/_/g, " ") : "-"}
+                            </td>
+                            <td>
+                              <button className="btn-view-details" disabled>
+                                View Details{" "}
+                                <FaArrowRight size={12} style={{ marginLeft: 5 }} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      : (tableData as ProviderRow[]).map((item) => (
+                          <tr key={item.id}>
+                            <td className="fw-bold">{item.business_name}</td>
+                            <td>
+                              {item.city}
+                              {item.city && item.province ? ", " : ""}
+                              {item.province}
+                            </td>
+                            <td>
+                              {formatDate(
+                                currentFilter === "pending"
+                                  ? item.created_at
+                                  : currentFilter === "active"
+                                  ? item.approved_at
+                                  : item.updated_at
+                              )}
+                            </td>
+                            <td>
+                              <span className={`status-pill ${item.status}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td>
+                              <button className="btn-view-details" disabled>
+                                View Details{" "}
+                                <FaArrowRight size={12} style={{ marginLeft: 5 }} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                   </tbody>
                 </table>
               )}
