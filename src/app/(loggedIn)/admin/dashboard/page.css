@@ -233,21 +233,18 @@
 }
 
 @media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2 cols on mobile */
-  }
-
-  .stat-card {
-    padding: 15px;
-  }
-
-  .list-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .report-button-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .as-of-date {
+    text-align: center;
+  }
+
+  .generate-report-btn {
     justify-content: center;
-    margin-bottom: 15px;
+    width: 100%;
   }
 }
