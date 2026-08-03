@@ -7,6 +7,12 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { ROUTES } from "@/config/routes";
 import "./page.css";
 
+const POSITION_OPTIONS = [
+  { value: "business_owner", label: "Business Owner" },
+  { value: "pet_stylist", label: "Pet Stylist" },
+  { value: "staff", label: "Staff" }
+];
+
 /* =========================================
    CONFIRMATION MODAL COMPONENT (UPDATED)
    ========================================= */
@@ -100,11 +106,14 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, isSubmitti
             <div className="review-group">
                 <h4>👥 Employees ({(files.employees || []).length})</h4>
                 <ul className="review-list">
-                    {(files.employees || []).map((emp, idx) => (
-                        <li key={idx}>
-                            <strong>{emp.fullName}</strong> — <span style={{color:'#6b7280'}}>{emp.position}</span>
-                        </li>
-                    ))}
+                    {(files.employees || []).map((emp, idx) => {
+                        const posLabel = POSITION_OPTIONS.find(p => p.value === emp.position)?.label || emp.position;
+                        return (
+                            <li key={idx}>
+                                <strong>{emp.firstName} {emp.lastName}</strong> — <span style={{color:'#6b7280'}}>{posLabel}</span>
+                            </li>
+                        )
+                    })}
                 </ul>
             </div>
 
@@ -220,12 +229,11 @@ export default function ServiceProviderOnboardingPage() {
   const [businessPermitFile, setBusinessPermitFile] = useState(null);
   const [existingPermitUrl, setExistingPermitUrl] = useState(null);
 
-  const [employees, setEmployees] = useState([{ fullName: "", position: "" }]);
+  const [employees, setEmployees] = useState([{ firstName: "", lastName: "", position: "" }]);
   const [validationErrors, setValidationErrors] = useState({});
 
   const daysOfWeekShort = ["S", "M", "T", "W", "T", "F", "S"];
   const daysOfWeekFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const positionOptions = ["Business Owner", "Pet Stylist", "Staff"];
 
   useEffect(() => {
     const loadProviderData = async () => {
@@ -284,7 +292,12 @@ export default function ServiceProviderOnboardingPage() {
 
             const { data: staff } = await supabase.from("service_provider_staff").select("*").eq("provider_id", providerData.id);
             if (staff && staff.length > 0) {
-                setEmployees(staff.map(s => ({ fullName: s.full_name, position: s.job_title })));
+                setEmployees(staff.map(s => {
+                    const parts = (s.full_name || "").split(" ");
+                    const fName = parts[0] || "";
+                    const lName = parts.slice(1).join(" ") || "";
+                    return { firstName: fName, lastName: lName, position: s.job_title };
+                }));
             }
         }
       } catch (err) {
@@ -300,7 +313,7 @@ export default function ServiceProviderOnboardingPage() {
     const { name, value } = e.target;
     
     if (name === "description") {
-        if (value.length <= 500) {
+        if (value.length <= 250) {
             setBusinessInfo((prev) => ({ ...prev, [name]: value }));
         }
         return;
@@ -385,7 +398,7 @@ export default function ServiceProviderOnboardingPage() {
   const removeSingleFile = (fileSetter, urlSetter) => { fileSetter(null); urlSetter(null); };
 
   const handleEmployeeChange = (index, field, value) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
-  const addEmployee = () => setEmployees((prev) => [...prev, { fullName: "", position: "" }]);
+  const addEmployee = () => setEmployees((prev) => [...prev, { firstName: "", lastName: "", position: "" }]);
   const removeEmployee = (index) => setEmployees((prev) => prev.filter((_, i) => i !== index));
 
   const validateForm = async () => {
@@ -406,18 +419,25 @@ export default function ServiceProviderOnboardingPage() {
         }
     }
 
-    if (!businessInfo.description.trim()) errors.description = "Business Description is required";
+    if (!businessInfo.description.trim()) {
+        errors.description = "Business Description is required";
+    } else if (businessInfo.description.length > 250) {
+        errors.description = "Maximum of 250 characters allowed";
+    }
     
-    if (!businessInfo.businessEmail.trim()) errors.businessEmail = "Email is required";
+    if (!businessInfo.businessEmail.trim()) {
+        errors.businessEmail = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(businessInfo.businessEmail)) {
+        errors.businessEmail = "Must have a valid domain format";
+    }
+    
     if (!/^09\d{9}$/.test(businessInfo.businessMobile)) errors.businessMobile = "Must be a valid PH mobile number";
 
     if (businessInfo.socialMediaUrl && !/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?(\?.*)?$/.test(businessInfo.socialMediaUrl)) {
         errors.socialMediaUrl = "Must be a valid URL";
     }
 
-    if (!businessInfo.googleMapUrl.trim()) {
-        errors.googleMapUrl = "Google Map Link is required";
-    } else if (!/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?(\?.*)?$/.test(businessInfo.googleMapUrl)) {
+    if (businessInfo.googleMapUrl && !/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?(\?.*)?$/.test(businessInfo.googleMapUrl)) {
         errors.googleMapUrl = "Must be a valid URL";
     }
 
@@ -433,7 +453,7 @@ export default function ServiceProviderOnboardingPage() {
       if (!businessInfo[field] || !businessInfo[field].trim()) errors[field] = "Please provide business address details";
     });
 
-    if (!/^\d{4}$/.test(businessInfo.postalCode)) errors.postalCode = "Invalid postal code";
+    if (!/^\d{4}$/.test(businessInfo.postalCode)) errors.postalCode = "Must only allow 4 integers";
 
     if (facilityImages.length === 0 && existingFacilityImages.length === 0) errors.facilityImages = "At least 1 facility image required";
     if (paymentChannelFiles.length === 0 && existingPaymentChannels.length === 0) errors.paymentChannelFiles = "At least 1 payment QR required";
@@ -441,7 +461,8 @@ export default function ServiceProviderOnboardingPage() {
 
     if (employees.length === 0) errors.employees = "At least one employee is required";
     employees.forEach((emp, i) => {
-      if (!emp.fullName.trim()) errors[`employee_${i}_name`] = "Required";
+      if (!emp.firstName.trim()) errors[`employee_${i}_first`] = "Required";
+      if (!emp.lastName.trim()) errors[`employee_${i}_last`] = "Required";
       if (!emp.position.trim()) errors[`employee_${i}_pos`] = "Required";
     });
 
@@ -615,7 +636,7 @@ export default function ServiceProviderOnboardingPage() {
 
         const staffPayload = employees.map(emp => ({
           provider_id: currentProviderId,
-          full_name: emp.fullName,
+          full_name: `${emp.firstName} ${emp.lastName}`.trim(),
           job_title: emp.position
         }));
 
@@ -685,7 +706,7 @@ export default function ServiceProviderOnboardingPage() {
                     {validationErrors.socialMediaUrl && <small className="error">{validationErrors.socialMediaUrl}</small>}
                 </div>
                 <div className="form-group">
-                    <label>Google Map Link*</label>
+                    <label>Google Map Link</label>
                     <input type="url" name="googleMapUrl" value={businessInfo.googleMapUrl} onChange={handleBusinessChange} placeholder="https://maps.google.com/..." />
                     {validationErrors.googleMapUrl && <small className="error">{validationErrors.googleMapUrl}</small>}
                 </div>
@@ -694,8 +715,8 @@ export default function ServiceProviderOnboardingPage() {
           <div className="form-group description-container">
                 <div className="description-label-row">
                     <label>Business Description*</label> 
-                    <span className={`description-char-count ${businessInfo.description.length >= 500 ? 'limit' : 'normal'}`}>
-                        {businessInfo.description.length}/500
+                    <span className={`description-char-count ${businessInfo.description.length >= 250 ? 'limit' : 'normal'}`}>
+                        {businessInfo.description.length}/250
                     </span>
                 </div>
                 <textarea
@@ -703,7 +724,7 @@ export default function ServiceProviderOnboardingPage() {
                     value={businessInfo.description}
                     onChange={handleBusinessChange}
                     rows={5}
-                    maxLength={500}
+                    maxLength={250}
                     placeholder="Tell us about your business, services, and what makes you unique..."
                     className={`description-textarea ${validationErrors.description ? 'error' : ''}`}
                 />
@@ -779,12 +800,12 @@ export default function ServiceProviderOnboardingPage() {
         <section className="form-section">
           <h2>Documents & Uploads</h2>
           <div className="form-grid-2">
-            <div className="form-group"><label>Waiver</label><label className="file-btn">📁 <span>Select File</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileSelect(setWaiverFile, e, 1, "waiverFile")} hidden /></label><div className="file-preview-small">{waiverFile ? <span>{waiverFile.name} <span onClick={() => setWaiverFile(null)} style={{cursor:'pointer'}}>✕</span></span> : existingWaiverUrl ? <span><a href={existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => removeSingleFile(setWaiverFile, setExistingWaiverUrl)} style={{cursor:'pointer'}}>✕</span></span> : null}</div>{validationErrors.waiverFile && <small className="error">{validationErrors.waiverFile}</small>}</div>
-            <div className="form-group"><label>Business Permit*</label><label className="file-btn">📁 <span>Select File</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileSelect(setBusinessPermitFile, e, 1, "businessPermitFile")} hidden /></label><div className="file-preview-small">{businessPermitFile ? <span>{businessPermitFile.name} <span onClick={() => setBusinessPermitFile(null)} style={{cursor:'pointer'}}>✕</span></span> : existingPermitUrl ? <span><a href={existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => removeSingleFile(setBusinessPermitFile, setExistingPermitUrl)} style={{cursor:'pointer'}}>✕</span></span> : null}</div>{validationErrors.businessPermitFile && <small className="error">{validationErrors.businessPermitFile}</small>}</div>
+            <div className="form-group"><label>Waiver</label><label className="file-btn">📁 <span>Select File (Max 1MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileSelect(setWaiverFile, e, 1, "waiverFile")} hidden /></label><div className="file-preview-small">{waiverFile ? <span>{waiverFile.name} <span onClick={() => setWaiverFile(null)} style={{cursor:'pointer'}}>✕</span></span> : existingWaiverUrl ? <span><a href={existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => removeSingleFile(setWaiverFile, setExistingWaiverUrl)} style={{cursor:'pointer'}}>✕</span></span> : null}</div>{validationErrors.waiverFile && <small className="error">{validationErrors.waiverFile}</small>}</div>
+            <div className="form-group"><label>Business Permit*</label><label className="file-btn">📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileSelect(setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label><div className="file-preview-small">{businessPermitFile ? <span>{businessPermitFile.name} <span onClick={() => setBusinessPermitFile(null)} style={{cursor:'pointer'}}>✕</span></span> : existingPermitUrl ? <span><a href={existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => removeSingleFile(setBusinessPermitFile, setExistingPermitUrl)} style={{cursor:'pointer'}}>✕</span></span> : null}</div>{validationErrors.businessPermitFile && <small className="error">{validationErrors.businessPermitFile}</small>}</div>
           </div>
           <div className="form-grid-2">
-                <div className="form-group"><label>Facility Images*</label><label className="file-btn">📁 <span>Select Images</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => handleMultiFileSelect(setFacilityImages, facilityImages, e, 3, "facilityImages", existingFacilityImages.length, 2)} hidden /></label><div className="file-list">{existingFacilityImages.map(img => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}{facilityImages.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => removeFile(setFacilityImages, i)}>✕</button></div>))}</div>{validationErrors.facilityImages && <small className="error">{validationErrors.facilityImages}</small>}</div>
-                <div className="form-group"><label>Payment QR*</label><label className="file-btn">📁 <span>Select QR Images</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => handleMultiFileSelect(setPaymentChannelFiles, paymentChannelFiles, e, 3, "paymentChannelFiles", existingPaymentChannels.length, 2)} hidden /></label><div className="file-list">{existingPaymentChannels.map(img => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}{paymentChannelFiles.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => removeFile(setPaymentChannelFiles, i)}>✕</button></div>))}</div>{validationErrors.paymentChannelFiles && <small className="error">{validationErrors.paymentChannelFiles}</small>}</div>
+                <div className="form-group"><label>Facility Images (Max 3)*</label><label className="file-btn">📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => handleMultiFileSelect(setFacilityImages, facilityImages, e, 3, "facilityImages", existingFacilityImages.length, 1)} hidden /></label><div className="file-list">{existingFacilityImages.map(img => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}{facilityImages.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => removeFile(setFacilityImages, i)}>✕</button></div>))}</div>{validationErrors.facilityImages && <small className="error">{validationErrors.facilityImages}</small>}</div>
+                <div className="form-group"><label>Payment QR (Max 2)*</label><label className="file-btn">📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => handleMultiFileSelect(setPaymentChannelFiles, paymentChannelFiles, e, 2, "paymentChannelFiles", existingPaymentChannels.length, 1)} hidden /></label><div className="file-list">{existingPaymentChannels.map(img => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}{paymentChannelFiles.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => removeFile(setPaymentChannelFiles, i)}>✕</button></div>))}</div>{validationErrors.paymentChannelFiles && <small className="error">{validationErrors.paymentChannelFiles}</small>}</div>
           </div>
         </section>
 
@@ -792,9 +813,10 @@ export default function ServiceProviderOnboardingPage() {
           <h2>Employee Information</h2>
           {employees.map((emp, idx) => (
             <div className="employee-row" key={idx}>
-              <div className="form-grid-2">
-                <div className="form-group"><label>Full Name*</label><input type="text" value={emp.fullName} onChange={(e) => handleEmployeeChange(idx, "fullName", e.target.value)} />{validationErrors[`employee_${idx}_name`] && <small className="error">{validationErrors[`employee_${idx}_name`]}</small>}</div>
-                <div className="form-group"><label>Position*</label><div className="input-with-btn"><select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)}><option value="">Select Position</option>{positionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{employees.length > 1 && (<button type="button" onClick={() => removeEmployee(idx)} className="remove-btn">🗑️</button>)}</div>{validationErrors[`employee_${idx}_pos`] && <small className="error">{validationErrors[`employee_${idx}_pos`]}</small>}</div>
+              <div className="form-grid-3">
+                <div className="form-group"><label>First Name*</label><input type="text" value={emp.firstName} onChange={(e) => handleEmployeeChange(idx, "firstName", e.target.value)} />{validationErrors[`employee_${idx}_first`] && <small className="error">{validationErrors[`employee_${idx}_first`]}</small>}</div>
+                <div className="form-group"><label>Last Name*</label><input type="text" value={emp.lastName} onChange={(e) => handleEmployeeChange(idx, "lastName", e.target.value)} />{validationErrors[`employee_${idx}_last`] && <small className="error">{validationErrors[`employee_${idx}_last`]}</small>}</div>
+                <div className="form-group"><label>Position*</label><div className="input-with-btn"><select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)}><option value="">Select Position</option>{POSITION_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>{employees.length > 1 && (<button type="button" onClick={() => removeEmployee(idx)} className="remove-btn">🗑️</button>)}</div>{validationErrors[`employee_${idx}_pos`] && <small className="error">{validationErrors[`employee_${idx}_pos`]}</small>}</div>
               </div>
             </div>
           ))}
