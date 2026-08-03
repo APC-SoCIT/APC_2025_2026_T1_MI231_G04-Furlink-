@@ -14,6 +14,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import "./page.css";
 
+type FilterType = "pending" | "active" | null;
+
 interface ProviderRow {
   id: string;
   business_name: string;
@@ -22,6 +24,7 @@ interface ProviderRow {
   status: string;
   created_at: string | null;
   updated_at: string | null;
+  approved_at?: string | null;
 }
 
 export default function AdminDashboardPage() {
@@ -38,7 +41,7 @@ export default function AdminDashboardPage() {
   const [totalUsers, setTotalUsers] = useState(0);
 
   // --- PENDING APPROVALS LIST ---
-  const [showPendingList, setShowPendingList] = useState(false);
+  const [currentFilter, setCurrentFilter] = useState<FilterType>("pending");
   const [tableData, setTableData] = useState<ProviderRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,12 +50,14 @@ export default function AdminDashboardPage() {
     fetchDashboardCounts();
   }, []);
 
-  //Fetch the pending list only when the Pending card is clicked
+  //Fetch the list only when a clickable card has been selected
   useEffect(() => {
-    if (showPendingList) {
+    if (currentFilter === "pending") {
       fetchPendingList();
+    } else if (currentFilter === "active") {
+      fetchActiveList();
     }
-  }, [showPendingList]);
+  }, [currentFilter]);
 
   //Fetch the functions
   const fetchAdminProfile = async () => {
@@ -153,8 +158,27 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Helpers
+  //Fetch just the active (approved) listings
+  const fetchActiveList = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("sp_general_info")
+        .select(
+          "id, business_name, city, province, status, created_at, updated_at, approved_at"
+        )
+        .eq("status", "approved")
+        .order("approved_at", { ascending: false });
 
+      if (!error) setTableData(data || []);
+    } catch (err) {
+      console.error("Error fetching active list:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helpers
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -168,8 +192,19 @@ export default function AdminDashboardPage() {
     // for repiort generation
   };
 
-  const handlePendingCardClick = () => {
-    setShowPendingList(true);
+  const handleCardClick = (filter: FilterType) => {
+    setCurrentFilter(filter);
+  };
+
+  const getListTitle = () => {
+    switch (currentFilter) {
+      case "pending":
+        return "Pending Approvals (Complete Applications)";
+      case "active":
+        return "Active Listings";
+      default:
+        return "";
+    }
   };
 
   return (
@@ -203,8 +238,10 @@ export default function AdminDashboardPage() {
         {/* KPI cards */}
         <div className="stats-grid">
           <div
-            className={`stat-card ${showPendingList ? "active-filter" : ""}`}
-            onClick={handlePendingCardClick}
+            className={`stat-card ${
+              currentFilter === "pending" ? "active-filter" : ""
+            }`}
+            onClick={() => handleCardClick("pending")}
           >
             <div className="stat-icon-wrapper pending">
               <FaStore size={24} />
@@ -215,7 +252,12 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="stat-card non-clickable">
+          <div
+            className={`stat-card ${
+              currentFilter === "active" ? "active-filter" : ""
+            }`}
+            onClick={() => handleCardClick("active")}
+          >
             <div className="stat-icon-wrapper active">
               <FaCheckCircle size={24} />
             </div>
@@ -256,13 +298,11 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* List only shows once the Pending card has been clicked */}
-        {showPendingList && (
+        {/* List only shows once Pending or Active has been clicked */}
+        {currentFilter && (
           <div className="dashboard-list-container">
             <div className="list-header">
-              <h2 className="list-title">
-                Pending Approvals (Complete Applications)
-              </h2>
+              <h2 className="list-title">{getListTitle()}</h2>
             </div>
 
             <div className="providers-table-wrapper">
@@ -278,7 +318,9 @@ export default function AdminDashboardPage() {
                     <tr>
                       <th>Business Name</th>
                       <th>Location</th>
-                      <th>Date Submitted</th>
+                      <th>
+                        Date {currentFilter === "pending" ? "Submitted" : "Approved"}
+                      </th>
                       <th>Status</th>
                       <th>Action</th>
                     </tr>
@@ -293,7 +335,13 @@ export default function AdminDashboardPage() {
                           {item.city && item.province ? ", " : ""}
                           {item.province}
                         </td>
-                        <td>{formatDate(item.created_at)}</td>
+                        <td>
+                          {formatDate(
+                            currentFilter === "pending"
+                              ? item.created_at
+                              : item.approved_at
+                          )}
+                        </td>
                         <td>
                           <span className={`status-pill ${item.status}`}>
                             {item.status}
