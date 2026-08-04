@@ -11,6 +11,7 @@ export const ROUTES = {
     DASHBOARD: "/pet_owner",
     MANAGE_BOOKING: "/pet_owner/manage_bookings",
     MANAGE_PET: "/pet_owner/manage_pet",
+    ADD_PET: "pet_owner/manage_pet/add_pet",
   },
   SERVICE_PROVIDER: {
     ONBOARDING: "/service_provider/manage_listing/onboarding",
