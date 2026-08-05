@@ -7,6 +7,12 @@ import { ROUTES } from "@/config/routes";
 import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
 import "./page.css"; 
 
+const REJECTION_REASONS = [
+  "Incomplete Information",
+  "Information cannot be verified",
+  "Uploaded files are invalid or inappropriate",
+];
+
 export default function SPDetailsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -19,8 +25,11 @@ export default function SPDetailsPage() {
   // States for Approve/Reject functionality
   const [adminId, setAdminId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showRejectInput, setShowRejectInput] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
+
+  // Modal states
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedRejectReason, setSelectedRejectReason] = useState("");
 
   useEffect(() => {
     fetchAdminUser();
@@ -69,8 +78,7 @@ export default function SPDetailsPage() {
   };
 
   // Handle Approval
-  const handleApprove = async () => {
-    if (!confirm("Are you sure you want to approve this provider?")) return;
+  const confirmApprove = async () => {
     setIsUpdating(true);
     
     try {
@@ -85,7 +93,7 @@ export default function SPDetailsPage() {
         .eq("id", providerId);
 
       if (error) throw error;
-      alert("Provider has been approved!");
+      setShowApproveModal(false);
       fetchProviderDetails(); // Refresh the UI
     } catch (err: any) {
       alert("Error approving: " + err.message);
@@ -95,9 +103,9 @@ export default function SPDetailsPage() {
   };
 
   // Handle Rejection
-  const handleRejectSubmit = async () => {
-    if (!rejectReason.trim()) {
-      alert("Please provide a reason for rejection.");
+  const confirmReject = async () => {
+    if (!selectedRejectReason) {
+      alert("Please select a reason for rejection.");
       return;
     }
     setIsUpdating(true);
@@ -107,15 +115,15 @@ export default function SPDetailsPage() {
         .from("sp_general_info")
         .update({
           registration_status: "rejected",
-          registration_rejection_reason: rejectReason.trim(),
+          registration_rejection_reason: selectedRejectReason,
           registration_response_by: adminId,
           updated_at: new Date().toISOString(),
         })
         .eq("id", providerId);
 
       if (error) throw error;
-      alert("Provider has been rejected.");
-      setShowRejectInput(false);
+      setShowRejectModal(false);
+      setSelectedRejectReason("");
       fetchProviderDetails(); // Refresh the UI
     } catch (err: any) {
       alert("Error rejecting: " + err.message);
@@ -155,41 +163,20 @@ export default function SPDetailsPage() {
             {/* ACTION BUTTONS (Only show if pending) */}
             {provider.registration_status === "pending" && (
               <div className="action-buttons-container">
-                {!showRejectInput ? (
-                  <>
-                    <button 
-                      className="btn-approve" 
-                      onClick={handleApprove} 
-                      disabled={isUpdating}
-                    >
-                      <FaCheck /> {isUpdating ? "Processing..." : "Approve Listing"}
-                    </button>
-                    <button 
-                      className="btn-reject" 
-                      onClick={() => setShowRejectInput(true)} 
-                      disabled={isUpdating}
-                    >
-                      <FaTimes /> Reject
-                    </button>
-                  </>
-                ) : (
-                  <div className="reject-reason-box">
-                    <textarea 
-                      placeholder="Why is this listing being rejected?"
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                      maxLength={250}
-                    />
-                    <div className="reject-actions">
-                      <button className="btn-reject" onClick={handleRejectSubmit} disabled={isUpdating}>
-                        Confirm Rejection
-                      </button>
-                      <button className="btn-cancel" onClick={() => setShowRejectInput(false)} disabled={isUpdating}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <button 
+                  className="btn-approve" 
+                  onClick={() => setShowApproveModal(true)} 
+                  disabled={isUpdating}
+                >
+                  <FaCheck /> Approve Listing
+                </button>
+                <button 
+                  className="btn-reject" 
+                  onClick={() => setShowRejectModal(true)} 
+                  disabled={isUpdating}
+                >
+                  <FaTimes /> Reject
+                </button>
               </div>
             )}
           </div>
@@ -307,6 +294,81 @@ export default function SPDetailsPage() {
 
         </div>
       </main>
+
+      {/* APPROVE MODAL */}
+      {showApproveModal && (
+        <div className="modal-overlay" onClick={() => !isUpdating && setShowApproveModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Approve this provider?</h3>
+            <p className="modal-text">
+              This will make <strong>{provider.business_name}</strong> visible and active on the platform.
+            </p>
+            <div className="modal-actions">
+              <button 
+                className="btn-cancel" 
+                onClick={() => setShowApproveModal(false)} 
+                disabled={isUpdating}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-approve" 
+                onClick={confirmApprove} 
+                disabled={isUpdating}
+              >
+                {isUpdating ? "Processing..." : "Yes, Approve"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT MODAL */}
+      {showRejectModal && (
+        <div className="modal-overlay" onClick={() => !isUpdating && setShowRejectModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Reject this provider?</h3>
+            <p className="modal-text">
+              Select a reason for rejecting <strong>{provider.business_name}</strong>.
+            </p>
+
+            <div className="reject-options-list">
+              {REJECTION_REASONS.map((reason) => (
+                <label key={reason} className="reject-option">
+                  <input
+                    type="radio"
+                    name="rejectReason"
+                    value={reason}
+                    checked={selectedRejectReason === reason}
+                    onChange={(e) => setSelectedRejectReason(e.target.value)}
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                className="btn-cancel" 
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setSelectedRejectReason("");
+                }} 
+                disabled={isUpdating}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-reject" 
+                onClick={confirmReject} 
+                disabled={isUpdating || !selectedRejectReason}
+              >
+                {isUpdating ? "Processing..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
