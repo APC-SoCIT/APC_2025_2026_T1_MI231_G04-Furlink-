@@ -84,6 +84,7 @@ export function useFileUploads(supabase, providerId, { setFieldError, clearField
     if (!url) return null;
     try {
       const u = new URL(url);
+      // The regex skips the bucket name and captures the remaining file path
       const match = u.pathname.match(/\/storage\/v1\/object\/public\/[^\/]+\/(.+)$/);
       return match ? decodeURIComponent(match[1]) : null;
     } catch {
@@ -96,31 +97,55 @@ export function useFileUploads(supabase, providerId, { setFieldError, clearField
     if (!window.confirm("Are you sure you want to remove this file?")) return;
     try {
       let tableName = "";
-      if (type === "image") tableName = "service_provider_images";
-      else if (type === "payment") tableName = "service_provider_payments";
-      else if (type === "permit") tableName = "service_provider_permits";
+      let bucketName = "";
+
+      if (type === "image") {
+        tableName = "sp_img_facilities"; // UPDATED TABLE NAME
+        bucketName = "sp-facility-images";
+      } else if (type === "payment") {
+        // No table needed; it is stored as a direct column in sp_general_info
+        bucketName = "sp-payment-qr";
+      } else if (type === "permit") {
+        // No table needed; it is stored as a direct column in sp_general_info
+        bucketName = "sp-permit";
+      }
 
       const filePath = getFilePathFromUrl(fileUrl);
-      if (filePath) await supabase.storage.from("service_provider_uploads").remove([filePath]);
+      if (filePath && bucketName) {
+        await supabase.storage.from(bucketName).remove([filePath]);
+      }
 
+      // Only sp_img_facilities remains as a separate related table
       if (tableName) {
         await supabase.from(tableName).delete().eq("id", id);
-        if (type === "image") setExistingFacilityImages((prev) => prev.filter((i) => i.id !== id));
-        if (type === "payment") setExistingPaymentChannels((prev) => prev.filter((p) => p.id !== id));
-        if (type === "permit") setExistingPermitUrl(null);
       }
+
+      // Always clear the frontend state so the user sees it vanish immediately
+      if (type === "image") setExistingFacilityImages((prev) => prev.filter((i) => i.id !== id));
+      if (type === "payment") setExistingPaymentChannels((prev) => prev.filter((p) => p.id !== id));
+      if (type === "permit") setExistingPermitUrl(null);
+      
     } catch (e) {
       console.error("Remove error", e);
     }
   };
 
-  /** Uploads one File to Supabase Storage and returns its public URL. */
+  /** Uploads one File to specific Supabase Storage buckets and returns its public URL. */
   const uploadFileToStorage = async (userId, folder, file) => {
     if (!file) return null;
-    const filePath = `${userId}/${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, "_")}`;
-    const { error } = await supabase.storage.from("service_provider_uploads").upload(filePath, file);
+
+    let bucketName = "";
+    if (folder === "waivers") bucketName = "sp-waiver";
+    else if (folder === "permits") bucketName = "sp-permit";
+    else if (folder === "facilities") bucketName = "sp-facility-images";
+    else if (folder === "payments") bucketName = "sp-payment-qr";
+
+    const filePath = `${userId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, "_")}`;
+    
+    const { error } = await supabase.storage.from(bucketName).upload(filePath, file);
     if (error) throw error;
-    const { data } = supabase.storage.from("service_provider_uploads").getPublicUrl(filePath);
+    
+    const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
     return data.publicUrl;
   };
 

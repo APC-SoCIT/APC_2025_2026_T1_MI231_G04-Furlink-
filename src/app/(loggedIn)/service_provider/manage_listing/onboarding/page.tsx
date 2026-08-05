@@ -1,7 +1,7 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/page.tsx */
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { ROUTES } from "@/config/routes";
@@ -12,34 +12,21 @@ import { POSITION_OPTIONS, DAYS_OF_WEEK_SHORT, DAYS_OF_WEEK_FULL, DESCRIPTION_MA
 import { useValidation } from "./hooks/useValidation";
 import { useFileUploads } from "./hooks/useFileUploads";
 
-/**
- * ServiceProviderOnboardingPage
- * ---------------------------------------------------------------------------
- * Multi-section application form for a new (or reapplying) service provider.
- * State/logic is split as follows:
- *   - businessInfo, employees, providerId, modal/loading flags -> local state here
- *   - validationErrors + validate()                            -> useValidation
- *   - all file/attachment state + upload handlers               -> useFileUploads
- *   - the read-only "review before submit" summary              -> ConfirmationModal
- *
- * The operating-hours editor and labeled form fields stay inline as JSX
- * below (by design) since they're tightly coupled to businessInfo state.
- */
 export default function ServiceProviderOnboardingPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); 
   const [providerId, setProviderId] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isReapplying, setIsReapplying] = useState(false);
 
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
-    description: "",
+    description: "", 
     businessEmail: "",
-    businessMobile: "",
+    businessMobile: "", 
     socialMediaUrl: "",
     googleMapUrl: "",
     typeOfService: "Pet Grooming",
@@ -51,7 +38,8 @@ export default function ServiceProviderOnboardingPage() {
       slotDurationMinutes: 0,
       capacityPerSlot: 1,
     }],
-    houseStreet: "",
+    houseStreet: "", 
+    region: "", 
     barangay: "",
     city: "",
     province: "",
@@ -63,84 +51,6 @@ export default function ServiceProviderOnboardingPage() {
 
   const { errors: validationErrors, setErrors: setValidationErrors, setFieldError, clearFieldError, validate } = useValidation();
   const files = useFileUploads(supabase, providerId, { setFieldError, clearFieldError });
-
-  /* -------------------------------------------------------------------- */
-  /* Load existing provider data (edit mode / reapplication)               */
-  /* -------------------------------------------------------------------- */
-  useEffect(() => {
-    const loadProviderData = async () => {
-      try {
-        setIsLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: providerData } = await supabase
-          .from("service_providers")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (providerData) {
-          setProviderId(providerData.id);
-          setIsReapplying(providerData.status === 'rejected');
-          localStorage.setItem("providerId", providerData.id);
-
-          setBusinessInfo(prev => ({
-            ...prev,
-            businessName: providerData.business_name || "",
-            description: providerData.description || "",
-            businessEmail: providerData.business_email || "",
-            businessMobile: providerData.business_mobile || "",
-            socialMediaUrl: providerData.social_media_url || "",
-            googleMapUrl: providerData.google_map_url || "",
-            houseStreet: providerData.house_street || "",
-            barangay: providerData.barangay || "",
-            city: providerData.city || "",
-            province: providerData.province || "",
-            postalCode: providerData.postal_code || "",
-          }));
-
-          if (providerData.waiver_url) files.setExistingWaiverUrl(providerData.waiver_url);
-
-          const { data: hours } = await supabase.from("service_provider_hours").select("*").eq("provider_id", providerData.id);
-          if (hours && hours.length > 0) {
-            const grouped = {};
-            hours.forEach((h) => {
-              const key = `${h.start_time}-${h.end_time}`;
-              if (!grouped[key]) grouped[key] = { days: [], startTime: h.start_time, endTime: h.end_time };
-              grouped[key].days.push(h.day_of_week);
-            });
-            setBusinessInfo((prev) => ({ ...prev, operatingHours: Object.values(grouped) }));
-          }
-
-          const { data: imgs } = await supabase.from("service_provider_images").select("*").eq("provider_id", providerData.id);
-          if (imgs) files.setExistingFacilityImages(imgs);
-
-          const { data: payments } = await supabase.from("service_provider_payments").select("*").eq("provider_id", providerData.id);
-          if (payments) files.setExistingPaymentChannels(payments);
-
-          const { data: permits } = await supabase.from("service_provider_permits").select("*").eq("provider_id", providerData.id);
-          if (permits && permits.length > 0) files.setExistingPermitUrl(permits[0].file_url);
-
-          const { data: staff } = await supabase.from("service_provider_staff").select("*").eq("provider_id", providerData.id);
-          if (staff && staff.length > 0) {
-            setEmployees(staff.map(s => {
-              const parts = (s.full_name || "").split(" ");
-              const fName = parts[0] || "";
-              const lName = parts.slice(1).join(" ") || "";
-              return { firstName: fName, lastName: lName, position: s.job_title };
-            }));
-          }
-        }
-      } catch (err) {
-        console.error("Load error:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadProviderData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]);
 
   /* -------------------------------------------------------------------- */
   /* Business info field handlers                                         */
@@ -189,7 +99,7 @@ export default function ServiceProviderOnboardingPage() {
   };
 
   /* -------------------------------------------------------------------- */
-  /* Employee helpers                                                      */
+  /* Employee helpers                                                     */
   /* -------------------------------------------------------------------- */
   const handleEmployeeChange = (index, field, value) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
   const addEmployee = () => setEmployees((prev) => [...prev, { firstName: "", lastName: "", position: "" }]);
@@ -242,30 +152,39 @@ export default function ServiceProviderOnboardingPage() {
         if (u) newPaymentUrls.push(u);
       }
 
+      const finalPaymentUrl = newPaymentUrls.length > 0 
+        ? newPaymentUrls.join(',') 
+        : (files.existingPaymentChannels?.[0]?.file_url || null);
+
       const payload = {
-        user_id: user.id,
+        profiles_id: user.id,
         business_name: businessInfo.businessName,
-        description: businessInfo.description,
+        business_bio: businessInfo.description,
         business_email: businessInfo.businessEmail,
-        business_mobile: businessInfo.businessMobile,
-        house_street: businessInfo.houseStreet,
-        barangay: businessInfo.barangay,
-        city: businessInfo.city,
-        province: businessInfo.province,
-        postal_code: businessInfo.postalCode,
-        country: businessInfo.country,
-        type_of_service: businessInfo.typeOfService,
-        social_media_url: businessInfo.socialMediaUrl,
-        google_map_url: businessInfo.googleMapUrl,
-        waiver_url: waiverUrl,
-        status: 'incomplete',
-        rejection_reasons: null,
+        business_contact: businessInfo.businessMobile,
+        business_street: businessInfo.houseStreet,
+        business_region: businessInfo.region,
+        business_barangay: businessInfo.barangay,
+        business_city: businessInfo.city,
+        business_province: businessInfo.province,
+        business_postal_code: businessInfo.postalCode,
+        business_country: businessInfo.country,
+        business_service_type: businessInfo.typeOfService,
+        business_social_media_url: businessInfo.socialMediaUrl || null,
+        business_google_map_url: businessInfo.googleMapUrl || null,
+        business_waiver_url: waiverUrl,
+        business_permit_url: permitUrl,
+        business_payment_qr_url: finalPaymentUrl,
+        registration_status: 'pending',
+        registration_rejection_reason: null,
+        business_latitude: 0, 
+        business_longitude: 0,
         updated_at: new Date().toISOString(),
       };
 
       const { data: upsertData, error: upsertError } = await supabase
-        .from("service_providers")
-        .upsert(payload, { onConflict: 'user_id' })
+        .from("sp_general_info")
+        .upsert(payload, { onConflict: 'profiles_id' })
         .select()
         .single();
 
@@ -275,9 +194,10 @@ export default function ServiceProviderOnboardingPage() {
       setProviderId(currentProviderId);
       localStorage.setItem("providerId", currentProviderId);
 
+      // UPDATED MAPPINGS: sp_id instead of provider_id
       await Promise.all([
-        supabase.from("service_provider_hours").delete().eq("provider_id", currentProviderId),
-        supabase.from("service_provider_staff").delete().eq("provider_id", currentProviderId),
+        supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId),
+        supabase.from("sp_employees_info").delete().eq("sp_id", currentProviderId),
       ]);
 
       const hoursPayload = [];
@@ -285,51 +205,39 @@ export default function ServiceProviderOnboardingPage() {
         const totalMinutes = (slot.slotDurationHours * 60) + slot.slotDurationMinutes;
         slot.days.forEach(day => {
           hoursPayload.push({
-            provider_id: currentProviderId,
+            sp_id: currentProviderId, // Mapped to new FK
             day_of_week: day,
-            start_time: slot.startTime,
-            end_time: slot.endTime,
-            slot_interval_minutes: totalMinutes,
+            opening_time: slot.startTime, // Mapped to opening_time
+            closing_time: slot.endTime,   // Mapped to closing_time
+            slot_interval: totalMinutes,  // Mapped to slot_interval
             slot_capacity: slot.capacityPerSlot,
           });
         });
       });
 
       if (hoursPayload.length > 0) {
-        const { error: hError } = await supabase.from("service_provider_hours").insert(hoursPayload);
+        const { error: hError } = await supabase.from("sp_operating_hours").insert(hoursPayload);
         if (hError) throw hError;
       }
 
       if (newFacilityUrls.length > 0) {
-        const imgPayload = newFacilityUrls.map(url => ({ provider_id: currentProviderId, image_url: url }));
-        const { error: imgErr } = await supabase.from("service_provider_images").insert(imgPayload);
+        const imgPayload = newFacilityUrls.map(url => ({ 
+          sp_id: currentProviderId, 
+          business_facility_images: url // Mapped to business_facility_images
+        }));
+        const { error: imgErr } = await supabase.from("sp_img_facilities").insert(imgPayload);
         if (imgErr) throw imgErr;
       }
 
-      if (newPaymentUrls.length > 0) {
-        const payPayload = newPaymentUrls.map(url => ({ provider_id: currentProviderId, method_type: "QR", file_url: url }));
-        const { error: payErr } = await supabase.from("service_provider_payments").insert(payPayload);
-        if (payErr) throw payErr;
-      }
-
-      if (files.businessPermitFile) {
-        await supabase.from("service_provider_permits").delete().eq("provider_id", currentProviderId);
-        const { error: permitErr } = await supabase.from("service_provider_permits").insert({
-          provider_id: currentProviderId,
-          permit_type: "Business Permit",
-          file_url: permitUrl,
-        });
-        if (permitErr) throw permitErr;
-      }
-
       const staffPayload = employees.map(emp => ({
-        provider_id: currentProviderId,
-        full_name: `${emp.firstName} ${emp.lastName}`.trim(),
-        job_title: emp.position,
+        sp_id: currentProviderId, // Mapped to new FK
+        employee_first_name: emp.firstName.trim(), // Split to first name
+        employee_last_name: emp.lastName.trim(),   // Split to last name
+        employee_position: emp.position,           // Mapped to employee_position
       }));
 
       if (staffPayload.length > 0) {
-        const { error: sError } = await supabase.from("service_provider_staff").insert(staffPayload);
+        const { error: sError } = await supabase.from("sp_employees_info").insert(staffPayload);
         if (sError) throw sError;
       }
 
@@ -337,8 +245,8 @@ export default function ServiceProviderOnboardingPage() {
       router.push(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING);
 
     } catch (err) {
-      console.error("SUBMISSION FAILED:", err);
-      setFieldError("general", "Submission failed: " + (err.message || "An unexpected error occurred."));
+      console.error("SUBMISSION FAILED:", JSON.stringify(err, null, 2), err);
+      setFieldError("general", "Submission failed: " + (err.message || err.details || "An unexpected error occurred."));
       setShowConfirmModal(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
@@ -416,7 +324,6 @@ export default function ServiceProviderOnboardingPage() {
             {validationErrors.description && <small className="error">{validationErrors.description}</small>}
           </div>
 
-          {/* Operating hours + slot capacity editor (kept inline — tightly coupled to businessInfo state) */}
           <div className="form-group operating-hours-container">
             <label>Operating Hours & Slot Capacity*</label>
             {businessInfo.operatingHours.map((slot, i) => (
@@ -473,9 +380,10 @@ export default function ServiceProviderOnboardingPage() {
           <h2>Business Address</h2>
           <div className="form-grid-3">
             <div className="form-group"><label>Street / House No.*</label><input type="text" name="houseStreet" value={businessInfo.houseStreet} onChange={handleBusinessChange} />{validationErrors.houseStreet && <small className="error">{validationErrors.houseStreet}</small>}</div>
-            <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
-            <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} />{validationErrors.city && <small className="error">{validationErrors.city}</small>}</div>
+            <div className="form-group"><label>Region*</label><input type="text" name="region" value={businessInfo.region} onChange={handleBusinessChange} />{validationErrors.region && <small className="error">{validationErrors.region}</small>}</div>
             <div className="form-group"><label>Province*</label><input type="text" name="province" value={businessInfo.province} onChange={handleBusinessChange} />{validationErrors.province && <small className="error">{validationErrors.province}</small>}</div>
+            <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} />{validationErrors.city && <small className="error">{validationErrors.city}</small>}</div>
+            <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
             <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} />{validationErrors.postalCode && <small className="error">{validationErrors.postalCode}</small>}</div>
             <div className="form-group"><label>Country</label><input type="text" name="country" value={businessInfo.country} disabled className="input-disabled" /></div>
           </div>
