@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FaArrowLeft, FaPaw, FaFileUpload } from "react-icons/fa";
+import { FaArrowLeft, FaPaw, FaFileUpload, FaCheckCircle } from "react-icons/fa";
 import "./add_pet.css";
 
 type PetBehavior = "friendly" | "aggressive" | "anxious" | "energetic" | "trained";
@@ -37,6 +37,9 @@ export default function AddPetPage() {
   const [petGroomingNotes, setPetGroomingNotes] = useState("");
   const [petEmergencyConsent, setPetEmergencyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Success Pop-up Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Dynamic Breed Loading State
   const [breeds, setBreeds] = useState<string[]>([]);
@@ -98,7 +101,6 @@ export default function AddPetPage() {
 
   // Helper function to upload file to the private pet-medical-docs bucket
   const uploadImage = async (file: File, folder: string, userId: string): Promise<string | null> => {
-    // Check file size (1MB limit set in your bucket configuration)
     if (file.size > 1 * 1024 * 1024) {
       alert(`File "${file.name}" exceeds the 1 MB size limit.`);
       return null;
@@ -121,13 +123,11 @@ export default function AddPetPage() {
         return null;
       }
 
-      // Generate a long-lived signed URL or get public path for private bucket
       const { data: signedData, error: signedError } = await supabase.storage
         .from('pet-medical-docs')
         .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1-year signed URL
 
       if (signedError || !signedData?.signedUrl) {
-        // Fallback to relative storage path if signed URL generation fails
         return fileName;
       }
 
@@ -163,14 +163,14 @@ export default function AddPetPage() {
         return;
       }
 
-      // Upload Vaccine Record to pet-medical-docs bucket
+      // Upload Vaccine Record
       const vaccineUrl = await uploadImage(vaccineFile, "vaccine", user.id);
       if (!vaccineUrl) {
         setSubmitting(false);
         return;
       }
 
-      // Upload Medical Record / Illness Proof (Optional)
+      // Upload Illness Proof (Optional)
       let illnessUrl: string | null = null;
       if (illnessFile) {
         illnessUrl = await uploadImage(illnessFile, "illness", user.id);
@@ -196,9 +196,7 @@ export default function AddPetPage() {
       if (error) {
         alert("Error registering pet: " + error.message);
       } else {
-        alert("Added new pet");
-        router.push("/pet_owner/manage_pet");
-        router.refresh();
+        setShowSuccessModal(true);
       }
     } catch (err) {
       console.error("Unexpected error saving pet:", err);
@@ -206,6 +204,12 @@ export default function AddPetPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    router.push("/pet_owner/manage_pet");
+    router.refresh();
   };
 
   return (
@@ -327,7 +331,6 @@ export default function AddPetPage() {
             </div>
           </div>
 
-          {/* Vaccine Record Image Upload */}
           <div className="form-group">
             <label className="form-label">Vaccine Record Image (Max 1MB) *</label>
             <div className="file-upload-wrapper">
@@ -348,7 +351,6 @@ export default function AddPetPage() {
             </div>
           </div>
 
-          {/* Medical Record / Illness Proof Image Upload */}
           <div className="form-group">
             <label className="form-label">Medical Record / Illness Proof Image (Max 1MB)</label>
             <div className="file-upload-wrapper">
@@ -401,6 +403,20 @@ export default function AddPetPage() {
           </div>
         </form>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <FaCheckCircle className="popup-icon" />
+            <h2 className="popup-title">Added New Pet</h2>
+            <p className="popup-message">Your pet profile has been created successfully!</p>
+            <button onClick={handleCloseModal} className="popup-btn">
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

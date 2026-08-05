@@ -42,6 +42,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  text-decoration: none;
   transition: opacity 0.2s;
 }
 
@@ -167,15 +168,29 @@
 
 .linkGroup {
   display: flex;
-  gap: 12px;
-  margin-top: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
-.docLink {
-  font-size: 12px;
+.docBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #f1f5f9;
   color: var(--btn-dark-blue);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 600;
-  text-decoration: underline;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.docBtn:hover {
+  background-color: var(--btn-dark-blue);
+  color: #ffffff;
 }
 
 .cardFooter {
@@ -202,115 +217,66 @@
   text-decoration: underline;
 }
 
-/* Modal styling */
-.modalOverlay {
+/* Image Preview Modal */
+.imageModalOverlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(10, 33, 122, 0.7);
+  background-color: rgba(10, 33, 122, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 150;
+  z-index: 200;
   padding: 16px;
 }
 
-.modalContent {
-  background-color: var(--bg-white);
-  color: #0f172a;
+.imageModalCard {
+  background-color: #ffffff;
   border-radius: 16px;
-  max-width: 520px;
+  max-width: 600px;
   width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
-.modalTitle {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--btn-dark-blue);
-  margin-bottom: 16px;
-}
-
-.formGroup {
+.imageModalHeader {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.gridTwo {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.inputWrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.label {
-  font-size: 12px;
+.imageModalHeader h3 {
+  font-size: 16px;
   font-weight: 700;
   color: var(--btn-dark-blue);
 }
 
-.input {
-  width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 14px;
+.closeModalBtn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.closeModalBtn:hover {
   color: #0f172a;
 }
 
-.checkboxGroup {
+.imageModalBody {
+  padding: 16px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.checkboxLabel {
-  font-size: 13px;
-  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  text-transform: capitalize;
+  background-color: #f8fafc;
+  max-height: 75vh;
+  overflow-y: auto;
 }
 
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.cancelBtn {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: #64748b;
-  padding: 8px 16px;
+.previewImg {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
   border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.saveBtn {
-  background-color: var(--btn-dark-blue);
-  color: var(--text-white);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@media (max-width: 640px) {
-  .gridTwo {
-    grid-template-columns: 1fr;
-  }
 }

@@ -204,6 +204,66 @@
   cursor: not-allowed;
 }
 
+/* Success Pop-up Modal */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 16px;
+}
+
+.popup-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 32px 24px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.popup-icon {
+  font-size: 48px;
+  color: #10b981;
+  margin-bottom: 12px;
+}
+
+.popup-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--btn-dark-blue);
+  margin-bottom: 8px;
+}
+
+.popup-message {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.popup-btn {
+  background-color: var(--btn-dark-blue);
+  color: #ffffff;
+  border: none;
+  padding: 10px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.popup-btn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 640px) {
   .form-grid-two {
     grid-template-columns: 1fr;

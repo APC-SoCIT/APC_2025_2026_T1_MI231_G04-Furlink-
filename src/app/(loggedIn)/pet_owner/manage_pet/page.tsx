@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FaPaw, FaPlus, FaTrash, FaVenus, FaMars } from "react-icons/fa";
+import { FaPaw, FaPlus, FaTrash, FaVenus, FaMars, FaTimes, FaFileImage } from "react-icons/fa";
 import "./manage_pet.css";
 
 type PetBehavior = "friendly" | "aggressive" | "anxious" | "energetic" | "trained";
@@ -31,6 +31,9 @@ export default function ManagePetPage() {
   const supabase = createClientComponentClient();
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal preview state for documents
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const fetchPets = async () => {
     try {
@@ -151,24 +154,34 @@ export default function ManagePetPage() {
                   </p>
                 )}
 
+                {/* Clickable Image Document Links */}
                 <div className="linkGroup">
-                  <a
-                    href={pet.pet_vaccine_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="docLink"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewImage({
+                        url: pet.pet_vaccine_url,
+                        title: `${pet.pet_name}'s Vaccine Record`,
+                      })
+                    }
+                    className="docBtn"
                   >
-                    Vaccine Records ↗
-                  </a>
+                    <FaFileImage /> Vaccine Record
+                  </button>
+
                   {pet.pet_illness_proof_url && (
-                    <a
-                      href={pet.pet_illness_proof_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="docLink"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewImage({
+                          url: pet.pet_illness_proof_url!,
+                          title: `${pet.pet_name}'s Medical Record`,
+                        })
+                      }
+                      className="docBtn"
                     >
-                      Medical Records ↗
-                    </a>
+                      <FaFileImage /> Medical Record
+                    </button>
                   )}
                 </div>
               </div>
@@ -183,6 +196,30 @@ export default function ManagePetPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div className="imageModalOverlay" onClick={() => setPreviewImage(null)}>
+          <div className="imageModalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="imageModalHeader">
+              <h3>{previewImage.title}</h3>
+              <button
+                className="closeModalBtn"
+                onClick={() => setPreviewImage(null)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="imageModalBody">
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="previewImg"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
