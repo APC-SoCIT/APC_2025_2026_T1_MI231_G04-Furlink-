@@ -42,11 +42,10 @@ export default function AddPetPage() {
   const [breeds, setBreeds] = useState<string[]>([]);
   const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
 
-  // Fetch breeds dynamically when petType changes
   useEffect(() => {
     const fetchBreeds = async () => {
       setLoadingBreeds(true);
-      setPetBreed(""); // Reset selected breed on type switch
+      setPetBreed("");
       try {
         if (petType === "dog") {
           const res = await fetch("https://dog.ceo/api/breeds/list/all");
@@ -97,27 +96,45 @@ export default function AddPetPage() {
     }
   };
 
-  // Helper function to upload file to Supabase Storage
-  const uploadImage = async (file: File, folder: string): Promise<string | null> => {
+  // Helper function to upload file to the private pet-medical-docs bucket
+  const uploadImage = async (file: File, folder: string, userId: string): Promise<string | null> => {
+    // Check file size (1MB limit set in your bucket configuration)
+    if (file.size > 1 * 1024 * 1024) {
+      alert(`File "${file.name}" exceeds the 1 MB size limit.`);
+      return null;
+    }
+
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const fileName = `${userId}/${folder}_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('pet_documents')
-        .upload(fileName, file);
+        .from('pet-medical-docs')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (uploadError) {
-        throw uploadError;
+        console.error("Storage upload error:", uploadError.message);
+        alert(`Upload error: ${uploadError.message}`);
+        return null;
       }
 
-      const { data } = supabase.storage
-        .from('pet_documents')
-        .getPublicUrl(fileName);
+      // Generate a long-lived signed URL or get public path for private bucket
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('pet-medical-docs')
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1-year signed URL
 
-      return data.publicUrl;
-    } catch (error) {
-      console.error("Image upload failed:", error);
+      if (signedError || !signedData?.signedUrl) {
+        // Fallback to relative storage path if signed URL generation fails
+        return fileName;
+      }
+
+      return signedData.signedUrl;
+    } catch (error: any) {
+      console.error("Image upload exception:", error);
+      alert(`Unexpected upload error: ${error?.message || error}`);
       return null;
     }
   };
@@ -146,18 +163,17 @@ export default function AddPetPage() {
         return;
       }
 
-      // Upload Vaccine Record
-      const vaccineUrl = await uploadImage(vaccineFile, "vaccines");
+      // Upload Vaccine Record to pet-medical-docs bucket
+      const vaccineUrl = await uploadImage(vaccineFile, "vaccine", user.id);
       if (!vaccineUrl) {
-        alert("Failed to upload vaccine record image. Please try again.");
         setSubmitting(false);
         return;
       }
 
-      // Upload Illness Proof (Optional)
+      // Upload Medical Record / Illness Proof (Optional)
       let illnessUrl: string | null = null;
       if (illnessFile) {
-        illnessUrl = await uploadImage(illnessFile, "medical_records");
+        illnessUrl = await uploadImage(illnessFile, "illness", user.id);
       }
 
       const { error } = await supabase.from("po_registered_pet").insert([
@@ -180,12 +196,13 @@ export default function AddPetPage() {
       if (error) {
         alert("Error registering pet: " + error.message);
       } else {
+        alert("Added new pet");
         router.push("/pet_owner/manage_pet");
         router.refresh();
       }
     } catch (err) {
       console.error("Unexpected error saving pet:", err);
-      alert("An unexpected error occurred.");
+      alert("An unexpected error occurred while saving profile.");
     } finally {
       setSubmitting(false);
     }
@@ -194,12 +211,10 @@ export default function AddPetPage() {
   return (
     <div className="add-pet-container">
       <div className="add-pet-card">
-        {/* Navigation Link Back */}
         <Link href="/pet_owner/manage_pet" className="back-link">
           <FaArrowLeft /> Back to Pets
         </Link>
 
-        {/* Title Header */}
         <div className="add-pet-header">
           <h1 className="add-pet-title">
             <FaPaw className="title-icon" /> Register New Pet
@@ -209,7 +224,6 @@ export default function AddPetPage() {
           </p>
         </div>
 
-        {/* Registration Form */}
         <form onSubmit={handleSubmit} className="add-pet-form">
           <div className="form-group">
             <label className="form-label">Pet Name *</label>
@@ -315,7 +329,7 @@ export default function AddPetPage() {
 
           {/* Vaccine Record Image Upload */}
           <div className="form-group">
-            <label className="form-label">Vaccine Record Image *</label>
+            <label className="form-label">Vaccine Record Image (Max 1MB) *</label>
             <div className="file-upload-wrapper">
               <label htmlFor="vaccine-upload" className="file-upload-box">
                 <FaFileUpload className="file-icon" />
@@ -326,7 +340,7 @@ export default function AddPetPage() {
               <input
                 id="vaccine-upload"
                 type="file"
-                accept="image/*"
+                accept="image/png, image/jpeg"
                 required
                 onChange={(e) => setVaccineFile(e.target.files?.[0] || null)}
                 className="file-input-hidden"
@@ -336,7 +350,7 @@ export default function AddPetPage() {
 
           {/* Medical Record / Illness Proof Image Upload */}
           <div className="form-group">
-            <label className="form-label">Medical Record / Illness Proof Image</label>
+            <label className="form-label">Medical Record / Illness Proof Image (Max 1MB)</label>
             <div className="file-upload-wrapper">
               <label htmlFor="illness-upload" className="file-upload-box">
                 <FaFileUpload className="file-icon" />
@@ -347,7 +361,7 @@ export default function AddPetPage() {
               <input
                 id="illness-upload"
                 type="file"
-                accept="image/*"
+                accept="image/png, image/jpeg"
                 onChange={(e) => setIllnessFile(e.target.files?.[0] || null)}
                 className="file-input-hidden"
               />
