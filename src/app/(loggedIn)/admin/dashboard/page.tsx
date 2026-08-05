@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import { supabase } from "@/lib/supabase";
 import "./page.css";
+import { ROUTES } from "@/config/routes";
 
 type FilterType = "pending" | "active" | "rejected" | "users" | null;
 
@@ -439,9 +440,11 @@ export default function AdminDashboardPage() {
                               {item.role ? item.role.replace(/_/g, " ") : "-"}
                             </td>
                             <td>
-                              <button className="btn-view-details" disabled>
-                                View Details{" "}
-                                <FaArrowRight size={12} style={{ marginLeft: 5 }} />
+                              <button
+                                className="btn-view-details"
+                                onClick={() => router.push(`${ROUTES.ADMIN.PO_DETAILS}?id=${item.id}`)}
+                              >
+                                View Details{" "} <FaArrowRight size={12} style={{ marginLeft: 5 }} />
                               </button>
                             </td>
                           </tr>
@@ -471,9 +474,11 @@ export default function AdminDashboardPage() {
                               </span>
                             </td>
                             <td>
-                              <button className="btn-view-details" disabled>
-                                View Details{" "}
-                                <FaArrowRight size={12} style={{ marginLeft: 5 }} />
+                              <button
+                                className="btn-view-details"
+                                onClick={() => router.push(`${ROUTES.ADMIN.SP_DETAILS}?id=${item.id}`)}
+                              >
+                                View Details{" "} <FaArrowRight size={12} style={{ marginLeft: 5 }} />
                               </button>
                             </td>
                           </tr>

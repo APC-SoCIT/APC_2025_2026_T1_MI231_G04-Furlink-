@@ -21,6 +21,8 @@ export const ROUTES = {
   },
   ADMIN: {
     ADMIN_DASHBOARD: "/admin/dashboard",
+    SP_DETAILS: "/admin/dashboard/sp_details",
+    PO_DETAILS: "/admin/dashboard/po_details",
   },
   SHARED: {
     SWITCH_BUSINESS: "/switch-business",
