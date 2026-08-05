@@ -24,6 +24,11 @@ export default function SignupPage() {
   const [touched, setTouched] = useState<any>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // New state to toggle UI into OTP verification view after successful signup trigger
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   // Anyone younger than 13 today can't be selected in the calendar picker
   const getMaxDob = () => {
@@ -32,8 +37,6 @@ export default function SignupPage() {
     return d.toISOString().split("T")[0];
   };
 
-  // The native date input's displayed format follows the browser/OS locale and can't be
-  // forced to mm/dd/yyyy directly, so we hide its native text and overlay our own formatting.
   const formatDobDisplay = (isoDate: string) => {
     if (!isoDate) return "";
     const [y, m, d] = isoDate.split("-");
@@ -57,6 +60,7 @@ export default function SignupPage() {
     setErrors(validationErrors);
   };
 
+  // MULTI-ROLE LOGIC HANDLING: pet_owner, service_provider, or both_sp_po
   const handleRoleToggle = (role: string) => {
     setFormData(prev => {
       const current = prev.roleChoice;
@@ -79,7 +83,6 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Mobile: digits only, capped at 10
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
     setFormData((prev) => ({ ...prev, mobile: digitsOnly }));
@@ -107,6 +110,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      // Registers user and triggers Supabase email OTP dispatch
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -117,7 +121,7 @@ export default function SignupPage() {
             username: formData.username,
             mobile_number: formData.mobile,
             date_of_birth: formData.dob,
-            role: formData.roleChoice
+            role: formData.roleChoice // saves 'pet_owner', 'service_provider', or 'both_sp_po'
           }
         }
       });
@@ -126,15 +130,8 @@ export default function SignupPage() {
         console.error("Signup error:", error);
         alert(error.message);
       } else {
-        router.refresh();
-
-        // UPDATED REDIRECTION LOGIC
-        if (formData.roleChoice === 'service_provider') {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else {
-          // Handles 'pet_owner' and 'both_sp_po'
-          router.push(ROUTES.PET_OWNER.DASHBOARD);
-        }
+        // Switch view to prompt user for the OTP sent to their email
+        setPendingVerification(true);
       }
     } catch (err) {
       console.error("Unexpected signup error:", err);
@@ -143,6 +140,73 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
+
+  // Handles verification of the OTP token sent to email
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpToken) return;
+    setVerificationLoading(true);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: formData.email,
+        token: otpToken,
+        type: 'signup'
+      });
+
+      if (error) {
+        alert(error.message);
+      } else {
+        router.refresh();
+
+        // Role-based routing after verified successfully
+        if (formData.roleChoice === 'service_provider') {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        } else {
+          // Handles 'pet_owner' and 'both_sp_po'
+          router.push(ROUTES.PET_OWNER.DASHBOARD);
+        }
+      }
+    } catch (err) {
+      console.error("OTP verification error:", err);
+      alert("Failed to verify code. Please try again.");
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  // If signup completed successfully, render the OTP verification screen step
+  if (pendingVerification) {
+    return (
+      <div className="signup-wrapper">
+        <form className="signup-card" onSubmit={handleVerifyOtp}>
+          <h1>Verify Your Email</h1>
+          <p className="otp-instructions">
+            We have sent a verification OTP code to <strong>{formData.email}</strong>. Please enter it below to activate your account.
+          </p>
+
+          <div className="input-group" style={{ marginBottom: "20px" }}>
+            <input
+              type="text"
+              placeholder="Enter 6-digit OTP"
+              value={otpToken}
+              onChange={(e) => setOtpToken(e.target.value)}
+              maxLength={6}
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="register-btn"
+            disabled={verificationLoading || !otpToken}
+          >
+            {verificationLoading ? "Verifying..." : "Verify Account"}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="signup-wrapper">
