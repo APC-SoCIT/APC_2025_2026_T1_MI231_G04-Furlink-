@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
           "id, business_name, business_city, business_province, registration_status, created_at, updated_at, sp_services!inner(id)"
         )
         .eq("registration_status", "pending")
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (!error) setTableData(data || []);
     } catch (err) {
