@@ -78,7 +78,7 @@ export default async function PetOwnerPage() {
               return (
                 <Link
                   key={shop.id}
-                  href={`/pet_owner/booking/${shop.id}`}
+                  href={`/pet_owner/book_appointment?sp_id=${shop.id}`}
                   className="shop-card-link"
                 >
                   <div className="shop-card">
