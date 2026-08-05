@@ -4,19 +4,26 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ROUTES } from "@/config/routes";
-import { FaArrowLeft } from "react-icons/fa";
-import "./page.css";
+import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
+import "./page.css"; 
 
 export default function SPDetailsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const providerId = searchParams.get("id");
 
-  const [provider, setProvider] = useState<ServiceProviderDetails | null>(null);
+  const [provider, setProvider] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // States for Approve/Reject functionality
+  const [adminId, setAdminId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
   useEffect(() => {
+    fetchAdminUser();
     if (providerId) {
       fetchProviderDetails();
     } else {
@@ -25,11 +32,17 @@ export default function SPDetailsPage() {
     }
   }, [providerId]);
 
+  // Get Admin ID to record who responded to the application
+  const fetchAdminUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) setAdminId(user.id);
+  };
+
   const fetchProviderDetails = async () => {
     try {
       setLoading(true);
       
-      //Fetching parent and all nested child
+      // Fetching parent and all nested child
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(`
@@ -55,9 +68,65 @@ export default function SPDetailsPage() {
     }
   };
 
-  if (loading) return <div className="loading-state">Loading provider details...</div>;
-  if (error) return <div className="empty-state">Error: {error}</div>;
-  if (!provider) return <div className="empty-state">Provider not found.</div>;
+  // Handle Approval
+  const handleApprove = async () => {
+    if (!confirm("Are you sure you want to approve this provider?")) return;
+    setIsUpdating(true);
+    
+    try {
+      const { error } = await supabase
+        .from("sp_general_info")
+        .update({
+          registration_status: "approved",
+          registration_approved_at: new Date().toISOString(),
+          registration_response_by: adminId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", providerId);
+
+      if (error) throw error;
+      alert("Provider has been approved!");
+      fetchProviderDetails(); // Refresh the UI
+    } catch (err: any) {
+      alert("Error approving: " + err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Handle Rejection
+  const handleRejectSubmit = async () => {
+    if (!rejectReason.trim()) {
+      alert("Please provide a reason for rejection.");
+      return;
+    }
+    setIsUpdating(true);
+
+    try {
+      const { error } = await supabase
+        .from("sp_general_info")
+        .update({
+          registration_status: "rejected",
+          registration_rejection_reason: rejectReason.trim(),
+          registration_response_by: adminId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", providerId);
+
+      if (error) throw error;
+      alert("Provider has been rejected.");
+      setShowRejectInput(false);
+      fetchProviderDetails(); // Refresh the UI
+    } catch (err: any) {
+      alert("Error rejecting: " + err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (loading) return <div className="loading-state" style={{ padding: "40px", textAlign: "center" }}>Loading provider details...</div>;
+  if (error) return <div className="empty-state" style={{ padding: "40px", textAlign: "center", color: "red" }}>Error: {error}</div>;
+  if (!provider) return <div className="empty-state" style={{ padding: "40px", textAlign: "center" }}>Provider not found.</div>;
 
   return (
     <div className="admin-dashboard-page">
@@ -75,11 +144,54 @@ export default function SPDetailsPage() {
         </div>
 
         <div className="dashboard-list-container">
-          <div className="list-header">
-            <h2 className="list-title">{provider.business_name} Details</h2>
-            <span className={`status-pill ${provider.registration_status}`}>
-              {provider.registration_status}
-            </span>
+          <div className="list-header" style={{ alignItems: "flex-start" }}>
+            <div>
+              <h2 className="list-title">{provider.business_name} Details</h2>
+              <span className={`status-pill ${provider.registration_status}`} style={{ display: "inline-block", marginTop: "10px" }}>
+                {provider.registration_status}
+              </span>
+            </div>
+
+            {/* ACTION BUTTONS (Only show if pending) */}
+            {provider.registration_status === "pending" && (
+              <div className="action-buttons-container">
+                {!showRejectInput ? (
+                  <>
+                    <button 
+                      className="btn-approve" 
+                      onClick={handleApprove} 
+                      disabled={isUpdating}
+                    >
+                      <FaCheck /> {isUpdating ? "Processing..." : "Approve Listing"}
+                    </button>
+                    <button 
+                      className="btn-reject" 
+                      onClick={() => setShowRejectInput(true)} 
+                      disabled={isUpdating}
+                    >
+                      <FaTimes /> Reject
+                    </button>
+                  </>
+                ) : (
+                  <div className="reject-reason-box">
+                    <textarea 
+                      placeholder="Why is this listing being rejected?"
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      maxLength={250}
+                    />
+                    <div className="reject-actions">
+                      <button className="btn-reject" onClick={handleRejectSubmit} disabled={isUpdating}>
+                        Confirm Rejection
+                      </button>
+                      <button className="btn-cancel" onClick={() => setShowRejectInput(false)} disabled={isUpdating}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* GENERAL INFO SECTION */}
@@ -87,18 +199,26 @@ export default function SPDetailsPage() {
             <h3>General Information</h3>
             <p><strong>Email:</strong> {provider.business_email}</p>
             <p><strong>Contact:</strong> {provider.business_contact}</p>
-            <p><strong>Location:</strong> {provider.business_city}, {provider.business_province}</p>
+            <p><strong>Location:</strong> {provider.business_street}, {provider.business_barangay}, {provider.business_city}, {provider.business_province} {provider.business_postal_code}</p>
             <p><strong>Service Type:</strong> {provider.business_service_type}</p>
+            <p><strong>Bio:</strong> {provider.business_bio}</p>
+
+            {/* Show rejection reason if rejected */}
+            {provider.registration_status === "rejected" && provider.registration_rejection_reason && (
+              <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444", borderRadius: "4px" }}>
+                <p style={{ margin: 0, color: "#991b1b" }}><strong>Rejection Reason:</strong> {provider.registration_rejection_reason}</p>
+              </div>
+            )}
             
             {/* Document Links */}
             <div style={{ marginTop: "15px" }}>
               {provider.business_permit_url && (
-                <a href={provider.business_permit_url} target="_blank" rel="noreferrer" style={{ marginRight: "15px", color: "blue" }}>
+                <a href={provider.business_permit_url} target="_blank" rel="noreferrer" className="document-link">
                   View Business Permit
                 </a>
               )}
               {provider.business_waiver_url && (
-                <a href={provider.business_waiver_url} target="_blank" rel="noreferrer" style={{ color: "blue" }}>
+                <a href={provider.business_waiver_url} target="_blank" rel="noreferrer" className="document-link">
                   View Waiver
                 </a>
               )}
@@ -110,9 +230,9 @@ export default function SPDetailsPage() {
           {/* OPERATING HOURS SECTION */}
           <section className="detail-section">
             <h3>Operating Hours</h3>
-            {provider.sp_operating_hours.length > 0 ? (
+            {provider.sp_operating_hours && provider.sp_operating_hours.length > 0 ? (
               <ul>
-                {provider.sp_operating_hours.map((hour) => (
+                {provider.sp_operating_hours.map((hour: any) => (
                   <li key={hour.id}>
                     <strong>{hour.day_of_week}:</strong> {hour.opening_time} - {hour.closing_time} (Capacity: {hour.slot_capacity})
                   </li>
@@ -128,11 +248,11 @@ export default function SPDetailsPage() {
           {/* EMPLOYEES SECTION */}
           <section className="detail-section">
             <h3>Employees</h3>
-            {provider.sp_employees_info.length > 0 ? (
+            {provider.sp_employees_info && provider.sp_employees_info.length > 0 ? (
               <ul>
-                {provider.sp_employees_info.map((emp) => (
+                {provider.sp_employees_info.map((emp: any) => (
                   <li key={emp.id}>
-                    {emp.employee_first_name} {emp.employee_last_name} - <span style={{textTransform: "capitalize"}}>{emp.employee_position.replace('_', ' ')}</span>
+                    <strong>{emp.employee_first_name} {emp.employee_last_name}</strong> - <span style={{textTransform: "capitalize"}}>{emp.employee_position.replace('_', ' ')}</span>
                   </li>
                 ))}
               </ul>
@@ -146,16 +266,17 @@ export default function SPDetailsPage() {
           {/* SERVICES & OPTIONS SECTION */}
           <section className="detail-section">
             <h3>Services Offered</h3>
-            {provider.sp_services.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {provider.sp_services.map((service) => (
-                  <div key={service.id} style={{ padding: "15px", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
-                    <h4>{service.service_name} ({service.service_type.replace('_', ' ')})</h4>
+            {provider.sp_services && provider.sp_services.length > 0 ? (
+              <div className="service-card-container">
+                {provider.sp_services.map((service: any) => (
+                  <div key={service.id} className="service-card">
+                    <h4>{service.service_name} <span style={{fontSize: "0.85rem", fontWeight: "normal", color: "#6b7280", textTransform: "capitalize"}}>({service.service_type.replace('_', ' ')})</span></h4>
                     <p>{service.service_description}</p>
+                    {service.service_notes && <p style={{ fontSize: "0.85rem", fontStyle: "italic" }}>Note: {service.service_notes}</p>}
                     
                     {/* Nested Service Options */}
                     {service.sp_service_options && service.sp_service_options.length > 0 && (
-                      <table className="providers-table" style={{ marginTop: "10px" }}>
+                      <table className="providers-table">
                         <thead>
                           <tr>
                             <th>Pet Type</th>
@@ -167,8 +288,8 @@ export default function SPDetailsPage() {
                         <tbody>
                           {service.sp_service_options.map((option: any) => (
                             <tr key={option.id}>
-                              <td style={{textTransform: "capitalize"}}>{option.pet_type.replace('_', ' ')}</td>
-                              <td style={{textTransform: "capitalize"}}>{option.pet_size.replace('_', ' ')}</td>
+                              <td style={{textTransform: "capitalize"}}>{option.pet_type.replace(/_/g, ' ')}</td>
+                              <td style={{textTransform: "capitalize"}}>{option.pet_size.replace(/_/g, ' ')}</td>
                               <td>{option.pet_min_weight_range} - {option.pet_max_weight_range} kg</td>
                               <td>₱{option.service_price}</td>
                             </tr>
