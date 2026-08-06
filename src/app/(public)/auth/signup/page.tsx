@@ -491,9 +491,9 @@ export default function SignupPage() {
           {loading ? "Signing Up..." : "Sign Up"}
         </button>
 
-        <p className="login-redirect">
-          Already have an account?{" "}
-          <Link href="/auth/login" className="login-link">Log In Here</Link>
+        <p className="auth-redirect-text">
+          Have an account?{" "}
+          <Link href="/auth/login" className="login-link">Log In</Link>
         </p>
       </form>
     </div>

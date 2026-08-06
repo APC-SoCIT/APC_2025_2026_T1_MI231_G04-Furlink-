@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { validateLogin } from "@/app/(public)/auth/validation/loginValidation";
 import { ROUTES } from "@/config/routes";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -103,11 +104,27 @@ export default function LoginPage() {
           {errors.password && <span className="error-text">{errors.password}</span>}
         </div>
 
-        {errors.form && <p className="error">{errors.form}</p>}
+        {/* Error message positioned before the Forgot Password button */}
+        {errors.form && <p className="auth-form-error">{errors.form}</p>}
+
+        {/* Forgot Password Link on the Left Side */}
+        <div className="auth-links-row">
+          <Link href="/auth/forgot_password" className="forgot-password-link">
+            Forgot Password?
+          </Link>
+        </div>
 
         <button type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Log In"}
         </button>
+
+        {/* Sign Up Redirect Link */}
+        <p className="auth-redirect-text">
+          Don&apos;t have an account?{" "}
+          <Link href="/auth/signup" className="login-link">
+            Sign Up
+          </Link>
+        </p>
       </form>
     </div>
   );
