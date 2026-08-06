@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -24,11 +24,33 @@ export default function SignupPage() {
   const [touched, setTouched] = useState<any>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   // New state to toggle UI into OTP verification view after successful signup trigger
   const [pendingVerification, setPendingVerification] = useState(false);
   const [otpToken, setOtpToken] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
+
+  // Countdown timer for OTP validity (seconds), seeded from the server's response
+  const [otpTimer, setOtpTimer] = useState(300);
+
+  // How many more times the user is allowed to request a new code, from the server
+  const [resendsRemaining, setResendsRemaining] = useState<number | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  // Ticks the countdown down every second while on the verification screen
+  useEffect(() => {
+    if (!pendingVerification || otpTimer <= 0) return;
+    const interval = setInterval(() => {
+      setOtpTimer((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pendingVerification, otpTimer]);
+
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   // Anyone younger than 13 today can't be selected in the calendar picker
   const getMaxDob = () => {
@@ -110,27 +132,18 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // Registers user and triggers Supabase email OTP dispatch
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            username: formData.username,
-            mobile_number: formData.mobile,
-            date_of_birth: formData.dob,
-            role: formData.roleChoice // saves 'pet_owner', 'service_provider', or 'both_sp_po'
-          }
-        }
+      const res = await fetch("/api/auth/send_otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
       });
+      const result = await res.json();
 
-      if (error) {
-        console.error("Signup error:", error);
-        alert(error.message);
+      if (!res.ok) {
+        alert(result.error || "Failed to send verification code.");
       } else {
-        // Switch view to prompt user for the OTP sent to their email
+        setOtpTimer(result.validitySeconds ?? 300);
+        setResendsRemaining(result.resendsRemaining ?? 0);
         setPendingVerification(true);
       }
     } catch (err) {
@@ -144,28 +157,52 @@ export default function SignupPage() {
   // Handles verification of the OTP token sent to email
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpToken) return;
+    if (!otpToken || otpTimer <= 0) return;
     setVerificationLoading(true);
 
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const res = await fetch("/api/auth/verify_otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          code: otpToken,
+          password: formData.password,
+          userData: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            username: formData.username,
+            mobile_number: formData.mobile,
+            date_of_birth: formData.dob,
+            role: formData.roleChoice,
+          },
+        }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert(result.error || "Verification failed.");
+        return;
+      }
+
+      // Sign the newly created user in immediately, since admin.createUser
+      // doesn't create a client-side session
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
-        token: otpToken,
-        type: 'signup'
+        password: formData.password,
       });
 
-      if (error) {
-        alert(error.message);
-      } else {
-        router.refresh();
+      if (signInError) {
+        alert("Account created, but automatic sign-in failed. Please log in.");
+        router.push(ROUTES.AUTH.LOGIN);
+        return;
+      }
 
-        // Role-based routing after verified successfully
-        if (formData.roleChoice === 'service_provider') {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else {
-          // Handles 'pet_owner' and 'both_sp_po'
-          router.push(ROUTES.PET_OWNER.DASHBOARD);
-        }
+      router.refresh();
+      if (formData.roleChoice === "service_provider") {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else {
+        router.push(ROUTES.PET_OWNER.DASHBOARD);
       }
     } catch (err) {
       console.error("OTP verification error:", err);
@@ -175,14 +212,50 @@ export default function SignupPage() {
     }
   };
 
+  // Resends a fresh OTP and resets the countdown, respecting the server's resend cap
+  const handleResendOtp = async () => {
+    if (resendsRemaining !== null && resendsRemaining <= 0) return;
+    setResendLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/send_otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert(result.error || "Failed to resend code.");
+        if (res.status === 429) {
+          setResendsRemaining(0);
+        }
+      } else {
+        setOtpTimer(result.validitySeconds ?? 300);
+        setResendsRemaining(result.resendsRemaining ?? 0);
+        setOtpToken("");
+      }
+    } catch (err) {
+      console.error("Resend OTP error:", err);
+      alert("Something went wrong resending the code.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   // If signup completed successfully, render the OTP verification screen step
   if (pendingVerification) {
+    const resendExhausted = resendsRemaining !== null && resendsRemaining <= 0;
+
     return (
       <div className="signup-wrapper">
         <form className="signup-card" onSubmit={handleVerifyOtp}>
           <h1>Verify Your Email</h1>
           <p className="otp-instructions">
             We have sent a verification OTP code to <strong>{formData.email}</strong>. Please enter it below to activate your account.
+          </p>
+          <p className="otp-spam-note">
+            Didn&apos;t receive it? Check your spam or trash folder.
           </p>
 
           <div className="input-group" style={{ marginBottom: "20px" }}>
@@ -193,13 +266,40 @@ export default function SignupPage() {
               onChange={(e) => setOtpToken(e.target.value)}
               maxLength={6}
               required
+              disabled={otpTimer <= 0}
             />
           </div>
+
+          {otpTimer > 0 ? (
+            <p className="otp-timer">Code expires in {formatTimer(otpTimer)}</p>
+          ) : (
+            <p className="otp-timer otp-expired">Code expired.</p>
+          )}
+
+          {resendExhausted ? (
+            <p className="otp-resend-limit">
+              You&apos;ve reached the maximum number of code requests. Please check your spam or trash folder, or try again later.
+            </p>
+          ) : (
+            <p className="otp-resend">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={resendLoading || otpTimer > 0}
+                className="resend-link"
+              >
+                {resendLoading ? "Resending..." : "Resend code"}
+              </button>
+              {resendsRemaining !== null && (
+                <span className="otp-resend-count"> ({resendsRemaining} left)</span>
+              )}
+            </p>
+          )}
 
           <button
             type="submit"
             className="register-btn"
-            disabled={verificationLoading || !otpToken}
+            disabled={verificationLoading || !otpToken || otpTimer <= 0}
           >
             {verificationLoading ? "Verifying..." : "Verify Account"}
           </button>
