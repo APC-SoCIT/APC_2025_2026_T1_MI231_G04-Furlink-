@@ -22,6 +22,8 @@ export default function SignupPage() {
 
   const [errors, setErrors] = useState<any>({});
   const [touched, setTouched] = useState<any>({});
+  const [dbErrors, setDbErrors] = useState<{ username?: string; email?: string }>({});
+  
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +34,6 @@ export default function SignupPage() {
   const [verificationLoading, setVerificationLoading] = useState(false);
 
   const [otpError, setOtpError] = useState<string | null>(null);
-
   const [otpTimer, setOtpTimer] = useState(300);
 
   const [resendExhausted, setResendExhausted] = useState(false);
@@ -48,13 +49,44 @@ export default function SignupPage() {
     return () => clearInterval(interval);
   }, [pendingVerification, otpTimer]);
 
+  // Automatically check database for email and username existence (handles autofill and typing)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const emailTrim = formData.email.trim();
+      const usernameTrim = formData.username.trim();
+
+      // Check Email
+      if (emailTrim && emailTrim.includes("@") && emailTrim.includes(".")) {
+        const emailExists = await checkFieldExists('email', emailTrim);
+        setDbErrors(prev => ({
+          ...prev,
+          email: emailExists ? "Email has already been used" : undefined
+        }));
+      } else {
+        setDbErrors(prev => ({ ...prev, email: undefined }));
+      }
+
+      // Check Username
+      if (usernameTrim.length >= 3) {
+        const usernameExists = await checkFieldExists('username', usernameTrim);
+        setDbErrors(prev => ({
+          ...prev,
+          username: usernameExists ? "Username has already been used" : undefined
+        }));
+      } else {
+        setDbErrors(prev => ({ ...prev, username: undefined }));
+      }
+    }, 400); // 400ms debounce to prevent excessive queries
+
+    return () => clearTimeout(timer);
+  }, [formData.email, formData.username]);
+
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // User younger than 13 today can't be selected in the calendar picker
   const getMaxDob = () => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 13);
@@ -67,20 +99,10 @@ export default function SignupPage() {
     return `${m}/${d}/${y}`;
   };
 
-  const handleBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name } = e.target;
     setTouched((prev: any) => ({ ...prev, [name]: true }));
-
-    const currentData = { ...formData, [name]: value };
-    const validationErrors = validateSignup(currentData, agreedToTerms);
-
-    if ((name === "username" || name === "email") && !validationErrors[name]) {
-      const exists = await checkFieldExists(name as 'username' | 'email', value);
-      if (exists) {
-        validationErrors[name] = `${name.charAt(0).toUpperCase() + name.slice(1)} has already been used`;
-      }
-    }
-
+    const validationErrors = validateSignup(formData, agreedToTerms);
     setErrors(validationErrors);
   };
 
@@ -118,6 +140,8 @@ export default function SignupPage() {
   const isFormValid = () => {
     const validationErrors = validateSignup(formData, agreedToTerms);
     const hasErrors = Object.values(validationErrors).some((err) => !!err);
+    const hasDbErrors = !!dbErrors.username || !!dbErrors.email;
+    
     const allFieldsFilled =
       formData.firstName &&
       formData.lastName &&
@@ -129,7 +153,7 @@ export default function SignupPage() {
       formData.password &&
       formData.confirmPassword;
 
-    return agreedToTerms && !hasErrors && !!allFieldsFilled;
+    return agreedToTerms && !hasErrors && !hasDbErrors && !!allFieldsFilled;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,6 +163,20 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      // Final check right before triggering OTP to prevent race conditions
+      const emailExists = await checkFieldExists('email', formData.email);
+      const usernameExists = await checkFieldExists('username', formData.username);
+
+      if (emailExists || usernameExists) {
+        setDbErrors({
+          email: emailExists ? "Email has already been used" : undefined,
+          username: usernameExists ? "Username has already been used" : undefined,
+        });
+        setFormError("The username or email is already registered. Please use different credentials.");
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch("/api/auth/send_otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,7 +200,6 @@ export default function SignupPage() {
     }
   };
 
-  // Handles verification of the OTP token sent to email
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpToken || otpTimer <= 0) return;
@@ -194,7 +231,6 @@ export default function SignupPage() {
         return;
       }
 
-      // Sign the newly created user in immediately, since admin.createUser doesn't create a client-side session
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
@@ -251,7 +287,6 @@ export default function SignupPage() {
     }
   };
 
-  // If signup completed successfully, render the OTP verification screen step
   if (pendingVerification) {
     const showResendLimitBanner = resendExhausted && (otpTimer <= 0 || !!otpError);
 
@@ -323,34 +358,38 @@ export default function SignupPage() {
 
   return (
     <div className="signup-wrapper">
-      <form className="signup-card" onSubmit={handleSubmit}>
+      <form className="signup-card" onSubmit={handleSubmit} noValidate>
         <h1>Create Your Account</h1>
 
         {formError && <p className="form-error-banner">{formError}</p>}
 
         <div className="form-row">
           <div className="input-group">
-            <input name="firstName" placeholder="First Name" onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} onBlur={handleBlur} className={errors.firstName ? "input-error" : ""} />
+            <input name="firstName" placeholder="First Name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} className={errors.firstName ? "input-error" : ""} />
             {touched.firstName && errors.firstName && <span className="error-text">{errors.firstName}</span>}
           </div>
           <div className="input-group">
-            <input name="lastName" placeholder="Last Name" onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} onBlur={handleBlur} className={errors.lastName ? "input-error" : ""} />
+            <input name="lastName" placeholder="Last Name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} className={errors.lastName ? "input-error" : ""} />
             {touched.lastName && errors.lastName && <span className="error-text">{errors.lastName}</span>}
           </div>
         </div>
 
         <div className="form-row">
           <div className="input-group">
-            <div className={`phone-input-container ${errors.username ? "input-error" : ""}`}>
+            <div className={`phone-input-container ${(errors.username || dbErrors.username) ? "input-error" : ""}`}>
               <span className="phone-prefix">@</span>
               <div className="phone-divider"></div>
-              <input name="username" placeholder="username" onChange={(e) => setFormData({ ...formData, username: e.target.value })} onBlur={handleBlur} />
+              <input name="username" placeholder="username" value={formData.username} onChange={handleChange} onBlur={handleBlur} />
             </div>
-            {touched.username && errors.username && <span className="error-text">{errors.username}</span>}
+            {(touched.username || dbErrors.username) && (errors.username || dbErrors.username) && (
+              <span className="error-text">{dbErrors.username || errors.username}</span>
+            )}
           </div>
           <div className="input-group">
-            <input name="email" placeholder="Email Address" onChange={(e) => setFormData({ ...formData, email: e.target.value })} onBlur={handleBlur} className={errors.email ? "input-error" : ""} />
-            {touched.email && errors.email && <span className="error-text">{errors.email}</span>}
+            <input name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} onBlur={handleBlur} className={(errors.email || dbErrors.email) ? "input-error" : ""} />
+            {(touched.email || dbErrors.email) && (errors.email || dbErrors.email) && (
+              <span className="error-text">{dbErrors.email || errors.email}</span>
+            )}
           </div>
         </div>
 
@@ -412,7 +451,7 @@ export default function SignupPage() {
         <div className="form-row">
           <div className="input-group">
             <div className="password-container">
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" onChange={(e) => setFormData({ ...formData, password: e.target.value })} onBlur={handleBlur} />
+              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} onBlur={handleBlur} />
               <button type="button" className="toggle-btn" onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -422,7 +461,7 @@ export default function SignupPage() {
 
           <div className="input-group">
             <div className="password-container">
-              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} onBlur={handleBlur} />
+              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} />
               <button type="button" className="toggle-btn" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}>
                 {showPasswordConfirm ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -454,7 +493,7 @@ export default function SignupPage() {
 
         <p className="login-redirect">
           Already have an account?{" "}
-          <Link href={ROUTES.AUTH.LOGIN} className="login-link">Log In Here</Link>
+          <Link href="/auth/login" className="login-link">Log In Here</Link>
         </p>
       </form>
     </div>
