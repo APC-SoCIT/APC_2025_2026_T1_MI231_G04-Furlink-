@@ -190,3 +190,63 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================================
+   UPDATED TYPOGRAPHY & FIELD STYLING
+   ========================================= */
+
+/* Force strong bolding on headers and labels */
+.form-field label, 
+.pricing-section > label,
+.page-title,
+h2 {
+  font-weight: 700 !important;
+}
+
+.pricing-header {
+  font-weight: 800 !important;
+}
+
+/* Input error states (Turns borders and error text red) */
+.input-error,
+input.input-error,
+textarea.input-error,
+select.input-error {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+}
+
+/* Philippine Mobile Number Input Wrapper Styling */
+.phone-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #fff;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.phone-input-wrapper:focus-within {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+.phone-prefix {
+  padding: 10px 12px;
+  background-color: #f8fafc;
+  color: #0E2679;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-right: 1px solid #d1d5db;
+}
+
+.phone-input-field {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 10px 12px !important;
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #0E2679;
+}

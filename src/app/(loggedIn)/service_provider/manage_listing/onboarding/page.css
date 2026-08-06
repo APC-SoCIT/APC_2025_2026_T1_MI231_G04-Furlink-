@@ -1,4 +1,13 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/page.css */
+/* Force Poppins explicitly on all containers, text elements, and form controls */
+.apply-provider-wrapper,
+.apply-provider-wrapper *,
+.apply-provider-wrapper input,
+.apply-provider-wrapper textarea,
+.apply-provider-wrapper select,
+.apply-provider-wrapper button {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 @import "./services.css";
 

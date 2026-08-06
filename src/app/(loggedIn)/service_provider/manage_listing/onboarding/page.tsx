@@ -12,7 +12,7 @@ import { POSITION_OPTIONS, DAYS_OF_WEEK_SHORT, DAYS_OF_WEEK_FULL, DESCRIPTION_MA
 import { useValidation } from "./hooks/useValidation";
 import { useFileUploads } from "./hooks/useFileUploads";
 
-// --- NEW IMPORTS ---
+// Modularized Service Management Hooks & Components
 import { useServiceManager } from "./hooks/useServiceManager";
 import ServiceCard from "./components/ServiceCard";
 import PricingTable from "./components/PricingTable";
@@ -21,20 +21,19 @@ export default function ServiceProviderOnboardingPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // Multi-step UI state
+  // --- Flow & UI State ---
   const [step, setStep] = useState(1);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false); 
   const [providerId, setProviderId] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Business State
+  // --- Business Profile State ---
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
     description: "", 
     businessEmail: "",
-    businessMobile: "", 
+    businessMobile: "", // Now handles the 10-digit number following +63
     socialMediaUrl: "",
     googleMapUrl: "",
     typeOfService: "Pet Grooming",
@@ -54,37 +53,46 @@ export default function ServiceProviderOnboardingPage() {
     postalCode: "",
     country: "Philippines",
   });
+  
   const [employees, setEmployees] = useState([{ firstName: "", lastName: "", position: "" }]);
 
-  // Hooks
+  // --- External Hooks ---
   const { errors: validationErrors, setErrors: setValidationErrors, setFieldError, clearFieldError, validate } = useValidation();
   const files = useFileUploads(supabase, providerId, { setFieldError, clearFieldError });
   
-  // --- NEW: Service Manager Hook ---
+  // Service management hook (handles state, validation rules, and DB saving for sp_services)
   const { 
     services, addService, removeService, updateService, 
     addPricingRow, removePricingRow, updatePricing, saveServicesToSupabase 
   } = useServiceManager();
 
   /* -------------------------------------------------------------------- */
-  /* Business Info Field Handlers                                         */
+  /* Input Handlers                                                       */
   /* -------------------------------------------------------------------- */
   const handleBusinessChange = (e) => {
     const { name, value } = e.target;
+    
+    // Character limit for description
     if (name === "description" && value.length > DESCRIPTION_MAX_LENGTH) return;
+    
+    // Handle Mobile Number (Restricted to 10 digits since +63 is prefixed in UI)
     if (name === "businessMobile") {
       const numbersOnly = value.replace(/\D/g, "");
-      if (numbersOnly.length <= 11) setBusinessInfo((prev) => ({ ...prev, [name]: numbersOnly }));
+      if (numbersOnly.length <= 10) setBusinessInfo((prev) => ({ ...prev, [name]: numbersOnly }));
       return;
     }
+    
+    // Handle Postal Code (4 digits for Philippines)
     if (name === "postalCode") {
       const numbersOnly = value.replace(/\D/g, "");
       if (numbersOnly.length <= 4) setBusinessInfo((prev) => ({ ...prev, [name]: numbersOnly }));
       return;
     }
+    
     setBusinessInfo((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Schedule / Hours handlers
   const toggleDay = (slotIndex, day) => {
     setBusinessInfo((prev) => {
       const used = prev.operatingHours.some((s, i) => i !== slotIndex && s.days.includes(day));
@@ -103,15 +111,16 @@ export default function ServiceProviderOnboardingPage() {
   const removeTimeSlot = (index) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.filter((_, i) => i !== index) }));
   const handleTimeChange = (slotIndex, type, value) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.map((slot, i) => (i === slotIndex ? { ...slot, [type]: value } : slot)) }));
 
+  // Employee handlers
   const handleEmployeeChange = (index, field, value) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
   const addEmployee = () => setEmployees((prev) => [...prev, { firstName: "", lastName: "", position: "" }]);
   const removeEmployee = (index) => setEmployees((prev) => prev.filter((_, i) => i !== index));
 
   /* -------------------------------------------------------------------- */
-  /* Flow Control: Validating & Moving Between Steps                      */
+  /* Flow Control: Validating & Proceeding to Review                      */
   /* -------------------------------------------------------------------- */
   
-  // Progresses from Business Info (Step 1) to Services (Step 2)
+  // STEP 1 -> STEP 2: Validate Business Info
   const handleNextStep = async (e) => {
     e.preventDefault();
     const isValid = await validate(supabase, providerId, businessInfo, employees, {
@@ -128,7 +137,7 @@ export default function ServiceProviderOnboardingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Validates Services before launching the Confirmation Modal
+  // STEP 2 -> MODAL: Validate Services & Pricing
   const handleReviewServices = () => {
     let isValid = true;
     let newErrors = { ...validationErrors };
@@ -162,7 +171,7 @@ export default function ServiceProviderOnboardingPage() {
   };
 
   /* -------------------------------------------------------------------- */
-  /* Final Submission Logic                                               */
+  /* Final Data Persistence (Supabase Submission)                         */
   /* -------------------------------------------------------------------- */
   const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
@@ -172,7 +181,7 @@ export default function ServiceProviderOnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // 1. Upload Files
+      // 1. Process and upload document files to storage
       const waiverUrl = files.waiverFile ? await files.uploadFileToStorage(user.id, "waivers", files.waiverFile) : (files.existingWaiverUrl || null);
       const permitUrl = files.businessPermitFile ? await files.uploadFileToStorage(user.id, "permits", files.businessPermitFile) : (files.existingPermitUrl || null);
       
@@ -187,10 +196,9 @@ export default function ServiceProviderOnboardingPage() {
         const u = await files.uploadFileToStorage(user.id, "payments", f);
         if (u) newPaymentUrls.push(u);
       }
-
       const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : (files.existingPaymentChannels?.[0]?.file_url || null);
 
-      // 2. Save Business Profile (sp_general_info)
+      // 2. Upsert Core Business Profile (sp_general_info)
       const payload = {
         profiles_id: user.id,
         business_name: businessInfo.businessName,
@@ -219,10 +227,9 @@ export default function ServiceProviderOnboardingPage() {
 
       const { data: upsertData, error: upsertError } = await supabase.from("sp_general_info").upsert(payload, { onConflict: 'profiles_id' }).select().single();
       if (upsertError) throw upsertError;
-      
       const currentProviderId = upsertData.id;
 
-      // 3. Save Hours, Staff, and Facilities
+      // 3. Clear and replace nested relation data (Hours, Employees, Facilities)
       await Promise.all([
         supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId),
         supabase.from("sp_employees_info").delete().eq("sp_id", currentProviderId),
@@ -242,6 +249,7 @@ export default function ServiceProviderOnboardingPage() {
           });
         });
       });
+      
       if (hoursPayload.length > 0) {
         const { error: hError } = await supabase.from("sp_operating_hours").insert(hoursPayload);
         if (hError) throw hError;
@@ -264,11 +272,11 @@ export default function ServiceProviderOnboardingPage() {
         if (sError) throw sError;
       }
 
-      // --- 4. NEW: SAVE SERVICES & PRICING ---
+      // 4. Save Services & Pricing (Handles sp_services and sp_service_options tables)
       const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId);
       if (!serviceSaveResult.success) throw new Error("Services save failed: " + serviceSaveResult.message);
 
-      // Finish up
+      // 5. Completion
       setShowConfirmModal(false);
       router.push(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING);
 
@@ -288,11 +296,11 @@ export default function ServiceProviderOnboardingPage() {
     <div className="apply-provider-wrapper">
       <h1 className="page-title">Service Provider Application</h1>
       
-      {/* Wizard Progress Indicator */}
+      {/* Dynamic Wizard Progress Indicator */}
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '30px' }}>
-        <span style={{ fontWeight: step === 1 ? 'bold' : 'normal', color: step === 1 ? '#0E2679' : '#9ca3af' }}>1. Business Info</span>
+        <span style={{ fontWeight: step === 1 ? '700' : 'normal', color: step === 1 ? '#0E2679' : '#9ca3af' }}>1. Business Info</span>
         <span style={{ color: '#9ca3af' }}>&gt;</span>
-        <span style={{ fontWeight: step === 2 ? 'bold' : 'normal', color: step === 2 ? '#0E2679' : '#9ca3af' }}>2. Services & Pricing</span>
+        <span style={{ fontWeight: step === 2 ? '700' : 'normal', color: step === 2 ? '#0E2679' : '#9ca3af' }}>2. Services & Pricing</span>
       </div>
 
       {validationErrors.general && (
@@ -310,15 +318,51 @@ export default function ServiceProviderOnboardingPage() {
           <section className="form-section">
             <h2>Business Information</h2>
             <div className="form-grid-3">
-              <div className="form-group"><label>Business Name*</label><input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} />{validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}</div>
-              <div className="form-group"><label>Email*</label><input type="email" name="businessEmail" value={businessInfo.businessEmail} onChange={handleBusinessChange} />{validationErrors.businessEmail && <small className="error">{validationErrors.businessEmail}</small>}</div>
-              <div className="form-group"><label>Mobile Number*</label><input type="tel" name="businessMobile" value={businessInfo.businessMobile} onChange={handleBusinessChange} placeholder="0912 345 6789" />{validationErrors.businessMobile && <small className="error">{validationErrors.businessMobile}</small>}</div>
+              <div className="form-group">
+                <label>Business Name*</label>
+                <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={validationErrors.businessName ? "input-error" : ""} />
+                {validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}
+              </div>
+              <div className="form-group">
+                <label>Email*</label>
+                <input type="email" name="businessEmail" value={businessInfo.businessEmail} onChange={handleBusinessChange} className={validationErrors.businessEmail ? "input-error" : ""} />
+                {validationErrors.businessEmail && <small className="error">{validationErrors.businessEmail}</small>}
+              </div>
+              
+              {/* UPDATED: Philippine Mobile Number input wrapper */}
+              <div className="form-group">
+                <label>Mobile Number*</label>
+                <div className={`phone-input-wrapper ${validationErrors.businessMobile ? "input-error" : ""}`}>
+                  <span className="phone-prefix">+63</span>
+                  <input 
+                    type="tel" 
+                    name="businessMobile" 
+                    value={businessInfo.businessMobile} 
+                    onChange={handleBusinessChange} 
+                    placeholder="920 667 2166" 
+                    maxLength={10}
+                    className="phone-input-field"
+                  />
+                </div>
+                {validationErrors.businessMobile && <small className="error">{validationErrors.businessMobile}</small>}
+              </div>
             </div>
 
             <div className="form-grid-2">
-              <div className="form-group"><label>Service Type</label><input type="text" name="typeOfService" value={businessInfo.typeOfService} disabled className="input-disabled" /></div>
-              <div className="form-group"><label>Social Media URL</label><input type="url" name="socialMediaUrl" value={businessInfo.socialMediaUrl} onChange={handleBusinessChange} placeholder="https://facebook.com/..." />{validationErrors.socialMediaUrl && <small className="error">{validationErrors.socialMediaUrl}</small>}</div>
-              <div className="form-group"><label>Google Map Link</label><input type="url" name="googleMapUrl" value={businessInfo.googleMapUrl} onChange={handleBusinessChange} placeholder="https://maps.google.com/..." />{validationErrors.googleMapUrl && <small className="error">{validationErrors.googleMapUrl}</small>}</div>
+              <div className="form-group">
+                <label>Service Type</label>
+                <input type="text" name="typeOfService" value={businessInfo.typeOfService} disabled className="input-disabled" />
+              </div>
+              <div className="form-group">
+                <label>Social Media URL</label>
+                <input type="url" name="socialMediaUrl" value={businessInfo.socialMediaUrl} onChange={handleBusinessChange} placeholder="https://facebook.com/..." className={validationErrors.socialMediaUrl ? "input-error" : ""} />
+                {validationErrors.socialMediaUrl && <small className="error">{validationErrors.socialMediaUrl}</small>}
+              </div>
+              <div className="form-group">
+                <label>Google Map Link</label>
+                <input type="url" name="googleMapUrl" value={businessInfo.googleMapUrl} onChange={handleBusinessChange} placeholder="https://maps.google.com/..." className={validationErrors.googleMapUrl ? "input-error" : ""} />
+                {validationErrors.googleMapUrl && <small className="error">{validationErrors.googleMapUrl}</small>}
+              </div>
             </div>
 
             <div className="form-group description-container">
@@ -328,7 +372,7 @@ export default function ServiceProviderOnboardingPage() {
                   {businessInfo.description.length}/{DESCRIPTION_MAX_LENGTH}
                 </span>
               </div>
-              <textarea name="description" value={businessInfo.description} onChange={handleBusinessChange} rows={5} maxLength={DESCRIPTION_MAX_LENGTH} placeholder="Tell us about your business, services, and what makes you unique..." className={`description-textarea ${validationErrors.description ? 'error' : ''}`} />
+              <textarea name="description" value={businessInfo.description} onChange={handleBusinessChange} rows={5} maxLength={DESCRIPTION_MAX_LENGTH} placeholder="Tell us about your business, services, and what makes you unique..." className={`description-textarea ${validationErrors.description ? 'input-error' : ''}`} />
               {validationErrors.description && <small className="error">{validationErrors.description}</small>}
             </div>
 
@@ -343,10 +387,33 @@ export default function ServiceProviderOnboardingPage() {
                   </div>
 
                   <div className="time-config-row-single">
-                    <div className="input-unit"><label>Hours:</label><div className="time-inputs-compact"><input type="time" value={slot.startTime} onChange={(e) => handleTimeChange(i, "startTime", e.target.value)} /><span>-</span><input type="time" value={slot.endTime} onChange={(e) => handleTimeChange(i, "endTime", e.target.value)} /></div></div>
-                    <div className="input-unit"><label>Slot Every:</label><div className="duration-inputs-compact"><input type="number" min="0" value={slot.slotDurationHours} onChange={(e) => handleTimeChange(i, "slotDurationHours", parseInt(e.target.value) || 0)} /><span>hr</span><input type="number" min="0" value={slot.slotDurationMinutes} onChange={(e) => handleTimeChange(i, "slotDurationMinutes", parseInt(e.target.value) || 0)} /><span>min</span></div></div>
-                    <div className="input-unit"><label>Capacity:</label><div className="capacity-input-compact"><input type="number" min="1" value={slot.capacityPerSlot} onChange={(e) => handleTimeChange(i, "capacityPerSlot", parseInt(e.target.value) || 1)} /><span>pets</span></div></div>
-                    {businessInfo.operatingHours.length > 1 && (<button type="button" onClick={() => removeTimeSlot(i)} className="remove-inline-btn">🗑️</button>)}
+                    <div className="input-unit">
+                      <label>Hours:</label>
+                      <div className="time-inputs-compact">
+                        <input type="time" value={slot.startTime} onChange={(e) => handleTimeChange(i, "startTime", e.target.value)} />
+                        <span>-</span>
+                        <input type="time" value={slot.endTime} onChange={(e) => handleTimeChange(i, "endTime", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="input-unit">
+                      <label>Slot Every:</label>
+                      <div className="duration-inputs-compact">
+                        <input type="number" min="0" value={slot.slotDurationHours} onChange={(e) => handleTimeChange(i, "slotDurationHours", parseInt(e.target.value) || 0)} />
+                        <span>hr</span>
+                        <input type="number" min="0" value={slot.slotDurationMinutes} onChange={(e) => handleTimeChange(i, "slotDurationMinutes", parseInt(e.target.value) || 0)} />
+                        <span>min</span>
+                      </div>
+                    </div>
+                    <div className="input-unit">
+                      <label>Capacity:</label>
+                      <div className="capacity-input-compact">
+                        <input type="number" min="1" value={slot.capacityPerSlot} onChange={(e) => handleTimeChange(i, "capacityPerSlot", parseInt(e.target.value) || 1)} />
+                        <span>pets</span>
+                      </div>
+                    </div>
+                    {businessInfo.operatingHours.length > 1 && (
+                      <button type="button" onClick={() => removeTimeSlot(i)} className="remove-inline-btn" title="Remove Schedule">🗑️</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -357,12 +424,12 @@ export default function ServiceProviderOnboardingPage() {
           <section className="form-section">
             <h2>Business Address</h2>
             <div className="form-grid-3">
-              <div className="form-group"><label>Street / House No.*</label><input type="text" name="houseStreet" value={businessInfo.houseStreet} onChange={handleBusinessChange} />{validationErrors.houseStreet && <small className="error">{validationErrors.houseStreet}</small>}</div>
-              <div className="form-group"><label>Region*</label><input type="text" name="region" value={businessInfo.region} onChange={handleBusinessChange} />{validationErrors.region && <small className="error">{validationErrors.region}</small>}</div>
-              <div className="form-group"><label>Province*</label><input type="text" name="province" value={businessInfo.province} onChange={handleBusinessChange} />{validationErrors.province && <small className="error">{validationErrors.province}</small>}</div>
-              <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} />{validationErrors.city && <small className="error">{validationErrors.city}</small>}</div>
-              <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
-              <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} />{validationErrors.postalCode && <small className="error">{validationErrors.postalCode}</small>}</div>
+              <div className="form-group"><label>Street / House No.*</label><input type="text" name="houseStreet" value={businessInfo.houseStreet} onChange={handleBusinessChange} className={validationErrors.houseStreet ? "input-error" : ""} />{validationErrors.houseStreet && <small className="error">{validationErrors.houseStreet}</small>}</div>
+              <div className="form-group"><label>Region*</label><input type="text" name="region" value={businessInfo.region} onChange={handleBusinessChange} className={validationErrors.region ? "input-error" : ""} />{validationErrors.region && <small className="error">{validationErrors.region}</small>}</div>
+              <div className="form-group"><label>Province*</label><input type="text" name="province" value={businessInfo.province} onChange={handleBusinessChange} className={validationErrors.province ? "input-error" : ""} />{validationErrors.province && <small className="error">{validationErrors.province}</small>}</div>
+              <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} className={validationErrors.city ? "input-error" : ""} />{validationErrors.city && <small className="error">{validationErrors.city}</small>}</div>
+              <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} className={validationErrors.barangay ? "input-error" : ""} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
+              <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} className={validationErrors.postalCode ? "input-error" : ""} />{validationErrors.postalCode && <small className="error">{validationErrors.postalCode}</small>}</div>
               <div className="form-group"><label>Country</label><input type="text" name="country" value={businessInfo.country} disabled className="input-disabled" /></div>
             </div>
           </section>
@@ -381,7 +448,7 @@ export default function ServiceProviderOnboardingPage() {
 
               <div className="form-group">
                 <label>Business Permit*</label>
-                <label className="file-btn">📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label>
+                <label className={`file-btn ${validationErrors.businessPermitFile ? "input-error" : ""}`}>📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label>
                 <div className="file-preview-small">
                   {files.businessPermitFile ? (<span>{files.businessPermitFile.name} <span onClick={() => files.setBusinessPermitFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingPermitUrl ? (<span><a href={files.existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setBusinessPermitFile, files.setExistingPermitUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
                 </div>
@@ -392,7 +459,7 @@ export default function ServiceProviderOnboardingPage() {
             <div className="form-grid-2">
               <div className="form-group">
                 <label>Facility Images (Max 3)*</label>
-                <label className="file-btn">📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", files.existingFacilityImages.length, 1)} hidden /></label>
+                <label className={`file-btn ${validationErrors.facilityImages ? "input-error" : ""}`}>📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", files.existingFacilityImages.length, 1)} hidden /></label>
                 <div className="file-list">
                   {files.existingFacilityImages.map(img => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => files.removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}
                   {files.facilityImages.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setFacilityImages, i)}>✕</button></div>))}
@@ -402,7 +469,7 @@ export default function ServiceProviderOnboardingPage() {
 
               <div className="form-group">
                 <label>Payment QR (Max 2)*</label>
-                <label className="file-btn">📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", files.existingPaymentChannels.length, 1)} hidden /></label>
+                <label className={`file-btn ${validationErrors.paymentChannelFiles ? "input-error" : ""}`}>📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", files.existingPaymentChannels.length, 1)} hidden /></label>
                 <div className="file-list">
                   {files.existingPaymentChannels.map(img => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => files.removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}
                   {files.paymentChannelFiles.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setPaymentChannelFiles, i)}>✕</button></div>))}
@@ -417,16 +484,16 @@ export default function ServiceProviderOnboardingPage() {
             {employees.map((emp, idx) => (
               <div className="employee-row" key={idx}>
                 <div className="form-grid-3">
-                  <div className="form-group"><label>First Name*</label><input type="text" value={emp.firstName} onChange={(e) => handleEmployeeChange(idx, "firstName", e.target.value)} />{validationErrors[`employee_${idx}_first`] && <small className="error">{validationErrors[`employee_${idx}_first`]}</small>}</div>
-                  <div className="form-group"><label>Last Name*</label><input type="text" value={emp.lastName} onChange={(e) => handleEmployeeChange(idx, "lastName", e.target.value)} />{validationErrors[`employee_${idx}_last`] && <small className="error">{validationErrors[`employee_${idx}_last`]}</small>}</div>
+                  <div className="form-group"><label>First Name*</label><input type="text" value={emp.firstName} onChange={(e) => handleEmployeeChange(idx, "firstName", e.target.value)} className={validationErrors[`employee_${idx}_first`] ? "input-error" : ""} />{validationErrors[`employee_${idx}_first`] && <small className="error">{validationErrors[`employee_${idx}_first`]}</small>}</div>
+                  <div className="form-group"><label>Last Name*</label><input type="text" value={emp.lastName} onChange={(e) => handleEmployeeChange(idx, "lastName", e.target.value)} className={validationErrors[`employee_${idx}_last`] ? "input-error" : ""} />{validationErrors[`employee_${idx}_last`] && <small className="error">{validationErrors[`employee_${idx}_last`]}</small>}</div>
                   <div className="form-group">
                     <label>Position*</label>
                     <div className="input-with-btn">
-                      <select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)}>
+                      <select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)} className={validationErrors[`employee_${idx}_pos`] ? "input-error" : ""}>
                         <option value="">Select Position</option>
                         {POSITION_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
-                      {employees.length > 1 && (<button type="button" onClick={() => removeEmployee(idx)} className="remove-btn">🗑️</button>)}
+                      {employees.length > 1 && (<button type="button" onClick={() => removeEmployee(idx)} className="remove-btn" title="Remove Employee">🗑️</button>)}
                     </div>
                     {validationErrors[`employee_${idx}_pos`] && <small className="error">{validationErrors[`employee_${idx}_pos`]}</small>}
                   </div>
@@ -453,8 +520,8 @@ export default function ServiceProviderOnboardingPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2>Service Menu</h2>
               <div className="add-service-buttons" style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" onClick={() => addService("individual_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer' }}>+ Individual</button>
-                <button type="button" onClick={() => addService("packaged_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer' }}>+ Package</button>
+                <button type="button" onClick={() => addService("individual_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Individual</button>
+                <button type="button" onClick={() => addService("packaged_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Package</button>
               </div>
             </div>
 
@@ -503,7 +570,7 @@ export default function ServiceProviderOnboardingPage() {
       )}
 
 
-      {/* --- Confirmation Modal --- */}
+      {/* --- Confirmation / Review Modal --- */}
       <ConfirmationModal
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
