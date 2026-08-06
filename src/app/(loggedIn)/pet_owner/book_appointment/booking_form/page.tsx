@@ -17,6 +17,8 @@ import {
   FaFileAlt,
   FaTag,
   FaMinus,
+  FaChevronDown,
+  FaCheckCircle,
 } from 'react-icons/fa';
 import './booking_form.css';
 
@@ -107,6 +109,11 @@ function BookingFormContent() {
   const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
   const [userRegisteredPets, setUserRegisteredPets] = useState<RegisteredPet[]>([]);
 
+  // Modal controls
+  const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [showPaymentBreakdown, setShowPaymentBreakdown] = useState<boolean>(false);
+
   // Services and Service Weight Options
   const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
   const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
@@ -130,6 +137,20 @@ function BookingFormContent() {
       return dateStr;
     }
   }, [dateStr]);
+
+  const formatDateForSummary = (dateVal: string) => {
+    if (!dateVal) return 'N/A';
+    try {
+      const d = new Date(dateVal);
+      return d.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateVal;
+    }
+  };
 
   // Fetch Capacity
   useEffect(() => {
@@ -274,7 +295,6 @@ function BookingFormContent() {
     return Array.from({ length: initialCount }, (_, i) => createDefaultPet(i + 1));
   });
 
-  // Calculate matching size and price dynamically based on weight and pet type
   const calculateSizeAndPrice = (
     weightStr: string,
     pType: 'Dog' | 'Cat',
@@ -295,7 +315,6 @@ function BookingFormContent() {
     const updatedServices = selectedSvcs.map((item) => {
       if (!item.serviceId) return { ...item, price: 0, matchedOptionId: null };
 
-      // Find matching size range in sp_service_options
       const matched = serviceWeightOptions.find((opt) => {
         if (opt.sp_services_id !== item.serviceId) return false;
 
@@ -309,7 +328,6 @@ function BookingFormContent() {
       });
 
       if (matched) {
-        // Format size label nicely (e.g., extra_large -> Extra Large)
         detectedSize = matched.pet_size
           .split('_')
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -348,7 +366,6 @@ function BookingFormContent() {
 
         const updatedPet = { ...pet, [field]: value };
 
-        // Recalculate size and price when weight or petType updates
         if (field === 'weight' || field === 'petType') {
           const { sizeLabel, updatedServices } = calculateSizeAndPrice(
             field === 'weight' ? value : pet.weight,
@@ -364,7 +381,6 @@ function BookingFormContent() {
     );
   };
 
-  // Service Handlers
   const handleServiceChange = (petId: string, index: number, serviceId: string) => {
     setPetForms((prev) =>
       prev.map((pet) => {
@@ -437,7 +453,6 @@ function BookingFormContent() {
     );
   };
 
-  // Autofill Registered Pet
   const handleAutofillPet = (formId: string, registeredPetId: string) => {
     const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
 
@@ -505,13 +520,21 @@ function BookingFormContent() {
     return false;
   };
 
-  // Grand total computation
   const grandTotal = useMemo(() => {
     return petForms.reduce((acc, pet) => {
       const petTotal = pet.selectedServices.reduce((sAcc, sItem) => sAcc + sItem.price, 0);
       return acc + petTotal;
     }, 0);
   }, [petForms]);
+
+  const handleConfirmBooking = () => {
+    setShowSummaryModal(false);
+    setShowSuccessModal(true);
+  };
+
+  const handleReturnHome = () => {
+    router.push('/pet_owner');
+  };
 
   return (
     <div className="booking-form-page">
@@ -523,7 +546,7 @@ function BookingFormContent() {
           <h1 className="form-main-title">Pet Information</h1>
         </div>
 
-        {/* Date & Pricing Bar without 30% Down Payment text */}
+        {/* Date & Pricing Bar */}
         <div className="info-summary-card">
           <div className="summary-left">
             <div className="summary-date flex-item">
@@ -536,7 +559,9 @@ function BookingFormContent() {
           </div>
 
           <div className="summary-right">
-            <button className="proceed-btn">Proceed to Summary &rarr;</button>
+            <button className="proceed-btn" onClick={() => setShowSummaryModal(true)}>
+              Proceed to Summary &rarr;
+            </button>
           </div>
         </div>
 
@@ -937,6 +962,176 @@ function BookingFormContent() {
           );
         })}
       </main>
+
+      {/* 1. BOOKING CONFIRMATION SUMMARY MODAL */}
+      {showSummaryModal && (
+        <div className="modal-backdrop">
+          <div className="summary-modal-card">
+            <div className="summary-modal-header">
+              <div className="modal-header-title">
+                <FaFileAlt className="header-doc-icon" />
+                <h2>Booking Confirmation</h2>
+              </div>
+              <button
+                className="modal-close-x"
+                onClick={() => setShowSummaryModal(false)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="summary-modal-body">
+              {petForms.map((pet, pIdx) => {
+                const petTotal = pet.selectedServices.reduce((sum, s) => sum + s.price, 0);
+
+                return (
+                  <div key={pet.id} className="summary-pet-card">
+                    <div className="summary-pet-top">
+                      <h3 className="summary-pet-name">
+                        Pet #{pIdx + 1}: {pet.petName || 'Unnamed Pet'}
+                      </h3>
+                      <div className="summary-pet-total-box">
+                        <span className="summary-pet-total-label">Pet Total</span>
+                        <span className="summary-pet-total-val">₱{petTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="summary-pet-info-grid">
+                      <div>Type: <strong>{pet.petType}</strong></div>
+                      <div>Breed: <strong>{pet.breed || 'N/A'}</strong></div>
+                      <div>Gender: <strong>{pet.gender}</strong></div>
+                      <div>Birth Date: <strong>{formatDateForSummary(pet.dob)}</strong></div>
+                      <div>Weight: <strong>{pet.weight ? `${pet.weight} kg` : 'N/A'}</strong></div>
+                      <div>Size: <strong>{pet.calculatedSize.toUpperCase()}</strong></div>
+                    </div>
+
+                    {/* Availed Services */}
+                    <div className="summary-services-box">
+                      <div className="availed-title">AVAILED SERVICES:</div>
+                      {pet.selectedServices.map((sItem, sIndex) => {
+                        const matchedSvc = availableServices.find((s) => s.id === sItem.serviceId);
+                        return (
+                          <div key={sIndex} className="availed-service-item">
+                            <span>• {matchedSvc ? matchedSvc.service_name : 'No service selected'}</span>
+                            <span>₱{sItem.price.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Behaviors */}
+                    <div className="summary-behaviors">
+                      Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
+                    </div>
+
+                    {/* Vaccine Preview */}
+                    <div className="summary-vaccine-section">
+                      <label>Vaccine</label>
+                      {pet.vaccineFile || pet.vaccineUrl ? (
+                        <div className="summary-vaccine-thumb">
+                          {isImageFile(pet.vaccineFile, pet.vaccineUrl) ? (
+                            <img
+                              src={
+                                pet.vaccineFile
+                                  ? URL.createObjectURL(pet.vaccineFile)
+                                  : pet.vaccineUrl!
+                              }
+                              alt="Vaccine Record"
+                            />
+                          ) : (
+                            <div className="summary-doc-icon">
+                              <FaFileAlt /> Vaccine Document Attached
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="no-vaccine-text">No record uploaded</span>
+                      )}
+                    </div>
+
+                    {/* Emergency Consent Status */}
+                    <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
+                      <FaExclamationCircle />
+                      <span>
+                        Emergency Transport Consent: {pet.emergencyConsent ? 'APPROVED' : 'DECLINED'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <hr className="summary-divider" />
+
+              {/* Total Financials Display (Clean Total Only) */}
+              <div className="summary-financials">
+                <div className="financial-row total-row">
+                  <span>Total Service Amount (VAT Inclusive):</span>
+                  <span className="amount-bold">₱{grandTotal.toFixed(2)}</span>
+                </div>
+
+                <div className="breakdown-toggle-box">
+                  <button
+                    className="toggle-breakdown-btn"
+                    onClick={() => setShowPaymentBreakdown(!showPaymentBreakdown)}
+                  >
+                    <span>See payment breakdown</span>
+                    <FaChevronDown className={`chevron-icon ${showPaymentBreakdown ? 'open' : ''}`} />
+                  </button>
+
+                  {showPaymentBreakdown && (
+                    <div className="payment-breakdown-details">
+                      {petForms.map((p, idx) => (
+                        <div key={p.id} className="breakdown-item">
+                          <span>Pet #{idx + 1} ({p.petName || 'Unnamed'}):</span>
+                          <span>₱{p.selectedServices.reduce((a, b) => a + b.price, 0).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <hr style={{ border: '0.5px dashed #cbd5e1', margin: '4px 0' }} />
+                      <div className="breakdown-item" style={{ fontWeight: 'bold' }}>
+                        <span>Grand Total:</span>
+                        <span>₱{grandTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="summary-modal-footer">
+              <button
+                className="btn-back-edit"
+                onClick={() => setShowSummaryModal(false)}
+              >
+                Back to Edit
+              </button>
+              <button
+                className="btn-confirm-booking"
+                onClick={handleConfirmBooking}
+              >
+                Confirm Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. BOOKING REQUESTED SUCCESS MODAL */}
+      {showSuccessModal && (
+        <div className="modal-backdrop">
+          <div className="success-modal-card">
+            <div className="success-icon-wrapper">
+              <FaCheckCircle className="success-green-check" />
+            </div>
+            <h2 className="success-title">Booking Requested!</h2>
+            <p className="success-message">
+              Your appointment request has been submitted. Please wait for the provider to confirm your slot.
+            </p>
+            <button className="btn-return-home" onClick={handleReturnHome}>
+              Return to Home
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Capacity Reached Modal */}
       {showCapacityModal && (

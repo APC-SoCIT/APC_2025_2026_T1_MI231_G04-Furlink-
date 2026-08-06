@@ -600,6 +600,497 @@
   flex-shrink: 0;
 }
 
+/* Modal Backdrop Overlay */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+/* Booking Confirmation Summary Modal */
+.summary-modal-card {
+  background-color: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  animation: modalPopIn 0.25s ease-out forwards;
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.summary-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.modal-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1e3a8a;
+}
+
+.header-doc-icon {
+  font-size: 22px;
+}
+
+.modal-header-title h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.modal-close-x {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.modal-close-x:hover {
+  color: #0f172a;
+}
+
+.summary-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Pet Card Inside Summary */
+.summary-pet-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.summary-pet-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 12px;
+}
+
+.summary-pet-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin: 0;
+}
+
+.summary-pet-total-box {
+  text-align: right;
+}
+
+.summary-pet-total-label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.summary-pet-total-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.summary-pet-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.summary-pet-info-grid strong {
+  color: #0f172a;
+}
+
+.summary-services-box {
+  background-color: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.availed-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.5px;
+}
+
+.availed-service-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.summary-behaviors {
+  font-size: 13px;
+  color: #475569;
+}
+
+.summary-vaccine-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-vaccine-section label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.summary-vaccine-thumb {
+  width: 120px;
+  height: 70px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-vaccine-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.summary-doc-icon {
+  font-size: 11px;
+  color: #1e3a8a;
+  padding: 4px;
+  text-align: center;
+}
+
+.no-vaccine-text {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.summary-consent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-consent-badge.declined {
+  color: #dc2626;
+}
+
+.summary-consent-badge.approved {
+  color: #16a34a;
+}
+
+.summary-divider {
+  border: 0;
+  border-top: 1px dashed #cbd5e1;
+  margin: 4px 0;
+}
+
+/* Financials Summary Footer */
+.summary-financials {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.financial-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 16px;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.amount-bold {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.dp-bold {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.breakdown-toggle-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.toggle-breakdown-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+}
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+  font-size: 10px;
+}
+
+.chevron-icon.open {
+  transform: rotate(180deg);
+}
+
+.payment-breakdown-details {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+}
+
+.summary-modal-footer {
+  padding: 16px 24px;
+  background-color: #ffffff;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-back-edit {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #334155;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-back-edit:hover {
+  background-color: #f8fafc;
+}
+
+.btn-confirm-booking {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background-color: #1e3a8a;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-confirm-booking:hover {
+  background-color: #1e40af;
+}
+
+/* 2. Success Modal Alert */
+.success-modal-card {
+  background-color: #ffffff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 440px;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modalPopIn 0.25s ease-out forwards;
+}
+
+.success-icon-wrapper {
+  margin-bottom: 16px;
+}
+
+.success-green-check {
+  font-size: 64px;
+  color: #10b981;
+}
+
+.success-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin: 0 0 12px 0;
+}
+
+.success-message {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+
+.btn-return-home {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background-color: #1e3a8a;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-return-home:hover {
+  background-color: #1e40af;
+}
+
+/* Financials Summary Footer */
+.summary-financials {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.financial-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 16px;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.amount-bold {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.breakdown-toggle-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.toggle-breakdown-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+}
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+  font-size: 10px;
+}
+
+.chevron-icon.open {
+  transform: rotate(180deg);
+}
+
+.payment-breakdown-details {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 640px) {
+  .summary-pet-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-modal-footer {
+    flex-direction: column;
+  }
+
+  .btn-back-edit,
+  .btn-confirm-booking {
+    width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .info-summary-card {
     flex-direction: column;
