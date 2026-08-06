@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
 export type OperatingHour = {
@@ -9,8 +10,8 @@ export type OperatingHour = {
   day_of_week: string;
   opening_time: string;
   closing_time: string;
-  slot_interval: number; // in minutes
-  slot_capacity: number; // max pets per slot
+  slot_interval: number;
+  slot_capacity: number;
 };
 
 type BookingWidgetProps = {
@@ -21,24 +22,22 @@ type BookingWidgetProps = {
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function BookingWidget({ spId, operatingHours }: BookingWidgetProps) {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1)); // August 2026
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 5)); // Default Aug 5, 2026
+  const router = useRouter();
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1));
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 5));
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [numPets, setNumPets] = useState<number>(1);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
 
-  // Map operating hours by day of week
   const hoursByDay = useMemo(() => {
     const map = new Map<string, OperatingHour>();
     operatingHours.forEach((oh) => map.set(oh.day_of_week, oh));
     return map;
   }, [operatingHours]);
 
-  // Determine current day of week and operating settings for selected date
   const selectedDayName = selectedDate ? DAYS_OF_WEEK[selectedDate.getDay()] : null;
   const currentOperatingHour = selectedDayName ? hoursByDay.get(selectedDayName) : null;
 
-  // Generate Available Time Slots based on Opening Time, Closing Time, and Slot Interval
   const generatedSlots = useMemo(() => {
     if (!currentOperatingHour) return [];
 
@@ -64,10 +63,8 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
     return slots;
   }, [currentOperatingHour]);
 
-  // Max pets allowed per slot
   const maxCapacity = currentOperatingHour ? currentOperatingHour.slot_capacity : 1;
 
-  // Handle month navigation
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
@@ -76,7 +73,6 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  // Calendar rendering helpers
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const monthName = currentDate.toLocaleString('en-US', { month: 'long' });
@@ -87,8 +83,8 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
   const handleDateSelect = (dayNum: number) => {
     const newDate = new Date(year, month, dayNum);
     setSelectedDate(newDate);
-    setSelectedTimeSlot(''); // Reset time slot on date change
-    setNumPets(1); // Reset pets count
+    setSelectedTimeSlot('');
+    setNumPets(1);
   };
 
   const handlePetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,11 +106,24 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
     numPets <= maxCapacity &&
     agreedTerms;
 
+  const handleCompleteBooking = () => {
+    if (!isBookingValid || !selectedDate) return;
+
+    const formattedDate = selectedDate.toISOString().split('T')[0];
+    const query = new URLSearchParams({
+      sp_id: spId,
+      date: formattedDate,
+      time: selectedTimeSlot,
+      pets: numPets.toString(),
+    });
+
+    router.push(`/pet_owner/book_appointment/booking_form?${query.toString()}`);
+  };
+
   return (
     <div className="widget-card">
       <h2 className="widget-title">Book Appointment</h2>
 
-      {/* 1. SELECT DATE */}
       <div className="form-group">
         <label className="field-label">SELECT DATE</label>
         <div className="calendar-box">
@@ -135,12 +144,10 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
           </div>
 
           <div className="calendar-dates-grid">
-            {/* Empty slots for offset */}
             {Array.from({ length: firstDayOfMonth }).map((_, i) => (
               <span key={`empty-${i}`} className="muted"></span>
             ))}
 
-            {/* Days of the month */}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const dayNum = i + 1;
               const thisDate = new Date(year, month, dayNum);
@@ -168,7 +175,6 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
         </div>
       </div>
 
-      {/* 2. SELECT TIME SLOT */}
       <div className="form-group">
         <label className="field-label">SELECT TIME SLOT</label>
         <select
@@ -194,7 +200,6 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
         </select>
       </div>
 
-      {/* 3. NUMBER OF PETS */}
       <div className="form-group">
         <label className="field-label">
           NUMBER OF PETS {currentOperatingHour && `(Max: ${maxCapacity})`}
@@ -210,7 +215,6 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
         />
       </div>
 
-      {/* 4. TERMS CHECKBOX */}
       <div className="terms-checkbox-group">
         <input
           type="checkbox"
@@ -223,13 +227,10 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
         </label>
       </div>
 
-      {/* 5. SUBMIT BUTTON */}
       <button
         disabled={!isBookingValid}
         className={`complete-booking-btn ${isBookingValid ? 'active' : ''}`}
-        onClick={() => {
-          alert(`Appointment booked for ${numPets} pet(s) on ${selectedDate?.toDateString()} at ${selectedTimeSlot}!`);
-        }}
+        onClick={handleCompleteBooking}
       >
         Complete Booking
       </button>
