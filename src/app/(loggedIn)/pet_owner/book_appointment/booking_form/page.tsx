@@ -84,6 +84,14 @@ type PetFormData = {
   emergencyConsent: boolean;
 };
 
+const REVERSE_BEHAVIOR_MAP: Record<string, string> = {
+  'Friendly / Social': 'friendly',
+  'Aggressive / Reactive': 'aggressive',
+  'Anxious / Nervous': 'anxious',
+  'High Energy': 'energetic',
+  'House Trained': 'trained',
+};
+
 const BEHAVIOR_MAP: Record<string, string> = {
   friendly: 'Friendly / Social',
   aggressive: 'Aggressive / Reactive',
@@ -113,6 +121,7 @@ function BookingFormContent() {
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
   const [showPaymentBreakdown, setShowPaymentBreakdown] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Services and Service Weight Options
   const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
@@ -328,10 +337,7 @@ function BookingFormContent() {
       });
 
       if (matched) {
-        detectedSize = matched.pet_size
-          .split('_')
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+        detectedSize = matched.pet_size;
 
         return {
           ...item,
@@ -527,9 +533,160 @@ function BookingFormContent() {
     }, 0);
   }, [petForms]);
 
-  const handleConfirmBooking = () => {
-    setShowSummaryModal(false);
-    setShowSuccessModal(true);
+  // File Upload Helper to Supabase Storage
+  const uploadFileToBucket = async (file: File, path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('pet_documents').upload(path, file);
+    if (error) {
+      console.error('File upload error:', error);
+      return null;
+    }
+    const { data: publicData } = supabase.storage.from('pet_documents').getPublicUrl(data.path);
+    return publicData.publicUrl;
+  };
+
+  // Main Handle Confirm Booking & DB Insertion Function
+  const handleConfirmBooking = async () => {
+    setIsSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('User authentication failed. Please log in again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 1. Insert into booking_info
+      const { data: bookingData, error: bookingErr } = await supabase
+        .from('booking_info')
+        .insert({
+          profiles_id: user.id,
+          sp_id: spId,
+          booking_date: dateStr,
+          booking_timeslot: timeSlot,
+          booking_status: 'pending_sp_response',
+          booking_total_amount: grandTotal,
+        })
+        .select()
+        .single();
+
+      if (bookingErr || !bookingData) {
+        throw new Error(bookingErr?.message || 'Failed to create booking.');
+      }
+
+      const bookingInfoId = bookingData.id;
+
+      // 2. Process and insert each pet
+      for (const pet of petForms) {
+        let finalVaccineUrl = pet.vaccineUrl || '';
+        let finalIllnessUrl = pet.illnessUrl || null;
+        let regPetId = pet.selectedRegisteredPetId;
+
+        // If a new vaccine file was uploaded
+        if (pet.vaccineFile) {
+          const filePath = `${user.id}/${Date.now()}_vaccine_${pet.vaccineFile.name}`;
+          const uploadedUrl = await uploadFileToBucket(pet.vaccineFile, filePath);
+          if (uploadedUrl) finalVaccineUrl = uploadedUrl;
+        }
+
+        // If a new illness file was uploaded
+        if (pet.illnessFile) {
+          const filePath = `${user.id}/${Date.now()}_illness_${pet.illnessFile.name}`;
+          const uploadedUrl = await uploadFileToBucket(pet.illnessFile, filePath);
+          if (uploadedUrl) finalIllnessUrl = uploadedUrl;
+        }
+
+        // If user didn't pick a registered pet, auto-register the pet record first to satisfy foreign key constraint
+        if (!regPetId) {
+          const { data: newRegPet, error: regErr } = await supabase
+            .from('po_registered_pet')
+            .insert({
+              profiles_id: user.id,
+              pet_name: pet.petName,
+              pet_type: pet.petType.toLowerCase(),
+              pet_breed: pet.breed,
+              pet_gender: pet.gender.toLowerCase(),
+              pet_date_of_birth: pet.dob,
+              pet_weight: parseFloat(pet.weight),
+              pet_behaviors: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
+              pet_vaccine_url: finalVaccineUrl,
+              pet_illness_proof_url: finalIllnessUrl,
+              pet_grooming_notes: pet.groomingSpecs || null,
+              pet_emergency_consent: pet.emergencyConsent,
+            })
+            .select()
+            .single();
+
+          if (regErr || !newRegPet) {
+            throw new Error(regErr?.message || 'Failed to register pet context.');
+          }
+          regPetId = newRegPet.id;
+        }
+
+        // Normalize DB constraints for calculated size
+        let normalizedSize = pet.calculatedSize.toLowerCase().replace(/\s+/g, '_');
+        const allowedSizes = ['all', 'extra_small', 'small', 'medium', 'large', 'extra_large', 'cat'];
+        if (!allowedSizes.includes(normalizedSize)) {
+          normalizedSize = pet.petType.toLowerCase() === 'cat' ? 'cat' : 'medium';
+        }
+
+        // Insert into booking_pet_info
+        const { data: petInfoData, error: petInfoErr } = await supabase
+          .from('booking_pet_info')
+          .insert({
+            booking_info_id: bookingInfoId,
+            registered_pet_id: regPetId,
+            booking_pet_name: pet.petName,
+            booking_pet_type: pet.petType.toLowerCase(),
+            booking_breed: pet.breed,
+            booking_gender: pet.gender.toLowerCase(),
+            booking_date_of_birth: pet.dob,
+            booking_weight: parseFloat(pet.weight),
+            booking_behavior: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
+            booking_vaccine_url: finalVaccineUrl,
+            booking_illness_proof_url: finalIllnessUrl,
+            booking_grooming_notes: pet.groomingSpecs || null,
+            booking_emergency_consent: pet.emergencyConsent,
+            booking_calculated_size: normalizedSize,
+          })
+          .select()
+          .single();
+
+        if (petInfoErr || !petInfoData) {
+          throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
+        }
+
+        const bookingPetInfoId = petInfoData.id;
+
+        // 3. Insert into booking_service_info
+        for (const svcItem of pet.selectedServices) {
+          if (!svcItem.matchedOptionId) continue;
+
+          const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
+
+          const { error: svcInsertErr } = await supabase
+            .from('booking_service_info')
+            .insert({
+              booking_pet_info_id: bookingPetInfoId,
+              booking_services_id: svcItem.matchedOptionId,
+              booking_service_name: matchedSvcObj ? matchedSvcObj.service_name : 'Service',
+              booking_service_type: matchedSvcObj?.service_type || 'individual_service',
+              booking_price: svcItem.price,
+            });
+
+          if (svcInsertErr) {
+            throw new Error(svcInsertErr.message);
+          }
+        }
+      }
+
+      setShowSummaryModal(false);
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      console.error('Booking confirmation failed:', err);
+      alert(`Booking Error: ${err.message || 'An error occurred while saving your booking.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReturnHome = () => {
@@ -772,7 +929,7 @@ function BookingFormContent() {
 
                 {/* Automatically Calculated Size Badge */}
                 <div className="calc-size-box">
-                  Calculated Size: <strong>{pet.calculatedSize}</strong>
+                  Calculated Size: <strong>{pet.calculatedSize.toUpperCase()}</strong>
                 </div>
 
                 {/* Behaviors */}
@@ -910,40 +1067,6 @@ function BookingFormContent() {
                   />
                 </div>
 
-                {/* AI Pet Haircut Generator */}
-                <div className="ai-generator-box">
-                  <h4 className="ai-title">AI Pet Haircut Generator</h4>
-                  <div className="ai-banner">
-                    <FaExclamationCircle className="ai-warn-icon" />
-                    <span>
-                      <strong>Style Preview Info:</strong> The AI generates a preview based <strong>strictly</strong> on your pet's <strong>Type, Breed, Weight</strong>, and <strong>Hairstyle choice!</strong>
-                    </span>
-                  </div>
-
-                  <div className="ai-controls">
-                    <div className="ai-style-selector">
-                      <label>Desired Style:</label>
-                      <select
-                        className="form-control inline-select"
-                        value={pet.desiredStyle}
-                        onChange={(e) => updatePetField(pet.id, 'desiredStyle', e.target.value)}
-                      >
-                        <option value="Lion Cut">Lion Cut</option>
-                        <option value="Teddy Bear Cut">Teddy Bear Cut</option>
-                        <option value="Puppy Cut">Puppy Cut</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="ai-generate-btn"
-                      onClick={() => alert('AI Haircut Preview Generator is coming soon!')}
-                    >
-                      Generate AI Style Preview
-                    </button>
-                  </div>
-                </div>
-
                 {/* Emergency Consent Checkbox */}
                 <div className="form-group consent-check">
                   <label className="custom-checkbox">
@@ -975,6 +1098,7 @@ function BookingFormContent() {
               <button
                 className="modal-close-x"
                 onClick={() => setShowSummaryModal(false)}
+                disabled={isSubmitting}
               >
                 <FaTimes />
               </button>
@@ -1024,31 +1148,6 @@ function BookingFormContent() {
                       Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
                     </div>
 
-                    {/* Vaccine Preview */}
-                    <div className="summary-vaccine-section">
-                      <label>Vaccine</label>
-                      {pet.vaccineFile || pet.vaccineUrl ? (
-                        <div className="summary-vaccine-thumb">
-                          {isImageFile(pet.vaccineFile, pet.vaccineUrl) ? (
-                            <img
-                              src={
-                                pet.vaccineFile
-                                  ? URL.createObjectURL(pet.vaccineFile)
-                                  : pet.vaccineUrl!
-                              }
-                              alt="Vaccine Record"
-                            />
-                          ) : (
-                            <div className="summary-doc-icon">
-                              <FaFileAlt /> Vaccine Document Attached
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="no-vaccine-text">No record uploaded</span>
-                      )}
-                    </div>
-
                     {/* Emergency Consent Status */}
                     <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
                       <FaExclamationCircle />
@@ -1062,7 +1161,7 @@ function BookingFormContent() {
 
               <hr className="summary-divider" />
 
-              {/* Total Financials Display (Clean Total Only) */}
+              {/* Total Financials Display */}
               <div className="summary-financials">
                 <div className="financial-row total-row">
                   <span>Total Service Amount (VAT Inclusive):</span>
@@ -1101,14 +1200,16 @@ function BookingFormContent() {
               <button
                 className="btn-back-edit"
                 onClick={() => setShowSummaryModal(false)}
+                disabled={isSubmitting}
               >
                 Back to Edit
               </button>
               <button
                 className="btn-confirm-booking"
                 onClick={handleConfirmBooking}
+                disabled={isSubmitting}
               >
-                Confirm Booking
+                {isSubmitting ? 'Processing...' : 'Confirm Booking'}
               </button>
             </div>
           </div>
