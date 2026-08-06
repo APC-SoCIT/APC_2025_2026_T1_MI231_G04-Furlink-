@@ -7,7 +7,6 @@ import Footer from '@/components/Footer';
 import {
   FaArrowLeft,
   FaCalendarAlt,
-  FaCreditCard,
   FaPlus,
   FaTrashAlt,
   FaExclamationCircle,
@@ -44,17 +43,35 @@ type ServiceOption = {
   service_status: string;
 };
 
+type ServiceWeightOption = {
+  id: string;
+  sp_services_id: string;
+  pet_type: string;
+  pet_size: string;
+  pet_min_weight_range: number;
+  pet_max_weight_range: number;
+  service_price: number;
+  option_status: string;
+};
+
+type SelectedServiceItem = {
+  serviceId: string;
+  matchedOptionId: string | null;
+  price: number;
+};
+
 type PetFormData = {
   id: string;
   selectedRegisteredPetId: string;
-  selectedServices: string[]; // Holds selected service IDs array
-  serviceError: string | null; // Holds validation message if add is clicked without selecting
+  selectedServices: SelectedServiceItem[];
+  serviceError: string | null;
   petType: 'Dog' | 'Cat';
   petName: string;
   breed: string;
   gender: 'Male' | 'Female';
   dob: string;
   weight: string;
+  calculatedSize: string;
   behaviors: string[];
   vaccineFile: File | null;
   vaccineUrl: string | null;
@@ -90,8 +107,9 @@ function BookingFormContent() {
   const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
   const [userRegisteredPets, setUserRegisteredPets] = useState<RegisteredPet[]>([]);
 
-  // Services offered by the specific Service Provider
+  // Services and Service Weight Options
   const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
+  const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
   const [loadingServices, setLoadingServices] = useState<boolean>(false);
 
   // Breed API states
@@ -113,7 +131,7 @@ function BookingFormContent() {
     }
   }, [dateStr]);
 
-  // 1. Fetch Provider Slot Capacity
+  // Fetch Capacity
   useEffect(() => {
     if (!spId || !dateStr) return;
 
@@ -134,28 +152,41 @@ function BookingFormContent() {
     fetchCapacity();
   }, [spId, dateStr, supabase]);
 
-  // 2. Fetch Active Services offered by Provider
+  // Fetch Services & options
   useEffect(() => {
     if (!spId) return;
 
-    const fetchServices = async () => {
+    const fetchServicesAndOptions = async () => {
       setLoadingServices(true);
-      const { data, error } = await supabase
+      const { data: svcData, error: svcErr } = await supabase
         .from('sp_services')
         .select('id, sp_id, service_name, service_type, service_status')
         .eq('sp_id', spId)
         .eq('service_status', 'active');
 
-      if (!error && data) {
-        setAvailableServices(data as ServiceOption[]);
+      if (!svcErr && svcData) {
+        setAvailableServices(svcData as ServiceOption[]);
+
+        const serviceIds = svcData.map((s) => s.id);
+        if (serviceIds.length > 0) {
+          const { data: optData } = await supabase
+            .from('sp_service_options')
+            .select('*')
+            .in('sp_services_id', serviceIds)
+            .eq('option_status', 'active');
+
+          if (optData) {
+            setServiceWeightOptions(optData as ServiceWeightOption[]);
+          }
+        }
       }
       setLoadingServices(false);
     };
 
-    fetchServices();
+    fetchServicesAndOptions();
   }, [spId, supabase]);
 
-  // 3. Fetch User Registered Pets
+  // Fetch User Registered Pets
   useEffect(() => {
     const fetchRegisteredPets = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -174,7 +205,7 @@ function BookingFormContent() {
     fetchRegisteredPets();
   }, [supabase]);
 
-  // 4. Fetch Breeds
+  // Fetch Breeds
   useEffect(() => {
     const fetchBreeds = async () => {
       setLoadingBreeds(true);
@@ -219,7 +250,7 @@ function BookingFormContent() {
   const createDefaultPet = (index: number): PetFormData => ({
     id: `pet-${Date.now()}-${index}-${Math.random()}`,
     selectedRegisteredPetId: '',
-    selectedServices: [''], // Starts with 1 empty service dropdown
+    selectedServices: [{ serviceId: '', matchedOptionId: null, price: 0 }],
     serviceError: null,
     petType: 'Dog',
     petName: '',
@@ -227,6 +258,7 @@ function BookingFormContent() {
     gender: 'Male',
     dob: '',
     weight: '',
+    calculatedSize: 'AUTO-CALC',
     behaviors: [],
     vaccineFile: null,
     vaccineUrl: null,
@@ -241,6 +273,60 @@ function BookingFormContent() {
     const initialCount = Math.max(1, queryPetsCount);
     return Array.from({ length: initialCount }, (_, i) => createDefaultPet(i + 1));
   });
+
+  // Calculate matching size and price dynamically based on weight and pet type
+  const calculateSizeAndPrice = (
+    weightStr: string,
+    pType: 'Dog' | 'Cat',
+    selectedSvcs: SelectedServiceItem[]
+  ) => {
+    const w = parseFloat(weightStr);
+    const targetPetType = pType.toLowerCase();
+
+    if (isNaN(w) || w < 0) {
+      return {
+        sizeLabel: 'AUTO-CALC',
+        updatedServices: selectedSvcs.map((s) => ({ ...s, price: 0, matchedOptionId: null })),
+      };
+    }
+
+    let detectedSize = 'AUTO-CALC';
+
+    const updatedServices = selectedSvcs.map((item) => {
+      if (!item.serviceId) return { ...item, price: 0, matchedOptionId: null };
+
+      // Find matching size range in sp_service_options
+      const matched = serviceWeightOptions.find((opt) => {
+        if (opt.sp_services_id !== item.serviceId) return false;
+
+        const isTypeMatch =
+          opt.pet_type === 'both_dog_cat' || opt.pet_type === targetPetType;
+
+        const isWeightMatch =
+          w >= Number(opt.pet_min_weight_range) && w <= Number(opt.pet_max_weight_range);
+
+        return isTypeMatch && isWeightMatch;
+      });
+
+      if (matched) {
+        // Format size label nicely (e.g., extra_large -> Extra Large)
+        detectedSize = matched.pet_size
+          .split('_')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        return {
+          ...item,
+          matchedOptionId: matched.id,
+          price: Number(matched.service_price),
+        };
+      }
+
+      return { ...item, matchedOptionId: null, price: 0 };
+    });
+
+    return { sizeLabel: detectedSize, updatedServices };
+  };
 
   const handleAddPet = () => {
     if (petForms.length >= slotCapacity) {
@@ -257,21 +343,47 @@ function BookingFormContent() {
 
   const updatePetField = (id: string, field: keyof PetFormData, value: any) => {
     setPetForms((prev) =>
-      prev.map((pet) => (pet.id === id ? { ...pet, [field]: value } : pet))
+      prev.map((pet) => {
+        if (pet.id !== id) return pet;
+
+        const updatedPet = { ...pet, [field]: value };
+
+        // Recalculate size and price when weight or petType updates
+        if (field === 'weight' || field === 'petType') {
+          const { sizeLabel, updatedServices } = calculateSizeAndPrice(
+            field === 'weight' ? value : pet.weight,
+            field === 'petType' ? value : pet.petType,
+            pet.selectedServices
+          );
+          updatedPet.calculatedSize = sizeLabel;
+          updatedPet.selectedServices = updatedServices;
+        }
+
+        return updatedPet;
+      })
     );
   };
 
-  // Service Management per Pet
-  const handleServiceChange = (petId: string, index: number, value: string) => {
+  // Service Handlers
+  const handleServiceChange = (petId: string, index: number, serviceId: string) => {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== petId) return pet;
-        const updatedServices = [...pet.selectedServices];
-        updatedServices[index] = value;
+
+        const currentServices = [...pet.selectedServices];
+        currentServices[index] = { serviceId, matchedOptionId: null, price: 0 };
+
+        const { sizeLabel, updatedServices } = calculateSizeAndPrice(
+          pet.weight,
+          pet.petType,
+          currentServices
+        );
+
         return {
           ...pet,
           selectedServices: updatedServices,
-          serviceError: value ? null : pet.serviceError, // clear error if user selects
+          calculatedSize: sizeLabel,
+          serviceError: serviceId ? null : pet.serviceError,
         };
       })
     );
@@ -282,9 +394,8 @@ function BookingFormContent() {
       prev.map((pet) => {
         if (pet.id !== petId) return pet;
 
-        // Check if last service input is empty
         const lastService = pet.selectedServices[pet.selectedServices.length - 1];
-        if (!lastService) {
+        if (!lastService?.serviceId) {
           return {
             ...pet,
             serviceError: 'Please select a service before adding another field.',
@@ -293,7 +404,10 @@ function BookingFormContent() {
 
         return {
           ...pet,
-          selectedServices: [...pet.selectedServices, ''],
+          selectedServices: [
+            ...pet.selectedServices,
+            { serviceId: '', matchedOptionId: null, price: 0 },
+          ],
           serviceError: null,
         };
       })
@@ -307,16 +421,23 @@ function BookingFormContent() {
         if (pet.selectedServices.length <= 1) return pet;
 
         const updatedServices = pet.selectedServices.filter((_, i) => i !== index);
+        const { sizeLabel, updatedServices: recalculated } = calculateSizeAndPrice(
+          pet.weight,
+          pet.petType,
+          updatedServices
+        );
+
         return {
           ...pet,
-          selectedServices: updatedServices,
+          selectedServices: recalculated,
+          calculatedSize: sizeLabel,
           serviceError: null,
         };
       })
     );
   };
 
-  // Handle pet selection for autofill
+  // Autofill Registered Pet
   const handleAutofillPet = (formId: string, registeredPetId: string) => {
     const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
 
@@ -332,15 +453,27 @@ function BookingFormContent() {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== formId) return pet;
+
+        const pType = selectedPet.pet_type.toLowerCase() === 'cat' ? 'Cat' : 'Dog';
+        const weightVal = selectedPet.pet_weight.toString();
+
+        const { sizeLabel, updatedServices } = calculateSizeAndPrice(
+          weightVal,
+          pType,
+          pet.selectedServices
+        );
+
         return {
           ...pet,
           selectedRegisteredPetId: registeredPetId,
-          petType: selectedPet.pet_type.toLowerCase() === 'cat' ? 'Cat' : 'Dog',
+          petType: pType,
           petName: selectedPet.pet_name,
           breed: selectedPet.pet_breed,
           gender: selectedPet.pet_gender.toLowerCase() === 'female' ? 'Female' : 'Male',
           dob: selectedPet.pet_date_of_birth,
-          weight: selectedPet.pet_weight.toString(),
+          weight: weightVal,
+          calculatedSize: sizeLabel,
+          selectedServices: updatedServices,
           behaviors: mappedBehaviors,
           vaccineFile: null,
           vaccineUrl: selectedPet.pet_vaccine_url || null,
@@ -366,19 +499,19 @@ function BookingFormContent() {
     );
   };
 
-  const calculateSize = (weightStr: string) => {
-    const w = parseFloat(weightStr);
-    if (isNaN(w) || w <= 0) return 'AUTO-CALC';
-    if (w < 5) return 'Small (under 5kg)';
-    if (w <= 15) return 'Medium (5-15kg)';
-    return 'Large (over 15kg)';
-  };
-
   const isImageFile = (file: File | null, url: string | null) => {
     if (file) return file.type.startsWith('image/');
     if (url) return /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url);
     return false;
   };
+
+  // Grand total computation
+  const grandTotal = useMemo(() => {
+    return petForms.reduce((acc, pet) => {
+      const petTotal = pet.selectedServices.reduce((sAcc, sItem) => sAcc + sItem.price, 0);
+      return acc + petTotal;
+    }, 0);
+  }, [petForms]);
 
   return (
     <div className="booking-form-page">
@@ -390,36 +523,33 @@ function BookingFormContent() {
           <h1 className="form-main-title">Pet Information</h1>
         </div>
 
+        {/* Date & Pricing Bar without 30% Down Payment text */}
         <div className="info-summary-card">
           <div className="summary-left">
             <div className="summary-date flex-item">
               <FaCalendarAlt className="summary-icon" />
               <span>{`${formattedDateDisplay} at ${timeSlot}`}</span>
             </div>
-            <div className="summary-total">Total Amount: ₱0.00</div>
+            <div className="summary-total">
+              Total Amount: ₱{grandTotal.toFixed(2)}
+            </div>
           </div>
 
           <div className="summary-right">
-            <div className="summary-downpayment">
-              <FaCreditCard className="summary-icon" />
-              <div>
-                <strong>30% Down Payment: ₱0.00</strong>
-                <span className="sub-text">(VAT Inclusive)</span>
-              </div>
-            </div>
             <button className="proceed-btn">Proceed to Summary &rarr;</button>
           </div>
         </div>
 
         {petForms.map((pet, index) => {
           const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
+          const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
 
           return (
             <div key={pet.id} className="pet-form-card">
               <div className="pet-card-header">
                 <div className="pet-badge-tag">Pet #{index + 1}</div>
                 <div className="pet-header-actions">
-                  <span className="pet-price">₱0.00</span>
+                  <span className="pet-price">₱{petFormTotal.toFixed(2)}</span>
 
                   {index === petForms.length - 1 && (
                     <button
@@ -471,7 +601,7 @@ function BookingFormContent() {
               <div className="section-block">
                 <h3 className="block-title">Service Selection</h3>
 
-                {pet.selectedServices.map((svcVal, sIdx) => (
+                {pet.selectedServices.map((svcItem, sIdx) => (
                   <div key={sIdx} className="form-group service-row-group">
                     <label className="field-label flex-label">
                       <FaTag className="tag-icon" /> Select Service {sIdx + 1} *
@@ -479,7 +609,7 @@ function BookingFormContent() {
                     <div className="input-with-action">
                       <select
                         className="form-control"
-                        value={svcVal}
+                        value={svcItem.serviceId}
                         onChange={(e) => handleServiceChange(pet.id, sIdx, e.target.value)}
                         disabled={loadingServices}
                       >
@@ -493,7 +623,6 @@ function BookingFormContent() {
                         ))}
                       </select>
 
-                      {/* Plus icon on last row */}
                       {sIdx === pet.selectedServices.length - 1 && (
                         <button
                           type="button"
@@ -505,7 +634,6 @@ function BookingFormContent() {
                         </button>
                       )}
 
-                      {/* Remove icon if more than 1 service row exists */}
                       {pet.selectedServices.length > 1 && (
                         <button
                           type="button"
@@ -520,7 +648,6 @@ function BookingFormContent() {
                   </div>
                 ))}
 
-                {/* Validation Banner if empty add attempt */}
                 {pet.serviceError && (
                   <div className="service-error-alert">
                     <FaExclamationCircle className="alert-icon" />
@@ -618,8 +745,9 @@ function BookingFormContent() {
                   </div>
                 </div>
 
+                {/* Automatically Calculated Size Badge */}
                 <div className="calc-size-box">
-                  Calculated Size: <strong>{calculateSize(pet.weight)}</strong>
+                  Calculated Size: <strong>{pet.calculatedSize}</strong>
                 </div>
 
                 {/* Behaviors */}
@@ -639,7 +767,7 @@ function BookingFormContent() {
                   </div>
                 </div>
 
-                {/* Medical Records Preview & Dropzone */}
+                {/* Medical Records */}
                 <div className="form-group">
                   <label className="field-label">Medical Records</label>
                   <div className="medical-records-grid">
