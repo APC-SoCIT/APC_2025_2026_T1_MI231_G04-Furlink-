@@ -42,11 +42,11 @@ export async function POST(req: Request) {
     await supabaseAdmin
       .from("otp_codes")
       .update({ attempts: record.attempts + 1 })
-      .eq("id", record.id);
-    return NextResponse.json({ error: "Incorrect code" }, { status: 400 });
+      .eq("email", email);
+    return NextResponse.json({ error: "Invalid code" }, { status: 400 });
   }
 
-  // Code is correct — create the confirmed user now
+  // OTP is correct - create the confirmed user now
   const { data: user, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,

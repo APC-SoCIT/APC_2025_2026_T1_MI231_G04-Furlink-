@@ -326,6 +326,23 @@ input::-webkit-credentials-auto-fill-button {
   transform: translateY(-1px);
 }
 
+.login-redirect {
+  text-align: center;
+  font-size: 13px;
+  margin-top: 16px;
+  color: #555555;
+}
+
+.login-link {
+  color: #2b5cd9;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
 /* OTP Verification */
 .otp-spam-note {
   color: #888888;
@@ -372,6 +389,17 @@ input::-webkit-credentials-auto-fill-button {
 
 .otp-resend-count {
   color: #888888;
+}
+
+.form-error-banner,
+.otp-error-banner {
+  background-color: #fdecea;
+  color: #c0392b;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
 }
 
 /* ==========================================================================

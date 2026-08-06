@@ -25,16 +25,18 @@ export default function SignupPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // New state to toggle UI into OTP verification view after successful signup trigger
+  const [formError, setFormError] = useState<string | null>(null);
+
   const [pendingVerification, setPendingVerification] = useState(false);
   const [otpToken, setOtpToken] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
 
-  // Countdown timer for OTP validity (seconds), seeded from the server's response
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const [otpTimer, setOtpTimer] = useState(300);
 
-  // How many more times the user is allowed to request a new code, from the server
-  const [resendsRemaining, setResendsRemaining] = useState<number | null>(null);
+  const [resendExhausted, setResendExhausted] = useState(false);
+  const [resendRetryMinutes, setResendRetryMinutes] = useState<number | null>(null);
   const [resendLoading, setResendLoading] = useState(false);
 
   // Ticks the countdown down every second while on the verification screen
@@ -52,7 +54,7 @@ export default function SignupPage() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Anyone younger than 13 today can't be selected in the calendar picker
+  // User younger than 13 today can't be selected in the calendar picker
   const getMaxDob = () => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 13);
@@ -82,15 +84,18 @@ export default function SignupPage() {
     setErrors(validationErrors);
   };
 
-  // MULTI-ROLE LOGIC HANDLING: pet_owner, service_provider, or both_sp_po
-  const handleRoleToggle = (role: string) => {
+  const handleRoleToggle = (role: 'pet_owner' | 'service_provider') => {
     setFormData(prev => {
-      const current = prev.roleChoice;
-      let next;
-      if (current === "") next = role;
-      else if (current === role) next = "";
-      else if (current === "both_sp_po") next = role === 'pet_owner' ? 'service_provider' : 'pet_owner';
-      else next = 'both_sp_po';
+      const isPetOwner = prev.roleChoice === 'pet_owner' || prev.roleChoice === 'both_sp_po';
+      const isServiceProvider = prev.roleChoice === 'service_provider' || prev.roleChoice === 'both_sp_po';
+
+      const nextPetOwner = role === 'pet_owner' ? !isPetOwner : isPetOwner;
+      const nextServiceProvider = role === 'service_provider' ? !isServiceProvider : isServiceProvider;
+
+      let next = '';
+      if (nextPetOwner && nextServiceProvider) next = 'both_sp_po';
+      else if (nextPetOwner) next = 'pet_owner';
+      else if (nextServiceProvider) next = 'service_provider';
 
       const newFormData = { ...prev, roleChoice: next };
       const validationErrors = validateSignup(newFormData, agreedToTerms);
@@ -111,7 +116,8 @@ export default function SignupPage() {
   };
 
   const isFormValid = () => {
-    const hasErrors = Object.values(errors).some((err) => !!err);
+    const validationErrors = validateSignup(formData, agreedToTerms);
+    const hasErrors = Object.values(validationErrors).some((err) => !!err);
     const allFieldsFilled =
       formData.firstName &&
       formData.lastName &&
@@ -129,6 +135,7 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid()) return;
+    setFormError(null);
     setLoading(true);
 
     try {
@@ -140,15 +147,16 @@ export default function SignupPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        alert(result.error || "Failed to send verification code.");
+        setFormError(result.error || "Failed to send verification code.");
       } else {
         setOtpTimer(result.validitySeconds ?? 300);
-        setResendsRemaining(result.resendsRemaining ?? 0);
+        setResendExhausted(!!result.resendsExhausted);
+        setResendRetryMinutes(result.retryAfterMinutes ?? null);
+        setOtpError(null);
         setPendingVerification(true);
       }
-    } catch (err) {
-      console.error("Unexpected signup error:", err);
-      alert("Something went wrong. Please try again.");
+    } catch {
+      setFormError("Something went wrong. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -158,6 +166,7 @@ export default function SignupPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpToken || otpTimer <= 0) return;
+    setOtpError(null);
     setVerificationLoading(true);
 
     try {
@@ -181,20 +190,19 @@ export default function SignupPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        alert(result.error || "Verification failed.");
+        setOtpError(result.error || "Verification failed. Please try again.");
         return;
       }
 
-      // Sign the newly created user in immediately, since admin.createUser
-      // doesn't create a client-side session
+      // Sign the newly created user in immediately, since admin.createUser doesn't create a client-side session
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
       if (signInError) {
-        alert("Account created, but automatic sign-in failed. Please log in.");
-        router.push(ROUTES.AUTH.LOGIN);
+        setOtpError("Account created, but automatic sign-in failed. Redirecting you to log in...");
+        setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 2000);
         return;
       }
 
@@ -204,17 +212,16 @@ export default function SignupPage() {
       } else {
         router.push(ROUTES.PET_OWNER.DASHBOARD);
       }
-    } catch (err) {
-      console.error("OTP verification error:", err);
-      alert("Failed to verify code. Please try again.");
+    } catch {
+      setOtpError("Failed to verify code. Please check your connection and try again.");
     } finally {
       setVerificationLoading(false);
     }
   };
 
-  // Resends a fresh OTP and resets the countdown, respecting the server's resend cap
   const handleResendOtp = async () => {
-    if (resendsRemaining !== null && resendsRemaining <= 0) return;
+    if (resendExhausted) return;
+    setOtpError(null);
     setResendLoading(true);
 
     try {
@@ -226,18 +233,19 @@ export default function SignupPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        alert(result.error || "Failed to resend code.");
+        setOtpError(result.error || "Failed to resend code.");
         if (res.status === 429) {
-          setResendsRemaining(0);
+          setResendExhausted(true);
+          setResendRetryMinutes(result.retryAfterMinutes ?? null);
         }
       } else {
         setOtpTimer(result.validitySeconds ?? 300);
-        setResendsRemaining(result.resendsRemaining ?? 0);
+        setResendExhausted(!!result.resendsExhausted);
+        setResendRetryMinutes(result.retryAfterMinutes ?? null);
         setOtpToken("");
       }
-    } catch (err) {
-      console.error("Resend OTP error:", err);
-      alert("Something went wrong resending the code.");
+    } catch {
+      setOtpError("Something went wrong resending the code. Please check your connection.");
     } finally {
       setResendLoading(false);
     }
@@ -245,7 +253,7 @@ export default function SignupPage() {
 
   // If signup completed successfully, render the OTP verification screen step
   if (pendingVerification) {
-    const resendExhausted = resendsRemaining !== null && resendsRemaining <= 0;
+    const showResendLimitBanner = resendExhausted && (otpTimer <= 0 || !!otpError);
 
     return (
       <div className="signup-wrapper">
@@ -257,6 +265,8 @@ export default function SignupPage() {
           <p className="otp-spam-note">
             Didn&apos;t receive it? Check your spam or trash folder.
           </p>
+
+          {otpError && <p className="otp-error-banner">{otpError}</p>}
 
           <div className="input-group" style={{ marginBottom: "20px" }}>
             <input
@@ -276,11 +286,17 @@ export default function SignupPage() {
             <p className="otp-timer otp-expired">Code expired.</p>
           )}
 
-          {resendExhausted ? (
+          {showResendLimitBanner && (
             <p className="otp-resend-limit">
-              You&apos;ve reached the maximum number of code requests. Please check your spam or trash folder, or try again later.
+              You&apos;ve requested too many codes.{" "}
+              {resendRetryMinutes
+                ? `Please come back in ${resendRetryMinutes} minute${resendRetryMinutes === 1 ? "" : "s"}.`
+                : "Please try again later."}{" "}
+              In the meantime, check your spam or trash folder for a previous code.
             </p>
-          ) : (
+          )}
+
+          {!resendExhausted && (
             <p className="otp-resend">
               <button
                 type="button"
@@ -290,9 +306,6 @@ export default function SignupPage() {
               >
                 {resendLoading ? "Resending..." : "Resend code"}
               </button>
-              {resendsRemaining !== null && (
-                <span className="otp-resend-count"> ({resendsRemaining} left)</span>
-              )}
             </p>
           )}
 
@@ -312,6 +325,8 @@ export default function SignupPage() {
     <div className="signup-wrapper">
       <form className="signup-card" onSubmit={handleSubmit}>
         <h1>Create Your Account</h1>
+
+        {formError && <p className="form-error-banner">{formError}</p>}
 
         <div className="form-row">
           <div className="input-group">
@@ -436,6 +451,11 @@ export default function SignupPage() {
         >
           {loading ? "Signing Up..." : "Sign Up"}
         </button>
+
+        <p className="login-redirect">
+          Already have an account?{" "}
+          <Link href={ROUTES.AUTH.LOGIN} className="login-link">Log In Here</Link>
+        </p>
       </form>
     </div>
   );

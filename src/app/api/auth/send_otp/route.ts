@@ -92,13 +92,17 @@ export async function POST(req: Request) {
   let first_requested_at = new Date(now).toISOString();
 
   if (existing) {
-    const withinWindow = now - new Date(existing.first_requested_at).getTime() < RESEND_WINDOW_MINUTES * 60_000;
+    const windowStartMs = new Date(existing.first_requested_at).getTime();
+    const windowEndMs = windowStartMs + RESEND_WINDOW_MINUTES * 60_000;
+    const withinWindow = now < windowEndMs;
 
     if (withinWindow) {
       if (existing.resend_count >= MAX_RESENDS) {
+        const retryAfterMinutes = Math.max(1, Math.ceil((windowEndMs - now) / 60_000));
         return NextResponse.json(
           {
-            error: `You've reached the maximum of ${MAX_RESENDS} code requests. Please check your spam or trash folder for a previous code, or try again in a bit.`,
+            error: `You've reached the maximum number of code requests. Please try again in ${retryAfterMinutes} minute${retryAfterMinutes === 1 ? "" : "s"}.`,
+            retryAfterMinutes,
           },
           { status: 429 }
         );
@@ -115,7 +119,6 @@ export async function POST(req: Request) {
       resend_count = existing.resend_count + 1;
       first_requested_at = existing.first_requested_at;
     }
-    // else: window expired, counters reset to defaults above
   }
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -151,9 +154,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to send email: " + err.message }, { status: 500 });
   }
 
+  const resendsExhausted = resend_count >= MAX_RESENDS;
+  const windowEndMs = new Date(first_requested_at).getTime() + RESEND_WINDOW_MINUTES * 60_000;
+  const retryAfterMinutes = resendsExhausted
+    ? Math.max(1, Math.ceil((windowEndMs - now) / 60_000))
+    : null;
+
   return NextResponse.json({
     success: true,
     validitySeconds: OTP_VALIDITY_MINUTES * 60,
-    resendsRemaining: MAX_RESENDS - resend_count,
+    resendsExhausted,
+    retryAfterMinutes,
   });
 }
