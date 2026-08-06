@@ -33,7 +33,7 @@ export default function ServiceProviderOnboardingPage() {
     businessName: "",
     description: "", 
     businessEmail: "",
-    businessMobile: "", // Now handles the 10-digit number following +63
+    businessMobile: "", // Handles the 10-digit number following +63
     socialMediaUrl: "",
     googleMapUrl: "",
     typeOfService: "Pet Grooming",
@@ -196,6 +196,7 @@ export default function ServiceProviderOnboardingPage() {
         const u = await files.uploadFileToStorage(user.id, "payments", f);
         if (u) newPaymentUrls.push(u);
       }
+      
       const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : (files.existingPaymentChannels?.[0]?.file_url || null);
 
       // 2. Upsert Core Business Profile (sp_general_info)
@@ -204,7 +205,7 @@ export default function ServiceProviderOnboardingPage() {
         business_name: businessInfo.businessName,
         business_bio: businessInfo.description,
         business_email: businessInfo.businessEmail,
-        business_contact: businessInfo.businessMobile,
+        business_contact: `+63${businessInfo.businessMobile}`, // Includes +63 prefix for DB check constraint
         business_street: businessInfo.houseStreet,
         business_region: businessInfo.region,
         business_barangay: businessInfo.barangay,
@@ -229,7 +230,7 @@ export default function ServiceProviderOnboardingPage() {
       if (upsertError) throw upsertError;
       const currentProviderId = upsertData.id;
 
-      // 3. Clear and replace nested relation data (Hours, Employees, Facilities)
+      // 3. Clear and replace nested relation data (Hours & Employees only)
       await Promise.all([
         supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId),
         supabase.from("sp_employees_info").delete().eq("sp_id", currentProviderId),
@@ -255,6 +256,7 @@ export default function ServiceProviderOnboardingPage() {
         if (hError) throw hError;
       }
 
+      // Appends new files to the DB directly (requires removing the max 3 constraint in the DB)
       if (newFacilityUrls.length > 0) {
         const imgPayload = newFacilityUrls.map(url => ({ sp_id: currentProviderId, business_facility_images: url }));
         const { error: imgErr } = await supabase.from("sp_img_facilities").insert(imgPayload);
@@ -329,7 +331,7 @@ export default function ServiceProviderOnboardingPage() {
                 {validationErrors.businessEmail && <small className="error">{validationErrors.businessEmail}</small>}
               </div>
               
-              {/* UPDATED: Philippine Mobile Number input wrapper */}
+              {/* Philippine Mobile Number input wrapper */}
               <div className="form-group">
                 <label>Mobile Number*</label>
                 <div className={`phone-input-wrapper ${validationErrors.businessMobile ? "input-error" : ""}`}>
@@ -577,6 +579,7 @@ export default function ServiceProviderOnboardingPage() {
         onConfirm={handleConfirmSubmit}
         isSubmitting={isSubmitting}
         data={businessInfo}
+        services={services}
         files={{
           waiverFile: files.waiverFile, existingWaiverUrl: files.existingWaiverUrl,
           facilityImages: files.facilityImages, existingFacilityImages: files.existingFacilityImages,
