@@ -12,7 +12,7 @@ import {
   FaFileAlt,
 } from "react-icons/fa";
 import { supabase } from "@/lib/supabase";
-import "./page.css";
+import styles from "./page.module.css";
 import { ROUTES } from "@/config/routes";
 
 type FilterType = "pending" | "active" | "rejected" | "users" | null;
@@ -284,16 +284,16 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="admin-dashboard-page">
-      <main className="admin-dashboard-wrapper">
-        <div className="admin-header-center">
+    <div className={styles["admin-dashboard-page"]}>
+      <main className={styles["admin-dashboard-wrapper"]}>
+        <div className={styles["admin-header-center"]}>
           <h1>Hi, {adminName}!</h1>
           <p>Here is your daily overview.</p>
         </div>
 
         {/* Date and Generate report btn */}
-        <div className="report-button-container">
-          <div className="as-of-date">
+        <div className={styles["report-button-container"]}>
+          <div className={styles["as-of-date"]}>
             As of{" "}
             {new Date().toLocaleDateString("en-US", {
               month: "long",
@@ -302,7 +302,7 @@ export default function AdminDashboardPage() {
             })}
           </div>
           <button
-            className="generate-report-btn"
+            className={styles["generate-report-btn"]}
             onClick={handleGenerateReport}
             disabled
           >
@@ -312,72 +312,72 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* KPI cards */}
-        <div className="stats-grid">
+        <div className={styles["stats-grid"]}>
           <div
-            className={`stat-card ${
-              currentFilter === "pending" ? "active-filter" : ""
+            className={`${styles["stat-card"]} ${
+              currentFilter === "pending" ? styles["active-filter"] : ""
             }`}
             onClick={() => handleCardClick("pending")}
           >
-            <div className="stat-icon-wrapper pending">
+            <div className={`${styles["stat-icon-wrapper"]} ${styles["pending"]}`}>
               <FaStore size={24} />
             </div>
-            <div className="stat-content">
+            <div className={styles["stat-content"]}>
               <h3>{pendingCount}</h3>
               <span>Pending Approvals</span>
             </div>
           </div>
 
           <div
-            className={`stat-card ${
-              currentFilter === "active" ? "active-filter" : ""
+            className={`${styles["stat-card"]} ${
+              currentFilter === "active" ? styles["active-filter"] : ""
             }`}
             onClick={() => handleCardClick("active")}
           >
-            <div className="stat-icon-wrapper active">
+            <div className={`${styles["stat-icon-wrapper"]} ${styles["active"]}`}>
               <FaCheckCircle size={24} />
             </div>
-            <div className="stat-content">
+            <div className={styles["stat-content"]}>
               <h3>{activeCount}</h3>
               <span>Active Listings</span>
             </div>
           </div>
 
           <div
-            className={`stat-card ${
-              currentFilter === "rejected" ? "active-filter" : ""
+            className={`${styles["stat-card"]} ${
+              currentFilter === "rejected" ? styles["active-filter"] : ""
             }`}
             onClick={() => handleCardClick("rejected")}
           >
-            <div className="stat-icon-wrapper rejected">
+            <div className={`${styles["stat-icon-wrapper"]} ${styles["rejected"]}`}>
               <FaTimesCircle size={24} />
             </div>
-            <div className="stat-content">
+            <div className={styles["stat-content"]}>
               <h3>{rejectedCount}</h3>
               <span>Rejected Listings</span>
             </div>
           </div>
 
-          <div className="stat-card non-clickable">
-            <div className="stat-icon-wrapper info">
+          <div className={`${styles["stat-card"]} ${styles["non-clickable"]}`}>
+            <div className={`${styles["stat-icon-wrapper"]} ${styles["info"]}`}>
               <FaClock size={24} />
             </div>
-            <div className="stat-content">
+            <div className={styles["stat-content"]}>
               <h3>{avgApprovalTime}</h3>
               <span>Avg. Approval Time</span>
             </div>
           </div>
 
           <div
-            className={`stat-card ${
-              currentFilter === "users" ? "active-filter" : ""
+            className={`${styles["stat-card"]} ${
+              currentFilter === "users" ? styles["active-filter"] : ""
             }`}
             onClick={() => handleCardClick("users")}
           >
-            <div className="stat-icon-wrapper users">
+            <div className={`${styles["stat-icon-wrapper"]} ${styles["users"]}`}>
               <FaUsers size={24} />
             </div>
-            <div className="stat-content">
+            <div className={styles["stat-content"]}>
               <h3>{totalUsers}</h3>
               <span>Total Users</span>
             </div>
@@ -386,20 +386,20 @@ export default function AdminDashboardPage() {
 
         {/* List shows the currently selected card's data (defaults to Pending) */}
         {currentFilter && (
-          <div className="dashboard-list-container">
-            <div className="list-header">
-              <h2 className="list-title">{getListTitle()}</h2>
+          <div className={styles["dashboard-list-container"]}>
+            <div className={styles["list-header"]}>
+              <h2 className={styles["list-title"]}>{getListTitle()}</h2>
             </div>
 
-            <div className="providers-table-wrapper">
+            <div className={styles["providers-table-wrapper"]}>
               {loading ? (
-                <div className="loading-state">Loading data...</div>
+                <div className={styles["loading-state"]}>Loading data...</div>
               ) : tableData.length === 0 ? (
-                <div className="empty-state">
+                <div className={styles["empty-state"]}>
                   No records found for this category.
                 </div>
               ) : (
-                <table className="providers-table">
+                <table className={styles["providers-table"]}>
                   <thead>
                     {currentFilter === "users" ? (
                       <tr>
@@ -432,8 +432,8 @@ export default function AdminDashboardPage() {
                     {currentFilter === "users"
                       ? (tableData as UserRow[]).map((item) => (
                           <tr key={item.id}>
-                            <td className="fw-bold">{item.first_name || "-"}</td>
-                            <td className="fw-bold">{item.last_name || "-"}</td>
+                            <td className={styles["fw-bold"]}>{item.first_name || "-"}</td>
+                            <td className={styles["fw-bold"]}>{item.last_name || "-"}</td>
                             <td>{item.username || "-"}</td>
                             <td>{item.mobile_number || "-"}</td>
                             <td style={{ textTransform: "capitalize" }}>
@@ -441,7 +441,7 @@ export default function AdminDashboardPage() {
                             </td>
                             <td>
                               <button
-                                className="btn-view-details"
+                                className={styles["btn-view-details"]}
                                 onClick={() => router.push(`${ROUTES.ADMIN.PO_DETAILS}?id=${item.id}`)}
                               >
                                 View Details{" "} <FaArrowRight size={12} style={{ marginLeft: 5 }} />
@@ -451,7 +451,7 @@ export default function AdminDashboardPage() {
                         ))
                       : (tableData as ProviderRow[]).map((item) => (
                           <tr key={item.id}>
-                            <td className="fw-bold">{item.business_name}</td>
+                            <td className={styles["fw-bold"]}>{item.business_name}</td>
                             <td>
                               {item.business_city}
                               {item.business_city && item.business_province ? ", " : ""}
@@ -468,14 +468,14 @@ export default function AdminDashboardPage() {
                             </td>
                             <td>
                               <span
-                                className={`status-pill ${item.registration_status}`}
+                                className={`${styles["status-pill"]} ${styles[item.registration_status]}`}
                               >
                                 {item.registration_status}
                               </span>
                             </td>
                             <td>
                               <button
-                                className="btn-view-details"
+                                className={styles["btn-view-details"]}
                                 onClick={() => router.push(`${ROUTES.ADMIN.SP_DETAILS}?id=${item.id}`)}
                               >
                                 View Details{" "} <FaArrowRight size={12} style={{ marginLeft: 5 }} />

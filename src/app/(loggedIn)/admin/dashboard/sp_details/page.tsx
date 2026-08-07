@@ -5,10 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ROUTES } from "@/config/routes";
 import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
-import "./page.css"; 
+import styles from "./page.module.css";
 
 const REJECTION_REASONS = [
-  "Incomplete Information",
+  "Incomplete information",
   "Information cannot be verified",
   "Uploaded files are invalid or inappropriate",
   "Others",
@@ -23,9 +23,11 @@ export default function SPDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // States for Approve/Reject functionality
   const [adminId, setAdminId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedRejectReasons, setSelectedRejectReasons] = useState<string[]>([]);
@@ -41,6 +43,7 @@ export default function SPDetailsPage() {
     }
   }, [providerId]);
 
+  // Get Admin ID to record who responded to the application
   const fetchAdminUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) setAdminId(user.id);
@@ -50,6 +53,7 @@ export default function SPDetailsPage() {
     try {
       setLoading(true);
       
+      // Fetching parent and all nested child
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(`
@@ -75,6 +79,7 @@ export default function SPDetailsPage() {
     }
   };
 
+  // Handle Approval
   const confirmApprove = async () => {
     setIsUpdating(true);
     
@@ -91,7 +96,7 @@ export default function SPDetailsPage() {
 
       if (error) throw error;
       setShowApproveModal(false);
-      fetchProviderDetails();
+      fetchProviderDetails(); // Refresh the UI
     } catch (err: any) {
       alert("Error approving: " + err.message);
     } finally {
@@ -99,6 +104,7 @@ export default function SPDetailsPage() {
     }
   };
 
+  // Toggle a reason in/out of the selected list
   const toggleRejectReason = (reason: string) => {
     setSelectedRejectReasons((prev) =>
       prev.includes(reason)
@@ -107,11 +113,13 @@ export default function SPDetailsPage() {
     );
   };
 
+  // Disable Confirm Rejection until a valid reason (and "Others" text, if selected) is provided
   const isRejectDisabled =
     isUpdating ||
     selectedRejectReasons.length === 0 ||
     (selectedRejectReasons.includes("Others") && !otherReasonText.trim());
 
+  // Handle Rejection
   const confirmReject = async () => {
     if (selectedRejectReasons.length === 0) {
       alert("Please select a reason for rejection.");
@@ -146,7 +154,7 @@ export default function SPDetailsPage() {
       setShowRejectModal(false);
       setSelectedRejectReasons([]);
       setOtherReasonText("");
-      fetchProviderDetails();
+      fetchProviderDetails(); // Refresh the UI
     } catch (err: any) {
       alert("Error rejecting: " + err.message);
     } finally {
@@ -154,17 +162,18 @@ export default function SPDetailsPage() {
     }
   };
 
-  if (loading) return <div className="loading-state" style={{ padding: "40px", textAlign: "center" }}>Loading provider details...</div>;
-  if (error) return <div className="empty-state" style={{ padding: "40px", textAlign: "center", color: "red" }}>Error: {error}</div>;
-  if (!provider) return <div className="empty-state" style={{ padding: "40px", textAlign: "center" }}>Provider not found.</div>;
+  if (loading) return <div className={styles["loading-state"]} style={{ padding: "40px", textAlign: "center" }}>Loading provider details...</div>;
+  if (error) return <div className={styles["empty-state"]} style={{ padding: "40px", textAlign: "center", color: "red" }}>Error: {error}</div>;
+  if (!provider) return <div className={styles["empty-state"]} style={{ padding: "40px", textAlign: "center" }}>Provider not found.</div>;
 
   return (
-    <div className="admin-dashboard-page">
-      <main className="admin-dashboard-wrapper">
+    <div className={styles["admin-dashboard-page"]}>
+      <main className={styles["admin-dashboard-wrapper"]}>
         
+        {/* Header / Back Button */}
         <div style={{ marginBottom: "20px" }}>
           <button 
-            className="btn-view-details" 
+            className={styles["btn-view-details"]} 
             onClick={() => router.push(ROUTES.ADMIN.ADMIN_DASHBOARD)}
             style={{ display: "flex", alignItems: "center", gap: "8px" }}
           >
@@ -172,26 +181,27 @@ export default function SPDetailsPage() {
           </button>
         </div>
 
-        <div className="dashboard-list-container">
-          <div className="list-header" style={{ alignItems: "flex-start" }}>
+        <div className={styles["dashboard-list-container"]}>
+          <div className={styles["list-header"]} style={{ alignItems: "flex-start" }}>
             <div>
-              <h2 className="list-title">{provider.business_name} Details</h2>
-              <span className={`status-pill ${provider.registration_status}`} style={{ display: "inline-block", marginTop: "10px" }}>
+              <h2 className={styles["list-title"]}>{provider.business_name} Details</h2>
+              <span className={`${styles["status-pill"]} ${styles[provider.registration_status]}`} style={{ display: "inline-block", marginTop: "10px" }}>
                 {provider.registration_status}
               </span>
             </div>
 
+            {/* ACTION BUTTONS (Only show if pending) */}
             {provider.registration_status === "pending" && (
-              <div className="action-buttons-container">
+              <div className={styles["action-buttons-container"]}>
                 <button 
-                  className="btn-approve" 
+                  className={styles["btn-approve"]} 
                   onClick={() => setShowApproveModal(true)} 
                   disabled={isUpdating}
                 >
                   <FaCheck /> Approve Listing
                 </button>
                 <button 
-                  className="btn-reject" 
+                  className={styles["btn-reject"]} 
                   onClick={() => setShowRejectModal(true)} 
                   disabled={isUpdating}
                 >
@@ -201,7 +211,8 @@ export default function SPDetailsPage() {
             )}
           </div>
 
-          <section className="detail-section">
+          {/* GENERAL INFO SECTION */}
+          <section className={styles["detail-section"]}>
             <h3>General Information</h3>
             <p><strong>Email:</strong> {provider.business_email}</p>
             <p><strong>Contact:</strong> {provider.business_contact}</p>
@@ -209,20 +220,22 @@ export default function SPDetailsPage() {
             <p><strong>Service Type:</strong> {provider.business_service_type}</p>
             <p><strong>Bio:</strong> {provider.business_bio}</p>
 
+            {/* Show rejection reason if rejected */}
             {provider.registration_status === "rejected" && provider.registration_rejection_reason && (
               <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444", borderRadius: "4px" }}>
                 <p style={{ margin: 0, color: "#991b1b" }}><strong>Rejection Reason:</strong> {provider.registration_rejection_reason}</p>
               </div>
             )}
             
+            {/* Document Links */}
             <div style={{ marginTop: "15px" }}>
               {provider.business_permit_url && (
-                <a href={provider.business_permit_url} target="_blank" rel="noreferrer" className="document-link">
+                <a href={provider.business_permit_url} target="_blank" rel="noreferrer" className={styles["document-link"]}>
                   View Business Permit
                 </a>
               )}
               {provider.business_waiver_url && (
-                <a href={provider.business_waiver_url} target="_blank" rel="noreferrer" className="document-link">
+                <a href={provider.business_waiver_url} target="_blank" rel="noreferrer" className={styles["document-link"]}>
                   View Waiver
                 </a>
               )}
@@ -231,7 +244,8 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          <section className="detail-section">
+          {/* OPERATING HOURS SECTION */}
+          <section className={styles["detail-section"]}>
             <h3>Operating Hours</h3>
             {provider.sp_operating_hours && provider.sp_operating_hours.length > 0 ? (
               <ul>
@@ -248,7 +262,8 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          <section className="detail-section">
+          {/* EMPLOYEES SECTION */}
+          <section className={styles["detail-section"]}>
             <h3>Employees</h3>
             {provider.sp_employees_info && provider.sp_employees_info.length > 0 ? (
               <ul>
@@ -265,18 +280,20 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          <section className="detail-section">
+          {/* SERVICES & OPTIONS SECTION */}
+          <section className={styles["detail-section"]}>
             <h3>Services Offered</h3>
             {provider.sp_services && provider.sp_services.length > 0 ? (
-              <div className="service-card-container">
+              <div className={styles["service-card-container"]}>
                 {provider.sp_services.map((service: any) => (
-                  <div key={service.id} className="service-card">
+                  <div key={service.id} className={styles["service-card"]}>
                     <h4>{service.service_name} <span style={{fontSize: "0.85rem", fontWeight: "normal", color: "#6b7280", textTransform: "capitalize"}}>({service.service_type.replace('_', ' ')})</span></h4>
                     <p>{service.service_description}</p>
                     {service.service_notes && <p style={{ fontSize: "0.85rem", fontStyle: "italic" }}>Note: {service.service_notes}</p>}
                     
+                    {/* Nested Service Options */}
                     {service.sp_service_options && service.sp_service_options.length > 0 && (
-                      <table className="providers-table">
+                      <table className={styles["providers-table"]}>
                         <thead>
                           <tr>
                             <th>Pet Type</th>
@@ -308,23 +325,24 @@ export default function SPDetailsPage() {
         </div>
       </main>
 
+      {/* APPROVE MODAL */}
       {showApproveModal && (
-        <div className="modal-overlay" onClick={() => !isUpdating && setShowApproveModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Approve this provider?</h3>
-            <p className="modal-text">
+        <div className={styles["modal-overlay"]} onClick={() => !isUpdating && setShowApproveModal(false)}>
+          <div className={styles["modal-box"]} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles["modal-title"]}>Approve this provider?</h3>
+            <p className={styles["modal-text"]}>
               This will make <strong>{provider.business_name}</strong> visible and active on the platform.
             </p>
-            <div className="modal-actions">
+            <div className={styles["modal-actions"]}>
               <button 
-                className="btn-cancel" 
+                className={styles["btn-cancel"]} 
                 onClick={() => setShowApproveModal(false)} 
                 disabled={isUpdating}
               >
                 Cancel
               </button>
               <button 
-                className="btn-approve" 
+                className={styles["btn-approve"]} 
                 onClick={confirmApprove} 
                 disabled={isUpdating}
               >
@@ -335,17 +353,18 @@ export default function SPDetailsPage() {
         </div>
       )}
 
+      {/* REJECT MODAL */}
       {showRejectModal && (
-        <div className="modal-overlay" onClick={() => !isUpdating && setShowRejectModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Reject this provider?</h3>
-            <p className="modal-text">
+        <div className={styles["modal-overlay"]} onClick={() => !isUpdating && setShowRejectModal(false)}>
+          <div className={styles["modal-box"]} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles["modal-title"]}>Reject this provider?</h3>
+            <p className={styles["modal-text"]}>
               Select the reason(s) for rejecting <strong>{provider.business_name}</strong>.
             </p>
 
-            <div className="reject-options-list">
+            <div className={styles["reject-options-list"]}>
               {REJECTION_REASONS.map((reason) => (
-                <label key={reason} className="reject-option">
+                <label key={reason} className={styles["reject-option"]}>
                   <input
                     type="checkbox"
                     name="rejectReason"
@@ -358,9 +377,10 @@ export default function SPDetailsPage() {
               ))}
             </div>
 
+            {/* Show text input when "Others" is selected */}
             {selectedRejectReasons.includes("Others") && (
               <textarea
-                className="reject-other-input"
+                className={styles["reject-other-input"]}
                 placeholder="Please specify the reason..."
                 value={otherReasonText}
                 onChange={(e) => setOtherReasonText(e.target.value)}
@@ -378,9 +398,9 @@ export default function SPDetailsPage() {
               />
             )}
 
-            <div className="modal-actions">
+            <div className={styles["modal-actions"]}>
               <button 
-                className="btn-cancel" 
+                className={styles["btn-cancel"]} 
                 onClick={() => {
                   setShowRejectModal(false);
                   setSelectedRejectReasons([]);
@@ -391,7 +411,7 @@ export default function SPDetailsPage() {
                 Cancel
               </button>
               <button 
-                className="btn-reject" 
+                className={styles["btn-reject"]} 
                 onClick={confirmReject} 
                 disabled={isRejectDisabled}
               >
