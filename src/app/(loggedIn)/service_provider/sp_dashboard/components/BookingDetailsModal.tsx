@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Booking, BookingStatus } from '../type';
 import { formatCurrency, formatStatus } from '../utils';
 
@@ -13,38 +13,61 @@ export default function BookingDetailsModal({
   setSelectedBooking, 
   handleUpdateStatus 
 }: BookingDetailsModalProps) {
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [showRejectInput, setShowRejectInput] = useState(false);
+
+  const handleReject = () => {
+    if (!rejectionReason.trim()) {
+      alert('Please enter a rejection reason');
+      return;
+    }
+    handleUpdateStatus(selectedBooking.id, 'rejected', rejectionReason);
+    setShowRejectInput(false);
+    setRejectionReason('');
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-2xl w-full p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
-        <h3 className="text-xl font-bold mb-4 border-b border-slate-800 pb-2">Booking Details</h3>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(30, 58, 138, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 50, padding: '1rem' }}>
+      <div style={{ background: 'white', borderRadius: '1.5rem', maxWidth: '600px', width: '100%', padding: '2rem', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <h3 style={{ fontSize: '1.5rem', fontWeight: 'black', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
+          Booking Details
+        </h3>
         
         {/* Basic Booking Info */}
-        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-          <p><strong>Date & Time:</strong> {selectedBooking.booking_date} ({selectedBooking.booking_timeslot})</p>
-          <p><strong>Total Amount:</strong> {formatCurrency(selectedBooking.booking_total_amount)}</p>
-          <p><strong>Status:</strong> <span className="capitalize">{formatStatus(selectedBooking.booking_status)}</span></p>
-          <p><strong>Created At:</strong> {new Date(selectedBooking.created_at).toLocaleString()}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+          <div><span style={{ color: '#64748b', display: 'block' }}>Date & Time</span><strong>{selectedBooking.booking_date} ({selectedBooking.booking_timeslot})</strong></div>
+          <div><span style={{ color: '#64748b', display: 'block' }}>Total Amount</span><strong>{formatCurrency(selectedBooking.booking_total_amount)}</strong></div>
+          <div><span style={{ color: '#64748b', display: 'block' }}>Status</span><strong style={{ textTransform: 'capitalize' }}>{formatStatus(selectedBooking.booking_status)}</strong></div>
+          <div><span style={{ color: '#64748b', display: 'block' }}>Created At</span><strong>{new Date(selectedBooking.created_at).toLocaleString()}</strong></div>
         </div>
 
+        {/* Rejection Reason (if exists) */}
+        {selectedBooking.booking_rejection_reason && (
+          <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '0.75rem', color: '#dc2626', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason</p>
+            <p style={{ fontSize: '0.875rem', color: '#991b1b' }}>{selectedBooking.booking_rejection_reason}</p>
+          </div>
+        )}
+
         {/* Pets & Services Section */}
-        <div className="mb-6">
-          <h4 className="text-md font-semibold text-blue-400 mb-2">Pet(s) & Services</h4>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Pet(s) & Services</h4>
           {selectedBooking.booking_pet_info && selectedBooking.booking_pet_info.length > 0 ? (
             selectedBooking.booking_pet_info.map((pet) => (
-              <div key={pet.id} className="bg-slate-800 p-4 rounded-lg mb-3 border border-slate-700 text-sm">
-                <p className="font-bold text-base text-yellow-400 mb-1">{pet.booking_pet_name} ({pet.booking_pet_type})</p>
-                <div className="grid grid-cols-2 gap-2 text-gray-300 mb-2">
+              <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
+                <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
                   <p><strong>Breed:</strong> {pet.booking_breed}</p>
                   <p><strong>Gender:</strong> {pet.booking_gender}</p>
                   <p><strong>Weight:</strong> {pet.booking_weight} kg ({pet.booking_calculated_size})</p>
                   <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
                 </div>
-                
+
                 {/* Nested Services List */}
                 {pet.booking_service_info && pet.booking_service_info.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-slate-700">
-                    <p className="font-semibold text-xs text-gray-400 uppercase mb-1">Services:</p>
-                    <ul className="list-disc list-inside text-gray-200">
+                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
+                    <p style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Services:</p>
+                    <ul style={{ listStyleType: 'disc', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#475569' }}>
                       {pet.booking_service_info.map((srv) => (
                         <li key={srv.id}>
                           {srv.booking_service_name} - {formatCurrency(srv.booking_price)}
@@ -56,31 +79,78 @@ export default function BookingDetailsModal({
               </div>
             ))
           ) : (
-            <p className="text-gray-400 text-sm">No pet info attached.</p>
+            <p style={{ color: '#64748b', fontSize: '0.875rem', fontStyle: 'italic' }}>No pet information attached.</p>
           )}
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3 mt-6 border-t border-slate-800 pt-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
           {selectedBooking.booking_status === 'pending_sp_response' && (
             <>
-              <button
-                onClick={() => handleUpdateStatus(selectedBooking.id, 'rejected', 'Schedule Conflict')}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 font-semibold"
-              >
-                Reject Booking
-              </button>
-              <button
-                onClick={() => handleUpdateStatus(selectedBooking.id, 'approved')}
-                className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 font-semibold"
-              >
-                Approve Booking
-              </button>
+              {showRejectInput && (
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason:</label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Enter reason for rejection..."
+                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical' }}
+                    rows={3}
+                  />
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                    <button
+                      onClick={handleReject}
+                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+                      onMouseOver={(e) => (e.currentTarget.style.background = '#b91c1c')}
+                      onMouseOut={(e) => (e.currentTarget.style.background = '#dc2626')}
+                    >
+                      Confirm Reject
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowRejectInput(false);
+                        setRejectionReason('');
+                      }}
+                      style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+                      onMouseOver={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                      onMouseOut={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!showRejectInput && (
+                <>
+                  <button
+                    onClick={() => setShowRejectInput(true)}
+                    style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+                    onMouseOver={(e) => (e.currentTarget.style.background = '#fecaca')}
+                    onMouseOut={(e) => (e.currentTarget.style.background = '#fee2e2')}
+                  >
+                    Reject Booking
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(selectedBooking.id, 'approved')}
+                    style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+                    onMouseOver={(e) => (e.currentTarget.style.background = '#1d4ed8')}
+                    onMouseOut={(e) => (e.currentTarget.style.background = '#1e3a8a')}
+                  >
+                    Approve Booking
+                  </button>
+                </>
+              )}
             </>
           )}
           <button
-            onClick={() => setSelectedBooking(null)}
-            className="px-4 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-600 font-semibold"
+            onClick={() => {
+              setSelectedBooking(null);
+              setShowRejectInput(false);
+              setRejectionReason('');
+            }}
+            style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+            onMouseOver={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+            onMouseOut={(e) => (e.currentTarget.style.background = '#f1f5f9')}
           >
             Close
           </button>

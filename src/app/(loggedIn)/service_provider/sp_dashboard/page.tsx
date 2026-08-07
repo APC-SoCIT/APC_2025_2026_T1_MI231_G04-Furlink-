@@ -6,6 +6,7 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
 import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
+import BookingDetailsModal from './components/BookingDetailsModal';
 import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
@@ -202,53 +203,11 @@ export default function ServiceProviderDashboardPage() {
 
       {/* Modal */}
       {selectedBooking && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 'black', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
-              Booking Details
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
-              <div><span style={{ color: '#64748b', display: 'block' }}>Date & Time</span><strong>{selectedBooking.booking_date} ({selectedBooking.booking_timeslot})</strong></div>
-              <div><span style={{ color: '#64748b', display: 'block' }}>Total Amount</span><strong>{formatCurrency(selectedBooking.booking_total_amount)}</strong></div>
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Pet(s) & Services</h4>
-              {selectedBooking.booking_pet_info && selectedBooking.booking_pet_info.length > 0 ? (
-                selectedBooking.booking_pet_info.map((pet) => (
-                  <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
-                    <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
-                      <p><strong>Breed:</strong> {pet.booking_breed}</p>
-                      <p><strong>Gender:</strong> {pet.booking_gender}</p>
-                      <p><strong>Weight:</strong> {pet.booking_weight} kg</p>
-                      <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p style={{ color: '#64748b', fontSize: '0.875rem', fontStyle: 'italic' }}>No pet information attached.</p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-              {selectedBooking.booking_status === 'pending_sp_response' && (
-                <>
-                  <button onClick={() => handleUpdateStatus(selectedBooking.id, 'rejected', 'Schedule Conflict')} style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                    Reject
-                  </button>
-                  <button onClick={() => handleUpdateStatus(selectedBooking.id, 'approved')} style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                    Approve
-                  </button>
-                </>
-              )}
-              <button onClick={() => setSelectedBooking(null)} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <BookingDetailsModal
+          selectedBooking={selectedBooking}
+          setSelectedBooking={setSelectedBooking}
+          handleUpdateStatus={handleUpdateStatus}
+        />
       )}
     </div>
   );
