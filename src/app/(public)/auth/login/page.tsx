@@ -29,42 +29,58 @@ export default function LoginPage() {
     }
 
     setLoading(true);
+    let resolvedIdentifier = formData.identifier.trim();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: formData.identifier,
-      password: formData.password,
-    });
+    try {
+      // If the identifier is NOT an email (no '@'), look up its email securely via the RPC function
+      if (!resolvedIdentifier.includes("@")) {
+        const { data: emailData, error: emailError } = await supabase
+          .rpc("get_email_for_username", { lookup_username: resolvedIdentifier.trim() });
 
-    if (error) {
-      setErrors({ form: "Invalid email or password. Please try again." });
-      setLoading(false);
-    } else {
-      const user = data.user;
-
-      if (user) {
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        if (profileError || !profileData) {
-          setErrors({ form: "Failed to fetch user profile role." });
+        if (emailError || !emailData) {
+          setErrors({ form: "Invalid email/username or password. Please try again." });
           setLoading(false);
           return;
         }
 
-        const role = profileData.role;
-        router.refresh();
-
-        if (role === 'service_provider') {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else if (role === 'admin') {
-          router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
-        } else {
-          router.push(ROUTES.PET_OWNER.DASHBOARD);
-        }
+        resolvedIdentifier = emailData;
       }
+
+      // Authenticate with Supabase Auth using the resolved email address
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: resolvedIdentifier,
+        password: formData.password,
+      });
+
+      if (error || !data.user) {
+        setErrors({ form: "Invalid email/username or password. Please try again." });
+        setLoading(false);
+        return;
+      }
+
+      const user = data.user;
+
+      // Fetch the user's role from public.profiles with a fallback to user metadata
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
+      
+      router.refresh();
+
+      if (role === 'service_provider') {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else if (role === 'admin') {
+        router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
+      } else {
+        router.push(ROUTES.PET_OWNER.DASHBOARD);
+      }
+    } catch (err) {
+      setErrors({ form: "Something went wrong. Please try again." });
+      setLoading(false);
     }
   };
 
@@ -75,9 +91,9 @@ export default function LoginPage() {
         
         <div className="input-group">
           <input 
-              type="email"
+              type="text"
               className={errors.identifier ? "input-error" : ""}
-              placeholder="Email address" 
+              placeholder="Email address or username" 
               value={formData.identifier}
               onChange={(e) => setFormData({...formData, identifier: e.target.value})} 
           />
