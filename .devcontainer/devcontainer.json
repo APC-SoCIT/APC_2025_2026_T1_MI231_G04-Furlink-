@@ -1,0 +1,15 @@
+{
+  "name": "furlink Workspace - LogiTeh",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [3000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "supabase.supabase-postgres-linter"
+      ]
+    }
+  },
+  "postCreateCommand": "npm install"
+}
