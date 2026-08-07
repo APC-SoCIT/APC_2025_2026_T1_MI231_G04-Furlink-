@@ -8,7 +8,7 @@ import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
 import "./page.css"; 
 
 const REJECTION_REASONS = [
-  "Incomplete information",
+  "Incomplete Information",
   "Information cannot be verified",
   "Uploaded files are invalid or inappropriate",
   "Others",
@@ -106,6 +106,11 @@ export default function SPDetailsPage() {
         : [...prev, reason]
     );
   };
+
+  const isRejectDisabled =
+    isUpdating ||
+    selectedRejectReasons.length === 0 ||
+    (selectedRejectReasons.includes("Others") && !otherReasonText.trim());
 
   const confirmReject = async () => {
     if (selectedRejectReasons.length === 0) {
@@ -388,7 +393,7 @@ export default function SPDetailsPage() {
               <button 
                 className="btn-reject" 
                 onClick={confirmReject} 
-                disabled={isUpdating || selectedRejectReasons.length === 0}
+                disabled={isRejectDisabled}
               >
                 {isUpdating ? "Processing..." : "Confirm Rejection"}
               </button>
