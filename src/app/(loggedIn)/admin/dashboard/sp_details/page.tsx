@@ -8,9 +8,10 @@ import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
 import "./page.css"; 
 
 const REJECTION_REASONS = [
-  "Incomplete Information",
+  "Incomplete information",
   "Information cannot be verified",
   "Uploaded files are invalid or inappropriate",
+  "Others",
 ];
 
 export default function SPDetailsPage() {
@@ -22,14 +23,13 @@ export default function SPDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // States for Approve/Reject functionality
   const [adminId, setAdminId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
-  const [selectedRejectReason, setSelectedRejectReason] = useState("");
+  const [selectedRejectReasons, setSelectedRejectReasons] = useState<string[]>([]);
+  const [otherReasonText, setOtherReasonText] = useState("");
 
   useEffect(() => {
     fetchAdminUser();
@@ -41,7 +41,6 @@ export default function SPDetailsPage() {
     }
   }, [providerId]);
 
-  // Get Admin ID to record who responded to the application
   const fetchAdminUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) setAdminId(user.id);
@@ -51,7 +50,6 @@ export default function SPDetailsPage() {
     try {
       setLoading(true);
       
-      // Fetching parent and all nested child
       const { data, error } = await supabase
         .from("sp_general_info")
         .select(`
@@ -77,7 +75,6 @@ export default function SPDetailsPage() {
     }
   };
 
-  // Handle Approval
   const confirmApprove = async () => {
     setIsUpdating(true);
     
@@ -94,7 +91,7 @@ export default function SPDetailsPage() {
 
       if (error) throw error;
       setShowApproveModal(false);
-      fetchProviderDetails(); // Refresh the UI
+      fetchProviderDetails();
     } catch (err: any) {
       alert("Error approving: " + err.message);
     } finally {
@@ -102,12 +99,31 @@ export default function SPDetailsPage() {
     }
   };
 
-  // Handle Rejection
+  const toggleRejectReason = (reason: string) => {
+    setSelectedRejectReasons((prev) =>
+      prev.includes(reason)
+        ? prev.filter((r) => r !== reason)
+        : [...prev, reason]
+    );
+  };
+
   const confirmReject = async () => {
-    if (!selectedRejectReason) {
+    if (selectedRejectReasons.length === 0) {
       alert("Please select a reason for rejection.");
       return;
     }
+
+    if (selectedRejectReasons.includes("Others") && !otherReasonText.trim()) {
+      alert("Please specify the other reason.");
+      return;
+    }
+
+    const finalReasons = selectedRejectReasons
+      .filter((r) => r !== "Others")
+      .concat(
+        selectedRejectReasons.includes("Others") ? [otherReasonText.trim()] : []
+      );
+
     setIsUpdating(true);
 
     try {
@@ -115,7 +131,7 @@ export default function SPDetailsPage() {
         .from("sp_general_info")
         .update({
           registration_status: "rejected",
-          registration_rejection_reason: selectedRejectReason,
+          registration_rejection_reason: finalReasons.join(", "),
           registration_response_by: adminId,
           updated_at: new Date().toISOString(),
         })
@@ -123,8 +139,9 @@ export default function SPDetailsPage() {
 
       if (error) throw error;
       setShowRejectModal(false);
-      setSelectedRejectReason("");
-      fetchProviderDetails(); // Refresh the UI
+      setSelectedRejectReasons([]);
+      setOtherReasonText("");
+      fetchProviderDetails();
     } catch (err: any) {
       alert("Error rejecting: " + err.message);
     } finally {
@@ -140,7 +157,6 @@ export default function SPDetailsPage() {
     <div className="admin-dashboard-page">
       <main className="admin-dashboard-wrapper">
         
-        {/* Header / Back Button */}
         <div style={{ marginBottom: "20px" }}>
           <button 
             className="btn-view-details" 
@@ -160,7 +176,6 @@ export default function SPDetailsPage() {
               </span>
             </div>
 
-            {/* ACTION BUTTONS (Only show if pending) */}
             {provider.registration_status === "pending" && (
               <div className="action-buttons-container">
                 <button 
@@ -181,7 +196,6 @@ export default function SPDetailsPage() {
             )}
           </div>
 
-          {/* GENERAL INFO SECTION */}
           <section className="detail-section">
             <h3>General Information</h3>
             <p><strong>Email:</strong> {provider.business_email}</p>
@@ -190,14 +204,12 @@ export default function SPDetailsPage() {
             <p><strong>Service Type:</strong> {provider.business_service_type}</p>
             <p><strong>Bio:</strong> {provider.business_bio}</p>
 
-            {/* Show rejection reason if rejected */}
             {provider.registration_status === "rejected" && provider.registration_rejection_reason && (
               <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444", borderRadius: "4px" }}>
                 <p style={{ margin: 0, color: "#991b1b" }}><strong>Rejection Reason:</strong> {provider.registration_rejection_reason}</p>
               </div>
             )}
             
-            {/* Document Links */}
             <div style={{ marginTop: "15px" }}>
               {provider.business_permit_url && (
                 <a href={provider.business_permit_url} target="_blank" rel="noreferrer" className="document-link">
@@ -214,7 +226,6 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          {/* OPERATING HOURS SECTION */}
           <section className="detail-section">
             <h3>Operating Hours</h3>
             {provider.sp_operating_hours && provider.sp_operating_hours.length > 0 ? (
@@ -232,7 +243,6 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          {/* EMPLOYEES SECTION */}
           <section className="detail-section">
             <h3>Employees</h3>
             {provider.sp_employees_info && provider.sp_employees_info.length > 0 ? (
@@ -250,7 +260,6 @@ export default function SPDetailsPage() {
 
           <hr style={{ margin: "20px 0", borderColor: "#f3f4f6" }} />
 
-          {/* SERVICES & OPTIONS SECTION */}
           <section className="detail-section">
             <h3>Services Offered</h3>
             {provider.sp_services && provider.sp_services.length > 0 ? (
@@ -261,7 +270,6 @@ export default function SPDetailsPage() {
                     <p>{service.service_description}</p>
                     {service.service_notes && <p style={{ fontSize: "0.85rem", fontStyle: "italic" }}>Note: {service.service_notes}</p>}
                     
-                    {/* Nested Service Options */}
                     {service.sp_service_options && service.sp_service_options.length > 0 && (
                       <table className="providers-table">
                         <thead>
@@ -295,7 +303,6 @@ export default function SPDetailsPage() {
         </div>
       </main>
 
-      {/* APPROVE MODAL */}
       {showApproveModal && (
         <div className="modal-overlay" onClick={() => !isUpdating && setShowApproveModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
@@ -323,36 +330,56 @@ export default function SPDetailsPage() {
         </div>
       )}
 
-      {/* REJECT MODAL */}
       {showRejectModal && (
         <div className="modal-overlay" onClick={() => !isUpdating && setShowRejectModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <h3 className="modal-title">Reject this provider?</h3>
             <p className="modal-text">
-              Select a reason for rejecting <strong>{provider.business_name}</strong>.
+              Select the reason(s) for rejecting <strong>{provider.business_name}</strong>.
             </p>
 
             <div className="reject-options-list">
               {REJECTION_REASONS.map((reason) => (
                 <label key={reason} className="reject-option">
                   <input
-                    type="radio"
+                    type="checkbox"
                     name="rejectReason"
                     value={reason}
-                    checked={selectedRejectReason === reason}
-                    onChange={(e) => setSelectedRejectReason(e.target.value)}
+                    checked={selectedRejectReasons.includes(reason)}
+                    onChange={() => toggleRejectReason(reason)}
                   />
                   <span>{reason}</span>
                 </label>
               ))}
             </div>
 
+            {selectedRejectReasons.includes("Others") && (
+              <textarea
+                className="reject-other-input"
+                placeholder="Please specify the reason..."
+                value={otherReasonText}
+                onChange={(e) => setOtherReasonText(e.target.value)}
+                rows={3}
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "1px solid #d1d5db",
+                  fontFamily: "inherit",
+                  fontSize: "0.9rem",
+                  resize: "vertical",
+                }}
+              />
+            )}
+
             <div className="modal-actions">
               <button 
                 className="btn-cancel" 
                 onClick={() => {
                   setShowRejectModal(false);
-                  setSelectedRejectReason("");
+                  setSelectedRejectReasons([]);
+                  setOtherReasonText("");
                 }} 
                 disabled={isUpdating}
               >
@@ -361,7 +388,7 @@ export default function SPDetailsPage() {
               <button 
                 className="btn-reject" 
                 onClick={confirmReject} 
-                disabled={isUpdating || !selectedRejectReason}
+                disabled={isUpdating || selectedRejectReasons.length === 0}
               >
                 {isUpdating ? "Processing..." : "Confirm Rejection"}
               </button>
