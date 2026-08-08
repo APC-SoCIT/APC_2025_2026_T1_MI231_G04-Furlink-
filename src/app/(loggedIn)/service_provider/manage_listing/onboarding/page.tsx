@@ -31,14 +31,15 @@ export default function ServiceProviderOnboardingPage() {
   // --- Business Profile State ---
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
-    isBranch: false,      // NEW: State for branch checkbox
-    branchName: "",       // NEW: State for branch location name
+    isBranch: false,
+    branchName: "",
     description: "", 
     businessEmail: "",
-    businessMobile: "", // Handles the 10-digit number following +63
+    businessMobile: "", 
     socialMediaUrl: "",
     googleMapUrl: "",
     typeOfService: "Pet Grooming",
+    useDefaultWaiver: false, // NEW: State for platform waiver checkbox
     operatingHours: [{
       days: [],
       startTime: "09:00",
@@ -74,17 +75,14 @@ export default function ServiceProviderOnboardingPage() {
   const handleBusinessChange = (e) => {
     const { name, value } = e.target;
     
-    // Character limit for description
     if (name === "description" && value.length > DESCRIPTION_MAX_LENGTH) return;
     
-    // Handle Mobile Number (Restricted to 10 digits since +63 is prefixed in UI)
     if (name === "businessMobile") {
       const numbersOnly = value.replace(/\D/g, "");
       if (numbersOnly.length <= 10) setBusinessInfo((prev) => ({ ...prev, [name]: numbersOnly }));
       return;
     }
     
-    // Handle Postal Code (4 digits for Philippines)
     if (name === "postalCode") {
       const numbersOnly = value.replace(/\D/g, "");
       if (numbersOnly.length <= 4) setBusinessInfo((prev) => ({ ...prev, [name]: numbersOnly }));
@@ -94,7 +92,6 @@ export default function ServiceProviderOnboardingPage() {
     setBusinessInfo((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Schedule / Hours handlers
   const toggleDay = (slotIndex, day) => {
     setBusinessInfo((prev) => {
       const used = prev.operatingHours.some((s, i) => i !== slotIndex && s.days.includes(day));
@@ -113,7 +110,6 @@ export default function ServiceProviderOnboardingPage() {
   const removeTimeSlot = (index) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.filter((_, i) => i !== index) }));
   const handleTimeChange = (slotIndex, type, value) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.map((slot, i) => (i === slotIndex ? { ...slot, [type]: value } : slot)) }));
 
-  // Employee handlers
   const handleEmployeeChange = (index, field, value) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
   const addEmployee = () => setEmployees((prev) => [...prev, { firstName: "", lastName: "", position: "" }]);
   const removeEmployee = (index) => setEmployees((prev) => prev.filter((_, i) => i !== index));
@@ -121,8 +117,6 @@ export default function ServiceProviderOnboardingPage() {
   /* -------------------------------------------------------------------- */
   /* Flow Control: Validating & Proceeding to Review                      */
   /* -------------------------------------------------------------------- */
-  
-  // STEP 1 -> STEP 2: Validate Business Info
   const handleNextStep = async (e) => {
     e.preventDefault();
     const isValid = await validate(supabase, providerId, businessInfo, employees, {
@@ -139,7 +133,6 @@ export default function ServiceProviderOnboardingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // STEP 2 -> MODAL: Validate Services & Pricing
   const handleReviewServices = () => {
     let isValid = true;
     let newErrors = { ...validationErrors };
@@ -184,7 +177,13 @@ export default function ServiceProviderOnboardingPage() {
       if (!user) throw new Error("No user found");
 
       // 1. Process and upload document files to storage
-      const waiverUrl = files.waiverFile ? await files.uploadFileToStorage(user.id, "waivers", files.waiverFile) : (files.existingWaiverUrl || null);
+      // If they opted for the default waiver, we can save a specific string or null here based on your DB needs
+      const waiverUrl = businessInfo.useDefaultWaiver 
+        ? "PLATFORM_DEFAULT_WAIVER" 
+        : files.waiverFile 
+          ? await files.uploadFileToStorage(user.id, "waivers", files.waiverFile) 
+          : (files.existingWaiverUrl || null);
+
       const permitUrl = files.businessPermitFile ? await files.uploadFileToStorage(user.id, "permits", files.businessPermitFile) : (files.existingPermitUrl || null);
       
       const newFacilityUrls = [];
@@ -201,7 +200,6 @@ export default function ServiceProviderOnboardingPage() {
       
       const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : (files.existingPaymentChannels?.[0]?.file_url || null);
 
-      // NEW: Combine Business Name and Branch Name for saving
       const finalBusinessName = businessInfo.isBranch && businessInfo.branchName.trim() !== ""
         ? `${businessInfo.businessName.trim()} - ${businessInfo.branchName.trim()}`
         : businessInfo.businessName.trim();
@@ -209,10 +207,10 @@ export default function ServiceProviderOnboardingPage() {
       // 2. Upsert Core Business Profile (sp_general_info)
       const payload = {
         profiles_id: user.id,
-        business_name: finalBusinessName, // UPDATED: Use combined string
+        business_name: finalBusinessName,
         business_bio: businessInfo.description,
         business_email: businessInfo.businessEmail,
-        business_contact: `+63${businessInfo.businessMobile}`, // Includes +63 prefix for DB check constraint
+        business_contact: `+63${businessInfo.businessMobile}`, 
         business_street: businessInfo.houseStreet,
         business_region: businessInfo.region,
         business_barangay: businessInfo.barangay,
@@ -263,7 +261,6 @@ export default function ServiceProviderOnboardingPage() {
         if (hError) throw hError;
       }
 
-      // Appends new files to the DB directly (requires removing the max 3 constraint in the DB)
       if (newFacilityUrls.length > 0) {
         const imgPayload = newFacilityUrls.map(url => ({ sp_id: currentProviderId, business_facility_images: url }));
         const { error: imgErr } = await supabase.from("sp_img_facilities").insert(imgPayload);
@@ -281,7 +278,7 @@ export default function ServiceProviderOnboardingPage() {
         if (sError) throw sError;
       }
 
-      // 4. Save Services & Pricing (Handles sp_services and sp_service_options tables)
+      // 4. Save Services & Pricing
       const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId);
       if (!serviceSaveResult.success) throw new Error("Services save failed: " + serviceSaveResult.message);
 
@@ -331,7 +328,7 @@ export default function ServiceProviderOnboardingPage() {
                 <label>Business Name*</label>
                 <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={validationErrors.businessName ? "input-error" : ""} />
                 
-                {/* NEW: Branch Checkbox with Fixed Layout */}
+                {/* Branch Checkbox with Fixed Layout */}
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginTop: '6px', fontSize: '0.8rem', fontWeight: 'normal', color: '#4b5563', cursor: 'pointer', width: 'fit-content' }}>
                   <input 
                     type="checkbox" 
@@ -344,7 +341,7 @@ export default function ServiceProviderOnboardingPage() {
                 {validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}
               </div>
 
-              {/* NEW: Conditional Branch Name Input */}
+              {/* Conditional Branch Name Input */}
               {businessInfo.isBranch && (
                 <div className="form-group fade-in-fast">
                   <label>Branch Name / Location*</label>
@@ -366,7 +363,6 @@ export default function ServiceProviderOnboardingPage() {
                 {validationErrors.businessEmail && <small className="error">{validationErrors.businessEmail}</small>}
               </div>
               
-              {/* Philippine Mobile Number input wrapper */}
               <div className="form-group">
                 <label>Mobile Number*</label>
                 <div className={`phone-input-wrapper ${validationErrors.businessMobile ? "input-error" : ""}`}>
@@ -473,14 +469,43 @@ export default function ServiceProviderOnboardingPage() {
 
           <section className="form-section">
             <h2>Documents & Uploads</h2>
+            
+            {/* NEW: Waiver Guidelines & Checkbox Box */}
+            <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+              <span style={{ fontWeight: '600', color: '#0E2679', display: 'block', marginBottom: '8px' }}>📄 Liability Waiver Guidelines</span>
+              <p style={{ fontSize: '0.85rem', color: '#4b5563', margin: '0 0 10px 0', lineHeight: '1.5' }}>
+                <strong>Purpose:</strong> This waiver protects both your establishment and the pet owners by outlining liability terms during grooming services. <br/>
+                <strong>Instructions:</strong> Please upload your own signed waiver. If you don't have a waiver, the platform has a standard <a href="#" onClick={(e) => e.preventDefault()} style={{ color: '#0E2679', textDecoration: 'underline', fontWeight: '600' }}>waiver</a> you can use.
+              </p>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#0E2679', fontWeight: '600', cursor: 'pointer', width: 'fit-content' }}>
+                <input 
+                  type="checkbox" 
+                  checked={businessInfo.useDefaultWaiver} 
+                  onChange={(e) => {
+                    setBusinessInfo(prev => ({ ...prev, useDefaultWaiver: e.target.checked }));
+                    // Optional: clear file if they check the box
+                    if (e.target.checked && files.waiverFile) files.setWaiverFile(null);
+                  }} 
+                  style={{ cursor: 'pointer', margin: 0, width: 'auto' }}
+                />
+                I will use the platform's standard waiver
+              </label>
+            </div>
+
             <div className="form-grid-2">
               <div className="form-group">
                 <label>Waiver</label>
-                <label className="file-btn">📁 <span>Select File (Max 1MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden /></label>
-                <div className="file-preview-small">
-                  {files.waiverFile ? (<span>{files.waiverFile.name} <span onClick={() => files.setWaiverFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingWaiverUrl ? (<span><a href={files.existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setWaiverFile, files.setExistingWaiverUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
+                {/* Dynamically disable the upload button if they check the default waiver box */}
+                <label className="file-btn" style={{ pointerEvents: businessInfo.useDefaultWaiver ? 'none' : 'auto', opacity: businessInfo.useDefaultWaiver ? 0.6 : 1, background: businessInfo.useDefaultWaiver ? '#f1f5f9' : '' }}>
+                  📁 <span>{businessInfo.useDefaultWaiver ? "Using Platform Waiver" : "Select File (Max 1MB)"}</span>
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden disabled={businessInfo.useDefaultWaiver} />
+                </label>
+                
+                <div className="file-preview-small" style={{ opacity: businessInfo.useDefaultWaiver ? 0.5 : 1 }}>
+                  {files.waiverFile ? (<span>{files.waiverFile.name} <span onClick={() => !businessInfo.useDefaultWaiver && files.setWaiverFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingWaiverUrl && !businessInfo.useDefaultWaiver ? (<span><a href={files.existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setWaiverFile, files.setExistingWaiverUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
                 </div>
-                {validationErrors.waiverFile && <small className="error">{validationErrors.waiverFile}</small>}
+                {validationErrors.waiverFile && !businessInfo.useDefaultWaiver && <small className="error">{validationErrors.waiverFile}</small>}
               </div>
 
               <div className="form-group">
