@@ -586,3 +586,15 @@ h1.page-title {
   .time-inputs { flex-wrap: wrap; }
   .review-grid { grid-template-columns: 1fr; }
 }
+.employee-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Adds breathing room between the button and the error */
+  margin-top: 15px; 
+}
+
+.employee-global-error {
+  display: block; /* Forces the error text onto its own line */
+  text-align: left;
+  font-size: 0.85rem;
+}

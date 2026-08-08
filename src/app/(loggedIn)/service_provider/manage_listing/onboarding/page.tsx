@@ -502,8 +502,10 @@ export default function ServiceProviderOnboardingPage() {
                 </div>
               </div>
             ))}
-            <button type="button" className="add-btn" onClick={addEmployee}>+ Add Employee</button>
-            {validationErrors.employees && <small className="error">{validationErrors.employees}</small>}
+            <div className="employee-actions-container">
+              <button type="button" className="add-btn" onClick={addEmployee}>+ Add Employee</button>
+              {validationErrors.employees && <small className="error employee-global-error">{validationErrors.employees}</small>}
+            </div>
           </section>
 
           <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end' }}>
