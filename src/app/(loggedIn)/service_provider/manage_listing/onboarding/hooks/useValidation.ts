@@ -1,13 +1,6 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/hooks/useValidation.ts */
 import { useState } from "react";
 
-/**
- * useValidation
- * ---------------------------------------------------------------------------
- * Encapsulates all validation logic for the service provider onboarding form,
- * ensuring business details, operating hours, employees, and files meet 
- * required criteria before moving to step 2 or final submission.
- */
 export function useValidation() {
   const [errors, setErrors] = useState({});
 
@@ -27,20 +20,31 @@ export function useValidation() {
     let newErrors = {};
     let isValid = true;
 
-    // 1. Business Info Validations
+    // 1. Business & Branch Validations
     if (!businessInfo.businessName.trim()) {
       newErrors.businessName = "Business name is required.";
       isValid = false;
-    } else {
-      // NEW REQUIREMENT (D): Check for duplicate business names across the system
+    }
+    
+    // NEW: Enforce Branch Name if checkbox is checked
+    if (businessInfo.isBranch && !businessInfo.branchName.trim()) {
+      newErrors.branchName = "Branch name is required.";
+      isValid = false;
+    }
+
+    // Only run DB check if the basic names are provided
+    if (businessInfo.businessName.trim() && (!businessInfo.isBranch || businessInfo.branchName.trim())) {
       try {
+        // Construct the combined name to check against the DB
+        const fullNameToCheck = businessInfo.isBranch 
+          ? `${businessInfo.businessName.trim()} - ${businessInfo.branchName.trim()}`
+          : businessInfo.businessName.trim();
+
         let query = supabase
           .from('sp_general_info')
           .select('id, business_name')
-          .ilike('business_name', businessInfo.businessName.trim()); // Case-insensitive exact match
+          .ilike('business_name', fullNameToCheck); 
           
-        // If this provider already exists, exclude their own ID from the check 
-        // so they can keep their existing name when updating.
         if (providerId) {
           query = query.neq('id', providerId);
         }
@@ -50,7 +54,11 @@ export function useValidation() {
         if (error) throw error;
         
         if (data && data.length > 0) {
-          newErrors.businessName = "This business name is already registered. Duplicate names are not allowed.";
+          if (businessInfo.isBranch) {
+            newErrors.branchName = "This exact branch location is already registered.";
+          } else {
+            newErrors.businessName = "This business name is already registered. If this is a new location, check the 'Branch' box.";
+          }
           isValid = false;
         }
       } catch (err) {
@@ -68,7 +76,6 @@ export function useValidation() {
       isValid = false;
     }
 
-    // Philippine Mobile Number Validation (10 digits following +63, starting with 9)
     const mobileRegex = /^9\d{9}$/;
     if (!businessInfo.businessMobile.trim()) {
       newErrors.businessMobile = "Mobile number is required.";
@@ -126,8 +133,6 @@ export function useValidation() {
     }
 
     // 4. Employee Validations
-    
-    // NEW REQUIREMENT (C): Require at least minimum of 2 employees
     if (employees.length < 2) {
       newErrors.employees = "You must have at least a minimum of 2 employees.";
       isValid = false;

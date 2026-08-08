@@ -31,6 +31,8 @@ export default function ServiceProviderOnboardingPage() {
   // --- Business Profile State ---
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
+    isBranch: false,      // NEW: State for branch checkbox
+    branchName: "",       // NEW: State for branch location name
     description: "", 
     businessEmail: "",
     businessMobile: "", // Handles the 10-digit number following +63
@@ -199,10 +201,15 @@ export default function ServiceProviderOnboardingPage() {
       
       const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : (files.existingPaymentChannels?.[0]?.file_url || null);
 
+      // NEW: Combine Business Name and Branch Name for saving
+      const finalBusinessName = businessInfo.isBranch && businessInfo.branchName.trim() !== ""
+        ? `${businessInfo.businessName.trim()} - ${businessInfo.branchName.trim()}`
+        : businessInfo.businessName.trim();
+
       // 2. Upsert Core Business Profile (sp_general_info)
       const payload = {
         profiles_id: user.id,
-        business_name: businessInfo.businessName,
+        business_name: finalBusinessName, // UPDATED: Use combined string
         business_bio: businessInfo.description,
         business_email: businessInfo.businessEmail,
         business_contact: `+63${businessInfo.businessMobile}`, // Includes +63 prefix for DB check constraint
@@ -320,11 +327,39 @@ export default function ServiceProviderOnboardingPage() {
           <section className="form-section">
             <h2>Business Information</h2>
             <div className="form-grid-3">
-              <div className="form-group">
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
                 <label>Business Name*</label>
                 <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={validationErrors.businessName ? "input-error" : ""} />
+                
+                {/* NEW: Branch Checkbox with Fixed Layout */}
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginTop: '6px', fontSize: '0.8rem', fontWeight: 'normal', color: '#4b5563', cursor: 'pointer', width: 'fit-content' }}>
+                  <input 
+                    type="checkbox" 
+                    style={{ width: 'auto', margin: 0, cursor: 'pointer' }}
+                    checked={businessInfo.isBranch} 
+                    onChange={(e) => setBusinessInfo(prev => ({ ...prev, isBranch: e.target.checked, branchName: e.target.checked ? prev.branchName : "" }))}
+                  />
+                  This is a specific branch/location
+                </label>
                 {validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}
               </div>
+
+              {/* NEW: Conditional Branch Name Input */}
+              {businessInfo.isBranch && (
+                <div className="form-group fade-in-fast">
+                  <label>Branch Name / Location*</label>
+                  <input 
+                    type="text" 
+                    name="branchName" 
+                    value={businessInfo.branchName} 
+                    onChange={handleBusinessChange} 
+                    placeholder="e.g., SM Mall of Asia"
+                    className={validationErrors.branchName ? "input-error" : ""} 
+                  />
+                  {validationErrors.branchName && <small className="error">{validationErrors.branchName}</small>}
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Email*</label>
                 <input type="email" name="businessEmail" value={businessInfo.businessEmail} onChange={handleBusinessChange} className={validationErrors.businessEmail ? "input-error" : ""} />
