@@ -31,6 +31,33 @@ export function useValidation() {
     if (!businessInfo.businessName.trim()) {
       newErrors.businessName = "Business name is required.";
       isValid = false;
+    } else {
+      // NEW REQUIREMENT (D): Check for duplicate business names across the system
+      try {
+        let query = supabase
+          .from('sp_general_info')
+          .select('id, business_name')
+          .ilike('business_name', businessInfo.businessName.trim()); // Case-insensitive exact match
+          
+        // If this provider already exists, exclude their own ID from the check 
+        // so they can keep their existing name when updating.
+        if (providerId) {
+          query = query.neq('id', providerId);
+        }
+
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          newErrors.businessName = "This business name is already registered. Duplicate names are not allowed.";
+          isValid = false;
+        }
+      } catch (err) {
+        console.error("Error checking business name uniqueness:", err);
+        newErrors.businessName = "Failed to verify business name availability.";
+        isValid = false;
+      }
     }
 
     if (!businessInfo.businessEmail.trim()) {
