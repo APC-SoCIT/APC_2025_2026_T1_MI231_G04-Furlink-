@@ -99,6 +99,13 @@ export function useValidation() {
     }
 
     // 4. Employee Validations
+    
+    // NEW REQUIREMENT (C): Require at least minimum of 2 employees
+    if (employees.length < 2) {
+      newErrors.employees = "You must have at least a minimum of 2 employees.";
+      isValid = false;
+    }
+
     employees.forEach((emp, idx) => {
       if (!emp.firstName.trim()) {
         newErrors[`employee_${idx}_first`] = "Required";
