@@ -10,10 +10,7 @@ import { supabase } from "@/lib/supabase";
 import "@/app/(public)/auth/auth.css";
 import { ROUTES } from "@/config/routes";
 
-// IMPORTANT: confirm this matches your project's actual "Email OTP Expiration"
-// value under Supabase Dashboard -> Authentication -> Emails, and update if different.
-// This is only used to drive the on-screen countdown; the real expiry is enforced by Supabase.
-const OTP_VALIDITY_SECONDS = 3600;
+const OTP_VALIDITY_SECONDS = 120; // Exactly 2 minutes validity per code
 
 export default function SignupPage() {
   const router = useRouter();
@@ -27,7 +24,6 @@ export default function SignupPage() {
 
   const [errors, setErrors] = useState<any>({});
   const [touched, setTouched] = useState<any>({});
-  const [dbErrors, setDbErrors] = useState<{ username?: string; email?: string }>({});
 
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,8 +38,8 @@ export default function SignupPage() {
   const [otpTimer, setOtpTimer] = useState(OTP_VALIDITY_SECONDS);
 
   const [resendLoading, setResendLoading] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
 
-  // Ticks the countdown down every second while on the verification screen
   useEffect(() => {
     if (!pendingVerification || otpTimer <= 0) return;
     const interval = setInterval(() => {
@@ -51,36 +47,6 @@ export default function SignupPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [pendingVerification, otpTimer]);
-
-  // Automatically check database for email and username existence (handles autofill and typing)
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      const emailTrim = formData.email.trim();
-      const usernameTrim = formData.username.trim();
-
-      if (emailTrim && emailTrim.includes("@") && emailTrim.includes(".")) {
-        const emailExists = await checkFieldExists('email', emailTrim);
-        setDbErrors(prev => ({
-          ...prev,
-          email: emailExists ? "Email has already been used" : undefined
-        }));
-      } else {
-        setDbErrors(prev => ({ ...prev, email: undefined }));
-      }
-
-      if (usernameTrim.length >= 3) {
-        const usernameExists = await checkFieldExists('username', usernameTrim);
-        setDbErrors(prev => ({
-          ...prev,
-          username: usernameExists ? "Username has already been used" : undefined
-        }));
-      } else {
-        setDbErrors(prev => ({ ...prev, username: undefined }));
-      }
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [formData.email, formData.username]);
 
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -130,18 +96,35 @@ export default function SignupPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if ((name === "password" || name === "confirmPassword") && value.length > 16) {
+      return;
+    }
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      const validationErrors = validateSignup(updated, agreedToTerms);
+      setErrors(validationErrors);
+      return updated;
+    });
   };
 
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
-    setFormData((prev) => ({ ...prev, mobile: digitsOnly }));
+    setFormData((prev) => {
+      const updated = { ...prev, mobile: digitsOnly };
+      const validationErrors = validateSignup(updated, agreedToTerms);
+      setErrors(validationErrors);
+      return updated;
+    });
+  };
+
+  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtpToken(digitsOnly);
   };
 
   const isFormValid = () => {
     const validationErrors = validateSignup(formData, agreedToTerms);
     const hasErrors = Object.values(validationErrors).some((err) => !!err);
-    const hasDbErrors = !!dbErrors.username || !!dbErrors.email;
 
     const allFieldsFilled =
       formData.firstName &&
@@ -154,31 +137,116 @@ export default function SignupPage() {
       formData.password &&
       formData.confirmPassword;
 
-    return agreedToTerms && !hasErrors && !hasDbErrors && !!allFieldsFilled;
+    return agreedToTerms && !hasErrors && !!allFieldsFilled;
+  };
+
+  // Rate limit check for requesting new codes
+  const checkSignupRateLimit = (email: string, isResend = false) => {
+    const key = `signup_attempts_${email.trim().toLowerCase()}`;
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000; // 10 minutes rolling window
+    const lockoutMs = 15 * 60 * 1000; // 15 minutes lockout
+
+    const rawData = localStorage.getItem(key);
+    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+
+    if (data.blockedUntil && now < data.blockedUntil) {
+      const remainingMs = data.blockedUntil - now;
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      setIsRateLimited(true);
+      return {
+        allowed: false,
+        message: `You have reached the maximum requests. Please try again in ${remainingMins} minute(s), or log back in later to request a new verification code.`
+      };
+    }
+
+    let attemptsArray = data?.attempts || [];
+    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
+
+    // If they already have 5 attempts recorded and are trying to make a *new* request (beyond the 5th)
+    if (validAttempts.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
+      setIsRateLimited(true);
+      return {
+        allowed: false,
+        message: "You have reached the maximum requests. Please try again in 15 minutes, or log back in later to request a new verification code."
+      };
+    }
+
+    if (isResend) {
+      validAttempts.push(now);
+    }
+
+    if (validAttempts.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
+      setIsRateLimited(true);
+    } else {
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
+      setIsRateLimited(false);
+    }
+
+    return { allowed: true };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid()) return;
+
+    const validationErrors = validateSignup(formData, agreedToTerms);
+    setErrors(validationErrors);
+    setTouched({
+      firstName: true, lastName: true, username: true, email: true,
+      mobile: true, dob: true, password: true, confirmPassword: true,
+      roleChoice: true, terms: true,
+    });
+
+    if (!isFormValid()) {
+      setFormError("Please fill out all required fields properly before continuing.");
+      return;
+    }
+
+    const usernameTaken = await checkFieldExists("username", formData.username);
+    const emailTaken = await checkFieldExists("email", formData.email);
+
+    if (usernameTaken || emailTaken) {
+      setFormError("Account already exists. Please log in instead.");
+      return;
+    }
+
     setFormError(null);
+
+    // Initial sign-up is request #1. Pass false for isResend so it registers the first attempt.
+    const key = `signup_attempts_${formData.email.trim().toLowerCase()}`;
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const rawData = localStorage.getItem(key);
+    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+
+    if (data.blockedUntil && now < data.blockedUntil) {
+      const remainingMs = data.blockedUntil - now;
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      setIsRateLimited(true);
+      setFormError(`You have reached the maximum requests. Please try again in ${remainingMins} minute(s), or log back in later to request a new verification code.`);
+      return;
+    }
+
+    let attemptsArray = data?.attempts || [];
+    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
+
+    if (validAttempts.length >= 5) {
+      setIsRateLimited(true);
+      setFormError("You have reached the maximum requests. Please try again in 15 minutes, or log back in later to request a new verification code.");
+      return;
+    }
+
+    validAttempts.push(now);
+    localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
+
     setLoading(true);
 
     try {
-      // Final check right before triggering OTP to prevent race conditions
-      const emailExists = await checkFieldExists('email', formData.email);
-      const usernameExists = await checkFieldExists('username', formData.username);
-
-      if (emailExists || usernameExists) {
-        setDbErrors({
-          email: emailExists ? "Email has already been used" : undefined,
-          username: usernameExists ? "Username has already been used" : undefined,
-        });
-        setFormError("The username or email is already registered. Please use different credentials.");
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.auth.signUp({
+      const { data: authData, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -194,12 +262,20 @@ export default function SignupPage() {
       });
 
       if (error) {
+        if (error.message.toLowerCase().includes("already registered") || error.message.toLowerCase().includes("already been used")) {
+          setFormError("Account already exists. Please log in instead.");
+          setLoading(false);
+          return;
+        }
+
         setFormError(error.message);
-      } else {
-        setOtpTimer(OTP_VALIDITY_SECONDS);
-        setOtpError(null);
-        setPendingVerification(true);
+        setLoading(false);
+        return;
       }
+
+      setOtpTimer(OTP_VALIDITY_SECONDS);
+      setOtpError(null);
+      setPendingVerification(true);
     } catch {
       setFormError("Something went wrong. Please check your connection and try again.");
     } finally {
@@ -221,11 +297,10 @@ export default function SignupPage() {
       });
 
       if (error) {
-        setOtpError(error.message);
+        setOtpError("Invalid OTP Code. Please check the code or try again after 15 minutes if limit was reached.");
         return;
       }
 
-      // verifyOtp establishes a session directly on success — no separate sign-in call needed
       if (!data.session) {
         setOtpError("Account verified, but automatic sign-in failed. Redirecting you to log in...");
         setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 2000);
@@ -246,6 +321,15 @@ export default function SignupPage() {
   };
 
   const handleResendOtp = async () => {
+    if (otpTimer > 0 || isRateLimited) return;
+
+    const rateCheck = checkSignupRateLimit(formData.email, true);
+    if (!rateCheck.allowed) {
+      setOtpError(rateCheck.message ?? null);
+      setIsRateLimited(true);
+      return;
+    }
+
     setOtpError(null);
     setResendLoading(true);
 
@@ -274,7 +358,7 @@ export default function SignupPage() {
         <form className="signup-card" onSubmit={handleVerifyOtp}>
           <h1>Verify Your Email</h1>
           <p className="otp-instructions">
-            We have sent a verification OTP code to <strong>{formData.email}</strong>. Please enter it below to activate your account.
+            We have sent a verification code to <strong>{formData.email}</strong>. Please enter it below to activate your account.
           </p>
           <p className="otp-spam-note">
             Didn&apos;t receive it? Check your spam or trash folder.
@@ -287,9 +371,10 @@ export default function SignupPage() {
               type="text"
               placeholder="Enter 6-digit OTP"
               value={otpToken}
-              onChange={(e) => setOtpToken(e.target.value)}
+              onChange={handleOtpChange}
               maxLength={6}
               required
+              inputMode="numeric"
               disabled={otpTimer <= 0}
             />
           </div>
@@ -304,10 +389,10 @@ export default function SignupPage() {
             <button
               type="button"
               onClick={handleResendOtp}
-              disabled={resendLoading || otpTimer > 0}
+              disabled={resendLoading || otpTimer > 0 || isRateLimited}
               className="resend-link"
             >
-              {resendLoading ? "Resending..." : "Resend code"}
+              {resendLoading ? "Resending..." : isRateLimited ? "Request limit reached" : "Resend code"}
             </button>
           </p>
 
@@ -343,25 +428,22 @@ export default function SignupPage() {
 
         <div className="form-row">
           <div className="input-group">
-            <div className={`phone-input-container ${(errors.username || dbErrors.username) ? "input-error" : ""}`}>
+            <div className={`phone-input-container ${errors.username ? "input-error" : ""}`}>
               <span className="phone-prefix">@</span>
               <div className="phone-divider"></div>
               <input name="username" placeholder="username" value={formData.username} onChange={handleChange} onBlur={handleBlur} />
             </div>
-            {(touched.username || dbErrors.username) && (errors.username || dbErrors.username) && (
-              <span className="error-text">{dbErrors.username || errors.username}</span>
-            )}
+            {touched.username && errors.username && <span className="error-text">{errors.username}</span>}
           </div>
           <div className="input-group">
-            <input name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} onBlur={handleBlur} className={(errors.email || dbErrors.email) ? "input-error" : ""} />
-            {(touched.email || dbErrors.email) && (errors.email || dbErrors.email) && (
-              <span className="error-text">{dbErrors.email || errors.email}</span>
-            )}
+            <input name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} onBlur={handleBlur} className={errors.email ? "input-error" : ""} />
+            {touched.email && errors.email && <span className="error-text">{errors.email}</span>}
           </div>
         </div>
 
         <div className="form-row">
           <div className="input-group">
+            <label className="field-guide-label">Mobile Number (PH)</label>
             <div className={`phone-input-container ${errors.mobile ? "input-error" : ""}`}>
               <span className="phone-prefix">+63</span>
               <div className="phone-divider"></div>
@@ -378,6 +460,7 @@ export default function SignupPage() {
             {touched.mobile && errors.mobile && <span className="error-text">{errors.mobile}</span>}
           </div>
           <div className="input-group">
+            <label className="field-guide-label">Date of Birth (mm/dd/yyyy)</label>
             <div className="date-input-container">
               <input
                 type="date"
@@ -414,11 +497,12 @@ export default function SignupPage() {
             Service Provider
           </button>
         </div>
+        {touched.roleChoice && errors.roleChoice && <span className="error-text">{errors.roleChoice}</span>}
 
         <div className="form-row">
           <div className="input-group">
             <div className="password-container">
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} onBlur={handleBlur} />
+              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password (max 16 chars)" value={formData.password} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -428,7 +512,7 @@ export default function SignupPage() {
 
           <div className="input-group">
             <div className="password-container">
-              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} />
+              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password (max 16 chars)" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}>
                 {showPasswordConfirm ? <FaEyeSlash /> : <FaEye />}
               </button>
