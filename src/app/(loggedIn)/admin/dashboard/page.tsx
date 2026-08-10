@@ -16,6 +16,18 @@ import styles from "./page.module.css";
 import { ROUTES } from "@/config/routes";
 
 type FilterType = "pending" | "active" | "rejected" | "users" | null;
+type UserRoleFilter = "all" | "pet_owner" | "service_provider" | "both";
+
+interface DateRange {
+  start: string;
+  end: string;
+}
+
+interface SavedFilters {
+  currentFilter: FilterType;
+  userRoleFilter: UserRoleFilter;
+  dateRange: DateRange;
+}
 
 interface ProviderRow {
   id: string;
@@ -38,6 +50,32 @@ interface UserRow {
   created_at: string | null;
 }
 
+const FILTERS_STORAGE_KEY = "adminDashboardFilters";
+
+const DEFAULT_FILTERS: SavedFilters = {
+  currentFilter: "pending",
+  userRoleFilter: "all",
+  dateRange: { start: "", end: "" },
+};
+
+// --- FILTRS ---
+const loadSavedFilters = (): SavedFilters => {
+  try {
+    const saved = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        currentFilter: parsed.currentFilter ?? DEFAULT_FILTERS.currentFilter,
+        userRoleFilter: parsed.userRoleFilter ?? DEFAULT_FILTERS.userRoleFilter,
+        dateRange: parsed.dateRange ?? DEFAULT_FILTERS.dateRange,
+      };
+    }
+  } catch (err) {
+    console.error("Error loading saved filters:", err);
+  }
+  return DEFAULT_FILTERS;
+};
+
 export default function AdminDashboardPage() {
   const router = useRouter();
 
@@ -52,23 +90,49 @@ export default function AdminDashboardPage() {
   const [totalUsers, setTotalUsers] = useState(0);
 
   // --- PENDING APPROVALS LIST ---
-  const [currentFilter, setCurrentFilter] = useState<FilterType>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("adminDashboardFilter") as FilterType;
-      if (saved) return saved;
-    }
-    return "pending";
-  });
+  const [currentFilter, setCurrentFilter] = useState<FilterType>(
+    DEFAULT_FILTERS.currentFilter
+  );
+
+  // --- USER ROLE FILTER ---
+  const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>(
+    DEFAULT_FILTERS.userRoleFilter
+  );
+
+  // --- SHARED DATE RANGE FILTER ---
+  const [dateRange, setDateRange] = useState<DateRange>(
+    DEFAULT_FILTERS.dateRange
+  );
+
+  const [filtersRestored, setFiltersRestored] = useState(false);
+
   const [tableData, setTableData] = useState<(ProviderRow | UserRow)[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAdminProfile();
     fetchDashboardCounts();
+
+    // Restore filter/tab user is on
+    const saved = loadSavedFilters();
+    setCurrentFilter(saved.currentFilter);
+    setUserRoleFilter(saved.userRoleFilter);
+    setDateRange(saved.dateRange);
+    setFiltersRestored(true);
   }, []);
 
-  //Fetch the list whenever the selected card changes (runs on mount too, since default is "pending")
+  // Filrer persistence
   useEffect(() => {
+    if (!filtersRestored) return;
+    sessionStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({ currentFilter, userRoleFilter, dateRange })
+    );
+  }, [currentFilter, userRoleFilter, dateRange, filtersRestored]);
+
+  // Fetch list when card/user role filter changes
+  useEffect(() => {
+    if (!filtersRestored) return;
     if (currentFilter === "pending") {
       fetchPendingList();
     } else if (currentFilter === "active") {
@@ -78,7 +142,19 @@ export default function AdminDashboardPage() {
     } else if (currentFilter === "users") {
       fetchUsersList();
     }
-  }, [currentFilter]);
+  }, [currentFilter, userRoleFilter, filtersRestored]);
+
+  // Refetch the provider tabs when date changes
+  useEffect(() => {
+    if (!filtersRestored) return;
+    if (currentFilter === "pending") {
+      fetchPendingList();
+    } else if (currentFilter === "active") {
+      fetchActiveList();
+    } else if (currentFilter === "rejected") {
+      fetchRejectedList();
+    }
+  }, [dateRange, filtersRestored]);
 
   //Fetch the functions
   const fetchAdminProfile = async () => {
@@ -164,13 +240,24 @@ export default function AdminDashboardPage() {
   const fetchPendingList = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sp_general_info")
         .select(
           "id, business_name, business_city, business_province, registration_status, created_at, updated_at, sp_services!inner(id)"
         )
-        .eq("registration_status", "pending")
-        .order("created_at", { ascending: false });
+        .eq("registration_status", "pending");
+
+      // Shared date range filter (based on created_at)
+      if (dateRange.start) {
+        query = query.gte("created_at", dateRange.start);
+      }
+      if (dateRange.end) {
+        const endDate = new Date(dateRange.end);
+        endDate.setUTCHours(23, 59, 59, 999);
+        query = query.lte("created_at", endDate.toISOString());
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (!error) setTableData(data || []);
     } catch (err) {
@@ -184,13 +271,26 @@ export default function AdminDashboardPage() {
   const fetchActiveList = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sp_general_info")
         .select(
           "id, business_name, business_city, business_province, registration_status, created_at, updated_at, registration_approved_at"
         )
-        .eq("registration_status", "approved")
-        .order("registration_approved_at", { ascending: false });
+        .eq("registration_status", "approved");
+
+      // Shared date range filter (based on registration_approved_at)
+      if (dateRange.start) {
+        query = query.gte("registration_approved_at", dateRange.start);
+      }
+      if (dateRange.end) {
+        const endDate = new Date(dateRange.end);
+        endDate.setUTCHours(23, 59, 59, 999);
+        query = query.lte("registration_approved_at", endDate.toISOString());
+      }
+
+      const { data, error } = await query.order("registration_approved_at", {
+        ascending: false,
+      });
 
       if (!error) setTableData(data || []);
     } catch (err) {
@@ -204,13 +304,24 @@ export default function AdminDashboardPage() {
   const fetchRejectedList = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sp_general_info")
         .select(
           "id, business_name, business_city, business_province, registration_status, created_at, updated_at"
         )
-        .eq("registration_status", "rejected")
-        .order("updated_at", { ascending: false });
+        .eq("registration_status", "rejected");
+
+      // Shared date range filter (based on updated_at)
+      if (dateRange.start) {
+        query = query.gte("updated_at", dateRange.start);
+      }
+      if (dateRange.end) {
+        const endDate = new Date(dateRange.end);
+        endDate.setUTCHours(23, 59, 59, 999);
+        query = query.lte("updated_at", endDate.toISOString());
+      }
+
+      const { data, error } = await query.order("updated_at", { ascending: false });
 
       if (!error) setTableData(data || []);
     } catch (err) {
@@ -226,16 +337,25 @@ export default function AdminDashboardPage() {
     setTableData([]);
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
         .select("id, first_name, last_name, username, mobile_number, role, created_at")
-        .neq("role", "admin")
-        .order("created_at", { ascending: false });
+        .neq("role", "admin");
+
+      // Apply role filter if not "all"
+      if (userRoleFilter === "both") {
+        query = query.in("role", ["pet_owner", "service_provider"]);
+      } else if (userRoleFilter !== "all") {
+        query = query.eq("role", userRoleFilter);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (!error) {
         setTableData(data || []);
       } else {
-        console.error("Supabase error:", JSON.stringify(error, null, 2));        setTableData([]); 
+        console.error("Supabase error:", JSON.stringify(error, null, 2));
+        setTableData([]);
       }
     } catch (err) {
       console.error("Error fetching users list:", err);
@@ -262,9 +382,17 @@ export default function AdminDashboardPage() {
 
   const handleCardClick = (filter: FilterType) => {
     setCurrentFilter(filter);
-    if (filter) {
-      localStorage.setItem("adminDashboardFilter", filter);
-    }
+  };
+
+  const handleDateRangeChange = (field: "start" | "end", value: string) => {
+    setDateRange((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const clearDateRangeHandler = () => {
+    setDateRange({ start: "", end: "" });
   };
 
   const getListTitle = () => {
@@ -388,6 +516,88 @@ export default function AdminDashboardPage() {
           <div className={styles["dashboard-list-container"]}>
             <div className={styles["list-header"]}>
               <h2 className={styles["list-title"]}>{getListTitle()}</h2>
+
+              {/* --- USER ROLE FILTER --- */}
+              {currentFilter === "users" && (
+                <div className={styles["user-filter-group"]}>
+                  <button
+                    className={`${styles["filter-btn"]} ${
+                      userRoleFilter === "all" ? styles["active"] : ""
+                    }`}
+                    onClick={() => setUserRoleFilter("all")}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`${styles["filter-btn"]} ${
+                      userRoleFilter === "pet_owner" ? styles["active"] : ""
+                    }`}
+                    onClick={() => setUserRoleFilter("pet_owner")}
+                  >
+                    Pet Owner
+                  </button>
+                  <button
+                    className={`${styles["filter-btn"]} ${
+                      userRoleFilter === "service_provider" ? styles["active"] : ""
+                    }`}
+                    onClick={() => setUserRoleFilter("service_provider")}
+                  >
+                    Service Provider
+                  </button>
+                  <button
+                    className={`${styles["filter-btn"]} ${
+                      userRoleFilter === "both" ? styles["active"] : ""
+                    }`}
+                    onClick={() => setUserRoleFilter("both")}
+                  >
+                    Both
+                  </button>
+                </div>
+              )}
+
+              {/* --- DATE RANGE FILTER FOR SERVICE PROVIDER TABS --- */}
+              {currentFilter !== "users" && (
+                <div className={styles["date-range-filter"]}>
+                  <div className={styles["date-inputs-group"]}>
+                    <div className={styles["date-input-wrapper"]}>
+                      <label className={styles["date-label"]}>From:</label>
+                      <input
+                        type="date"
+                        className={styles["date-input"]}
+                        value={dateRange.start}
+                        onChange={(e) => handleDateRangeChange("start", e.target.value)}
+                        max={dateRange.end || new Date().toISOString().split("T")[0]}
+                      />
+                    </div>
+                    <div className={styles["date-input-wrapper"]}>
+                      <label className={styles["date-label"]}>To:</label>
+                      <input
+                        type="date"
+                        className={styles["date-input"]}
+                        value={dateRange.end}
+                        onChange={(e) => handleDateRangeChange("end", e.target.value)}
+                        min={dateRange.start}
+                        max={new Date().toISOString().split("T")[0]}
+                      />
+                    </div>
+                    {(dateRange.start || dateRange.end) && (
+                      <button
+                        className={styles["clear-dates-btn"]}
+                        onClick={clearDateRangeHandler}
+                        title="Clear date range"
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+                  {(dateRange.start || dateRange.end) && (
+                    <div className={styles["active-filter-indicator"]}>
+                      <span className={styles["filter-active-dot"]}></span>
+                      <span className={styles["filter-active-text"]}>Date filter active</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className={styles["providers-table-wrapper"]}>
