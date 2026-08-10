@@ -10,6 +10,11 @@ import { supabase } from "@/lib/supabase";
 import "@/app/(public)/auth/auth.css";
 import { ROUTES } from "@/config/routes";
 
+// IMPORTANT: confirm this matches your project's actual "Email OTP Expiration"
+// value under Supabase Dashboard -> Authentication -> Emails, and update if different.
+// This is only used to drive the on-screen countdown; the real expiry is enforced by Supabase.
+const OTP_VALIDITY_SECONDS = 3600;
+
 export default function SignupPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -23,7 +28,7 @@ export default function SignupPage() {
   const [errors, setErrors] = useState<any>({});
   const [touched, setTouched] = useState<any>({});
   const [dbErrors, setDbErrors] = useState<{ username?: string; email?: string }>({});
-  
+
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -34,10 +39,8 @@ export default function SignupPage() {
   const [verificationLoading, setVerificationLoading] = useState(false);
 
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [otpTimer, setOtpTimer] = useState(300);
+  const [otpTimer, setOtpTimer] = useState(OTP_VALIDITY_SECONDS);
 
-  const [resendExhausted, setResendExhausted] = useState(false);
-  const [resendRetryMinutes, setResendRetryMinutes] = useState<number | null>(null);
   const [resendLoading, setResendLoading] = useState(false);
 
   // Ticks the countdown down every second while on the verification screen
@@ -55,7 +58,6 @@ export default function SignupPage() {
       const emailTrim = formData.email.trim();
       const usernameTrim = formData.username.trim();
 
-      // Check Email
       if (emailTrim && emailTrim.includes("@") && emailTrim.includes(".")) {
         const emailExists = await checkFieldExists('email', emailTrim);
         setDbErrors(prev => ({
@@ -66,7 +68,6 @@ export default function SignupPage() {
         setDbErrors(prev => ({ ...prev, email: undefined }));
       }
 
-      // Check Username
       if (usernameTrim.length >= 3) {
         const usernameExists = await checkFieldExists('username', usernameTrim);
         setDbErrors(prev => ({
@@ -76,7 +77,7 @@ export default function SignupPage() {
       } else {
         setDbErrors(prev => ({ ...prev, username: undefined }));
       }
-    }, 400); // 400ms debounce to prevent excessive queries
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [formData.email, formData.username]);
@@ -141,7 +142,7 @@ export default function SignupPage() {
     const validationErrors = validateSignup(formData, agreedToTerms);
     const hasErrors = Object.values(validationErrors).some((err) => !!err);
     const hasDbErrors = !!dbErrors.username || !!dbErrors.email;
-    
+
     const allFieldsFilled =
       formData.firstName &&
       formData.lastName &&
@@ -177,19 +178,25 @@ export default function SignupPage() {
         return;
       }
 
-      const res = await fetch("/api/auth/send_otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email }),
+      const { error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            username: formData.username,
+            mobile_number: formData.mobile,
+            date_of_birth: formData.dob,
+            role: formData.roleChoice,
+          },
+        },
       });
-      const result = await res.json();
 
-      if (!res.ok) {
-        setFormError(result.error || "Failed to send verification code.");
+      if (error) {
+        setFormError(error.message);
       } else {
-        setOtpTimer(result.validitySeconds ?? 300);
-        setResendExhausted(!!result.resendsExhausted);
-        setResendRetryMinutes(result.retryAfterMinutes ?? null);
+        setOtpTimer(OTP_VALIDITY_SECONDS);
         setOtpError(null);
         setPendingVerification(true);
       }
@@ -207,37 +214,20 @@ export default function SignupPage() {
     setVerificationLoading(true);
 
     try {
-      const res = await fetch("/api/auth/verify_otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          code: otpToken,
-          password: formData.password,
-          userData: {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            username: formData.username,
-            mobile_number: formData.mobile,
-            date_of_birth: formData.dob,
-            role: formData.roleChoice,
-          },
-        }),
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: formData.email,
+        token: otpToken,
+        type: "signup",
       });
-      const result = await res.json();
 
-      if (!res.ok) {
-        setOtpError(result.error || "Verification failed. Please try again.");
+      if (error) {
+        setOtpError(error.message);
         return;
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (signInError) {
-        setOtpError("Account created, but automatic sign-in failed. Redirecting you to log in...");
+      // verifyOtp establishes a session directly on success — no separate sign-in call needed
+      if (!data.session) {
+        setOtpError("Account verified, but automatic sign-in failed. Redirecting you to log in...");
         setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 2000);
         return;
       }
@@ -256,28 +246,19 @@ export default function SignupPage() {
   };
 
   const handleResendOtp = async () => {
-    if (resendExhausted) return;
     setOtpError(null);
     setResendLoading(true);
 
     try {
-      const res = await fetch("/api/auth/send_otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email }),
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: formData.email,
       });
-      const result = await res.json();
 
-      if (!res.ok) {
-        setOtpError(result.error || "Failed to resend code.");
-        if (res.status === 429) {
-          setResendExhausted(true);
-          setResendRetryMinutes(result.retryAfterMinutes ?? null);
-        }
+      if (error) {
+        setOtpError(error.message);
       } else {
-        setOtpTimer(result.validitySeconds ?? 300);
-        setResendExhausted(!!result.resendsExhausted);
-        setResendRetryMinutes(result.retryAfterMinutes ?? null);
+        setOtpTimer(OTP_VALIDITY_SECONDS);
         setOtpToken("");
       }
     } catch {
@@ -288,8 +269,6 @@ export default function SignupPage() {
   };
 
   if (pendingVerification) {
-    const showResendLimitBanner = resendExhausted && (otpTimer <= 0 || !!otpError);
-
     return (
       <div className="signup-wrapper">
         <form className="signup-card" onSubmit={handleVerifyOtp}>
@@ -321,28 +300,16 @@ export default function SignupPage() {
             <p className="otp-timer otp-expired">Code expired.</p>
           )}
 
-          {showResendLimitBanner && (
-            <p className="otp-resend-limit">
-              You&apos;ve requested too many codes.{" "}
-              {resendRetryMinutes
-                ? `Please come back in ${resendRetryMinutes} minute${resendRetryMinutes === 1 ? "" : "s"}.`
-                : "Please try again later."}{" "}
-              In the meantime, check your spam or trash folder for a previous code.
-            </p>
-          )}
-
-          {!resendExhausted && (
-            <p className="otp-resend">
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={resendLoading || otpTimer > 0}
-                className="resend-link"
-              >
-                {resendLoading ? "Resending..." : "Resend code"}
-              </button>
-            </p>
-          )}
+          <p className="otp-resend">
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              disabled={resendLoading || otpTimer > 0}
+              className="resend-link"
+            >
+              {resendLoading ? "Resending..." : "Resend code"}
+            </button>
+          </p>
 
           <button
             type="submit"
