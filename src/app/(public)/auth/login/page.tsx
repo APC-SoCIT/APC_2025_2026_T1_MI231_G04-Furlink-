@@ -217,7 +217,15 @@ export default function LoginPage() {
         .maybeSingle();
 
       const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
+      const mustChangePassword = user.user_metadata?.must_change_password;
+
       router.refresh();
+
+      // Check if role is admin and if it's their first login (must_change_password is true)
+      if (role === 'admin' && mustChangePassword) {
+        router.push("/auth/admin_first_login");
+        return;
+      }
 
       if (role === 'service_provider') {
         router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
@@ -267,8 +275,15 @@ export default function LoginPage() {
         .maybeSingle();
         
       const role = userProfile?.role || data.user.user_metadata?.role || 'pet_owner';
+      const mustChangePassword = data.user.user_metadata?.must_change_password;
 
       router.refresh();
+
+      if (role === 'admin' && mustChangePassword) {
+        router.push("/auth/admin_first_login");
+        return;
+      }
+
       if (role === 'service_provider') {
         router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
       } else if (role === 'admin') {
