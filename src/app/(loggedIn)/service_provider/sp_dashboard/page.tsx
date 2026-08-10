@@ -7,6 +7,7 @@ import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
 import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
 import BookingDetailsModal from './components/BookingDetailsModal';
+import CalendarModal from './components/CalendarModal';
 import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
@@ -17,6 +18,7 @@ export default function ServiceProviderDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -108,7 +110,10 @@ export default function ServiceProviderDashboardPage() {
           <button className={styles.actionBtn}>
             <FaChartLine size={24} /> Dashboard
           </button>
-          <button className={styles.actionBtn}>
+          <button 
+            className={styles.actionBtn}
+            onClick={() => setShowCalendar(true)}
+          >
             <FaCalendarAlt size={24} /> Calendar
           </button>
         </div>
@@ -201,12 +206,20 @@ export default function ServiceProviderDashboardPage() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* Booking Details Modal */}
       {selectedBooking && (
         <BookingDetailsModal
           selectedBooking={selectedBooking}
           setSelectedBooking={setSelectedBooking}
           handleUpdateStatus={handleUpdateStatus}
+        />
+      )}
+
+      {/* Calendar Modal */}
+      {showCalendar && (
+        <CalendarModal
+          bookings={bookings}
+          setShowCalendar={setShowCalendar}
         />
       )}
     </div>
