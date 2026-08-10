@@ -52,20 +52,19 @@ export default function AdminDashboardPage() {
   const [totalUsers, setTotalUsers] = useState(0);
 
   // --- PENDING APPROVALS LIST ---
-  const [currentFilter, setCurrentFilter] = useState<FilterType>("pending");
+  const [currentFilter, setCurrentFilter] = useState<FilterType>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("adminDashboardFilter") as FilterType;
+      if (saved) return saved;
+    }
+    return "pending";
+  });
   const [tableData, setTableData] = useState<(ProviderRow | UserRow)[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAdminProfile();
     fetchDashboardCounts();
-  }, []);
-
-  useEffect(() => {
-    const savedFilter = localStorage.getItem("adminDashboardFilter") as FilterType;
-    if (savedFilter) {
-      setCurrentFilter(savedFilter);
-    }
   }, []);
 
   //Fetch the list whenever the selected card changes (runs on mount too, since default is "pending")
