@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ROUTES } from "@/config/routes";
-import { FaArrowLeft, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaTimes, FaUser, FaHistory, FaExclamationTriangle, 
+  FaPaperPlane, FaChevronDown, FaUserSlash, } from "react-icons/fa";
 import styles from "./page.module.css";
 
 interface BookingServiceInfo {
@@ -55,6 +56,17 @@ interface UserProfile {
 
 // Roles that should have an email shown (pulled from sp_general_info.business_email)
 const ROLES_WITH_EMAIL = ["service_provider", "both"];
+
+// Human-friendly labels for booking_status
+const STATUS_LABELS: Record<string, string> = {
+  pending_sp_response: "Pending",
+  approved: "Approved",
+  rejected: "Declined",
+  paid: "Paid",
+  cancelled: "Cancelled",
+  to_rate: "To Rate",
+  rated: "Rated",
+};
 
 export default function PODetailsPage() {
   const searchParams = useSearchParams();
@@ -123,7 +135,7 @@ export default function PODetailsPage() {
       console.error("Error fetching business email:", err);
     }
   };
-
+  
   const fetchBookingHistory = async () => {
     try {
       setBookingsLoading(true);
@@ -182,7 +194,22 @@ export default function PODetailsPage() {
     });
   };
 
-  const formatStatus = (status: string) => status.replace(/_/g, " ");
+  // Combines booking_date booking_timeslot into proper formating 
+  const formatDateWithSlot = (dateString: string, timeslot: string) => {
+    const datePart = formatDate(dateString);
+    return timeslot ? `${datePart} at ${timeslot}` : datePart;
+  };
+
+  const formatStatusLabel = (status: string) =>
+    STATUS_LABELS[status] || status.replace(/_/g, " ");
+
+  const getServiceSummary = (booking: BookingRow) => {
+    const names = new Set<string>();
+    booking.booking_pet_info?.forEach((pet) =>
+      pet.booking_service_info?.forEach((svc) => names.add(svc.booking_service_name))
+    );
+    return names.size > 0 ? Array.from(names).join(", ") : "-";
+  };
 
   const showEmail = !!user?.role && ROLES_WITH_EMAIL.includes(user.role);
 
@@ -198,129 +225,178 @@ export default function PODetailsPage() {
   return (
     <div className={styles["admin-dashboard-page"]}>
       <main className={styles["admin-dashboard-wrapper"]}>
-        {/* Header / Back Button */}
+        {/* Back Button */}
         <div className={styles["back-button-container"]}>
-            <button
+          <button
             className={styles["btn-back"]}
-            onClick={() => {
-                router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
-            }}
-            >
-                <FaArrowLeft /> Back to Dashboard
-            </button>
+            onClick={() => router.push(ROUTES.ADMIN.ADMIN_DASHBOARD)}
+          >
+            <FaArrowLeft /> Back to Dashboard
+          </button>
         </div>
 
-        {/* PERSONAL INFORMATION */}
-        <div className={styles["dashboard-list-container"]}>
-          <div className={styles["list-header"]}>
-            <div>
-              <h2 className={styles["list-title"]}>
-                {user.first_name} {user.last_name}
-              </h2>
-              {user.role && (
-                <span className={styles["role-pill"]}>
-                  {user.role.replace(/_/g, " ")}
-                </span>
-              )}
-            </div>
+        {/* PAGE HEADER */}
+        <div className={styles["page-header"]}>
+          <h1 className={styles["page-title"]}>
+            {user.first_name} {user.last_name}
+          </h1>
+          {user.role && (
+            <span className={styles["role-pill"]}>
+              {user.role.replace(/_/g, " ")}
+            </span>
+          )}
+        </div>
+
+        {/* MAIN TWO-COLUMN LAYOUT */}
+        <div className={styles["details-grid"]}>
+          {/* LEFT COLUMN Personal Info & Admin Actions */}
+          <div className={styles["left-column"]}>
+            {/* PERSONAL INFORMATION */}
+            <section className={styles["info-card"]}>
+              <div className={styles["card-header"]}>
+                <FaUser />
+                <h2>Personal Information</h2>
+              </div>
+
+              <dl className={styles["info-list"]}>
+                <div className={styles["info-row"]}>
+                  <dt>Role:</dt>
+                  <dd>{user.role ? user.role.replace(/_/g, " ") : "-"}</dd>
+                </div>
+
+                {showEmail && (
+                  <div className={styles["info-row"]}>
+                    <dt>Email:</dt>
+                    <dd>{businessEmail || "-"}</dd>
+                  </div>
+                )}
+
+                <div className={styles["info-row"]}>
+                  <dt>Mobile:</dt>
+                  <dd>{user.mobile_number || "-"}</dd>
+                </div>
+
+                <div className={styles["info-row"]}>
+                  <dt>Date of Birth:</dt>
+                  <dd>{formatDate(user.date_of_birth)}</dd>
+                </div>
+
+                <div className={styles["info-row"]}>
+                  <dt>Member Since:</dt>
+                  <dd>{formatDate(user.created_at)}</dd>
+                </div>
+              </dl>
+            </section>
+
+            {/* ADMIN ACTIONS */}
+            <section className={styles["admin-actions-card"]}>
+              <div className={styles["admin-card-header"]}>
+                <FaExclamationTriangle />
+                <h2>Admin Actions</h2>
+              </div>
+
+              {/* Issue Warning */}
+              <div className={styles["admin-block"]}>
+                <div className={styles["admin-block-label-row"]}>
+                  <span className={styles["admin-block-label"]}>Issue Warning</span>
+                  <span className={styles["count-pill"]}>Count: 0</span>
+                </div>
+                <textarea
+                  className={styles["warning-textarea"]}
+                  placeholder="Type warning message here..."
+                  rows={3}
+                />
+                <button className={styles["btn-send-notification"]}>
+                  <FaPaperPlane /> Send Notification
+                </button>
+              </div>
+
+              <hr className={styles["admin-divider"]} />
+
+              {/* View History */}
+              <button className={styles["btn-view-history"]}>
+                <FaChevronDown /> View History (0)
+              </button>
+
+              <hr className={styles["admin-divider"]} />
+
+              {/* Account Suspension */}
+              <div className={styles["admin-block"]}>
+                <span className={styles["admin-block-label"]}>Account Suspension</span>
+                <p className={styles["admin-block-desc"]}>
+                  Temporarily disable this user's access for 7 days.
+                </p>
+                <button className={styles["btn-suspend"]}>
+                  <FaUserSlash /> Suspend for 1 Week
+                </button>
+              </div>
+            </section>
           </div>
 
-          <section className={styles["detail-section"]}>
-            <h3>Personal Information</h3>
-            <div className={styles["info-grid"]}>
-              <div className={styles["info-item"]}>
-                <span className={styles["info-label"]}>Role</span>
-                <span className={styles["info-value"]}>
-                  {user.role ? user.role.replace(/_/g, " ") : "-"}
-                </span>
-              </div>
+          {/* BOOKING HISTORY */}
+          <section className={styles["info-card"]}>
+            <div className={styles["card-header"]}>
+              <FaHistory />
+              <h2>Full Booking History</h2>
+            </div>
+            <p className={styles["card-subtitle"]}>
+              Showing all appointments (Pending, Paid, Cancelled, Rated, etc.)
+            </p>
 
-              {showEmail && (
-                <div className={styles["info-item"]}>
-                  <span className={styles["info-label"]}>Email</span>
-                  <span className={styles["info-value"]}>
-                    {businessEmail || "-"}
-                  </span>
+            <div className={styles["providers-table-wrapper"]}>
+              {bookingsLoading ? (
+                <div className={styles["loading-state"]}>Loading bookings...</div>
+              ) : bookings.length === 0 ? (
+                <div className={styles["empty-state"]}>
+                  No bookings found for this user.
                 </div>
+              ) : (
+                <table className={styles["providers-table"]}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Pets</th>
+                      <th>Service</th>
+                      <th>Total</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookings.map((booking) => (
+                      <tr key={booking.id}>
+                        <td>
+                          <div className={styles["date-cell-main"]}>
+                            {formatDateWithSlot(booking.booking_date, booking.booking_timeslot)}
+                          </div>
+                          <div className={styles["date-cell-status"]}>
+                            Status:{" "}
+                            <span
+                              className={`${styles["status-text"]} ${
+                                styles[booking.booking_status] || ""
+                              }`}
+                            >
+                              {formatStatusLabel(booking.booking_status)}
+                            </span>
+                          </div>
+                        </td>
+                        <td>{booking.booking_pet_info?.length || 0} Pet/s</td>
+                        <td>{getServiceSummary(booking)}</td>
+                        <td>₱{Number(booking.booking_total_amount).toFixed(2)}</td>
+                        <td>
+                          <button
+                            className={styles["btn-view-details"]}
+                            onClick={() => setSelectedBooking(booking)}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-
-              <div className={styles["info-item"]}>
-                <span className={styles["info-label"]}>Mobile Number</span>
-                <span className={styles["info-value"]}>
-                  {user.mobile_number || "-"}
-                </span>
-              </div>
-              <div className={styles["info-item"]}>
-                <span className={styles["info-label"]}>Date of Birth</span>
-                <span className={styles["info-value"]}>
-                  {formatDate(user.date_of_birth)}
-                </span>
-              </div>
-              <div className={styles["info-item"]}>
-                <span className={styles["info-label"]}>Joined</span>
-                <span className={styles["info-value"]}>
-                  {formatDate(user.created_at)}
-                </span>
-              </div>
             </div>
           </section>
-        </div>
-
-        {/* BOOKING HISTORY */}
-        <div className={styles["dashboard-list-container"]}>
-          <div className={styles["list-header"]}>
-            <h2 className={styles["list-title"]}>Booking History</h2>
-          </div>
-
-          <div className={styles["providers-table-wrapper"]}>
-            {bookingsLoading ? (
-              <div className={styles["loading-state"]}>
-                Loading bookings...
-              </div>
-            ) : bookings.length === 0 ? (
-              <div className={styles["empty-state"]}>
-                No bookings found for this user.
-              </div>
-            ) : (
-              <table className={styles["providers-table"]}>
-                <thead>
-                  <tr>
-                    <th>Date of Booking</th>
-                    <th>Number of Pets</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.map((booking) => (
-                    <tr key={booking.id}>
-                      <td className={styles["fw-bold"]}>
-                        {formatDate(booking.booking_date)}
-                      </td>
-                      <td>{booking.booking_pet_info?.length || 0}</td>
-                      <td>
-                        <span
-                          className={`${styles["status-pill"]} ${
-                            styles[booking.booking_status] || ""
-                          }`}
-                        >
-                          {formatStatus(booking.booking_status)}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className={styles["btn-view-details"]}
-                          onClick={() => setSelectedBooking(booking)}
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
         </div>
       </main>
 
@@ -371,13 +447,13 @@ export default function PODetailsPage() {
                       styles[selectedBooking.booking_status] || ""
                     }`}
                   >
-                    {formatStatus(selectedBooking.booking_status)}
+                    {formatStatusLabel(selectedBooking.booking_status)}
                   </span>
                 </div>
                 <div className={styles["info-item"]}>
                   <span className={styles["info-label"]}>Total Amount</span>
                   <span className={styles["info-value"]}>
-                    ₱{selectedBooking.booking_total_amount}
+                    ₱{Number(selectedBooking.booking_total_amount).toFixed(2)}
                   </span>
                 </div>
               </div>
