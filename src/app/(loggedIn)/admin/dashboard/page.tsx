@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FaStore,
@@ -10,7 +10,11 @@ import {
   FaUsers,
   FaArrowRight,
   FaFileAlt,
+  FaTimes,
+  FaDownload,
 } from "react-icons/fa";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import styles from "./page.module.css";
 import { ROUTES } from "@/config/routes";
@@ -78,6 +82,7 @@ const loadSavedFilters = (): SavedFilters => {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const reportRef = useRef<HTMLDivElement>(null);
 
   // --- HEADER ---
   const [adminName, setAdminName] = useState("Admin");
@@ -108,6 +113,10 @@ export default function AdminDashboardPage() {
 
   const [tableData, setTableData] = useState<(ProviderRow | UserRow)[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // --- REPORT MODAL / PDF EXPORT ---
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   useEffect(() => {
     fetchAdminProfile();
@@ -377,7 +386,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleGenerateReport = () => {
-    // for repiort generation
+    setShowReportModal(true);
   };
 
   const handleCardClick = (filter: FilterType) => {
@@ -410,6 +419,82 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // --- PDF GENERATION ---
+  const generatePDF = async () => {
+    if (!reportRef.current) return;
+
+    setIsGeneratingPDF(true);
+
+    try {
+      // Create a clone of the report content to manipulate for PDF
+      const reportContent = reportRef.current;
+      const clone = reportContent.cloneNode(true) as HTMLDivElement;
+
+      // Apply PDF-specific styling
+      clone.style.width = "210mm"; // A4 width
+      clone.style.padding = "20px";
+      clone.style.backgroundColor = "white";
+      clone.style.position = "absolute";
+      clone.style.left = "-9999px";
+      clone.style.top = "0";
+
+      document.body.appendChild(clone);
+
+      // Generate from the cloned element
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      // Remove clone
+      document.body.removeChild(clone);
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 w in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Create PDF
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgData = canvas.toDataURL("image/png");
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= 297; // A4 size
+
+      // Add more page
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= 297;
+      }
+
+      // Generate filename with current date
+      const dateStr = new Date()
+        .toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+        .replace(/\//g, "-");
+
+      const filename = `Admin_Dashboard_Report_${dateStr}.pdf`;
+
+      // Save the PDF
+      pdf.save(filename);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   return (
     <div className={styles["admin-dashboard-page"]}>
       <main className={styles["admin-dashboard-wrapper"]}>
@@ -431,7 +516,6 @@ export default function AdminDashboardPage() {
           <button
             className={styles["generate-report-btn"]}
             onClick={handleGenerateReport}
-            disabled
           >
             <FaFileAlt size={16} />
             <span>Generate Admin Report</span>
@@ -695,6 +779,236 @@ export default function AdminDashboardPage() {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* --- ADMIN REPORT MODAL --- */}
+        {showReportModal && (
+          <div
+            className={styles["report-modal-overlay"]}
+            onClick={() => setShowReportModal(false)}
+          >
+            <div
+              className={styles["report-modal-content"]}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className={styles["report-modal-header"]}>
+                <div className={styles["report-header-title"]}>
+                  <FaFileAlt size={20} />
+                  <h2>Admin Dashboard Report</h2>
+                </div>
+                <button
+                  className={styles["modal-close-btn"]}
+                  onClick={() => setShowReportModal(false)}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className={styles["report-modal-body"]} ref={reportRef}>
+                {/* Report Header Info */}
+                <div className={styles["report-info-section"]}>
+                  <div className={styles["report-info-row"]}>
+                    <span className={styles["report-label"]}>Report Generated:</span>
+                    <span className={styles["report-value"]}>
+                      {new Date().toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  {(dateRange.start || dateRange.end) && (
+                    <div className={styles["report-info-row"]}>
+                      <span className={styles["report-label"]}>Date Filter Applied:</span>
+                      <span className={styles["report-value"]}>
+                        {dateRange.start && dateRange.end
+                          ? `${new Date(dateRange.start).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "2-digit",
+                              year: "numeric",
+                            })} - ${new Date(dateRange.end).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "2-digit",
+                              year: "numeric",
+                            })}`
+                          : dateRange.start
+                          ? `From ${new Date(dateRange.start).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "2-digit",
+                              year: "numeric",
+                            })}`
+                          : `Until ${new Date(dateRange.end).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "2-digit",
+                              year: "numeric",
+                            })}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exec Summary */}
+                <div className={styles["report-section"]}>
+                  <h3 className={styles["report-section-title"]}>Executive Summary</h3>
+                  <div className={styles["report-kpi-grid"]}>
+                    <div className={styles["report-kpi-item"]}>
+                      <span className={styles["report-kpi-label"]}>Pending Approvals</span>
+                      <span className={styles["report-kpi-value"]}>{pendingCount}</span>
+                      <span className={styles["report-kpi-description"]}>
+                        Complete applications awaiting review
+                      </span>
+                    </div>
+                    <div className={styles["report-kpi-item"]}>
+                      <span className={styles["report-kpi-label"]}>Active Listings</span>
+                      <span className={styles["report-kpi-value"]}>{activeCount}</span>
+                      <span className={styles["report-kpi-description"]}>
+                        Approved service providers
+                      </span>
+                    </div>
+                    <div className={styles["report-kpi-item"]}>
+                      <span className={styles["report-kpi-label"]}>Rejected Listings</span>
+                      <span className={styles["report-kpi-value"]}>{rejectedCount}</span>
+                      <span className={styles["report-kpi-description"]}>
+                        Applications not approved
+                      </span>
+                    </div>
+                    <div className={styles["report-kpi-item"]}>
+                      <span className={styles["report-kpi-label"]}>Total Users</span>
+                      <span className={styles["report-kpi-value"]}>{totalUsers}</span>
+                      <span className={styles["report-kpi-description"]}>
+                        Registered platform users
+                      </span>
+                    </div>
+                    <div className={styles["report-kpi-item"]}>
+                      <span className={styles["report-kpi-label"]}>Avg Approval Time</span>
+                      <span className={styles["report-kpi-value"]}>{avgApprovalTime}</span>
+                      <span className={styles["report-kpi-description"]}>
+                        Time to approve applications
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Platform Insights */}
+                <div className={styles["report-section"]}>
+                  <h3 className={styles["report-section-title"]}>Platform Insights</h3>
+                  <div className={styles["report-insights"]}>
+                    <div className={styles["insight-item"]}>
+                      <strong>Application Status:</strong>
+                      <p>
+                        {pendingCount > 0
+                          ? `There are currently ${pendingCount} complete application${
+                              pendingCount !== 1 ? "s" : ""
+                            } pending review. ${
+                              pendingCount >= 5
+                                ? "Consider prioritizing these reviews to maintain platform quality."
+                                : ""
+                            }`
+                          : "All applications have been reviewed. Great work staying on top of approvals!"}
+                      </p>
+                    </div>
+
+                    <div className={styles["insight-item"]}>
+                      <strong>Service Provider Network:</strong>
+                      <p>
+                        The platform has {activeCount} active service provider
+                        {activeCount !== 1 ? "s" : ""} available to pet owners.
+                        {rejectedCount > 0 &&
+                          ` ${rejectedCount} application${
+                            rejectedCount !== 1 ? "s have" : " has"
+                          } been rejected.`}
+                      </p>
+                    </div>
+
+                    <div className={styles["insight-item"]}>
+                      <strong>User Base:</strong>
+                      <p>
+                        Total registered users: {totalUsers}. This includes both pet owners
+                        and service providers who are actively using the platform.
+                      </p>
+                    </div>
+
+                    <div className={styles["insight-item"]}>
+                      <strong>Approval Efficiency:</strong>
+                      <p>
+                        {avgApprovalTime === "-"
+                          ? "No approval data available yet. Start reviewing applications to track approval times."
+                          : `Applications are being approved in an average of ${avgApprovalTime}. ${
+                              avgApprovalTime.includes("< 1")
+                                ? "Excellent response time!"
+                                : "Consider streamlining the approval process if possible."
+                            }`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Items */}
+                <div className={styles["report-section"]}>
+                  <h3 className={styles["report-section-title"]}>Recommended Actions</h3>
+                  <div className={styles["action-items-list"]}>
+                    {pendingCount > 0 && (
+                      <div className={styles["action-item"]}>
+                        <span className={`${styles["action-priority"]} ${styles["pending"]}`}>
+                          Pending
+                        </span>
+                        <span className={styles["action-text"]}>
+                          Review {pendingCount} pending application{pendingCount !== 1 ? "s" : ""}{" "}
+                          to maintain quality standards
+                        </span>
+                      </div>
+                    )}
+                    {pendingCount === 0 && (
+                      <div className={styles["action-item"]}>
+                        <span className={`${styles["action-priority"]} ${styles["completed"]}`}>
+                          Completed
+                        </span>
+                        <span className={styles["action-text"]}>
+                          All applications reviewed - No pending items
+                        </span>
+                      </div>
+                    )}
+                    {activeCount < 10 && (
+                      <div className={styles["action-item"]}>
+                        <span className={`${styles["action-priority"]} ${styles["info"]}`}>
+                          Info
+                        </span>
+                        <span className={styles["action-text"]}>
+                          Consider marketing initiatives to attract more service providers
+                        </span>
+                      </div>
+                    )}
+                    {rejectedCount > activeCount && (
+                      <div className={styles["action-item"]}>
+                        <span className={`${styles["action-priority"]} ${styles["warning"]}`}>
+                          Alert
+                        </span>
+                        <span className={styles["action-text"]}>
+                          High rejection rate detected - Review approval criteria
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className={styles["report-modal-footer"]}>
+                <button
+                  className={styles["btn-download-pdf"]}
+                  onClick={generatePDF}
+                  disabled={isGeneratingPDF}
+                >
+                  <FaDownload size={14} />
+                  <span>{isGeneratingPDF ? "Generating PDF..." : "Download as PDF"}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
