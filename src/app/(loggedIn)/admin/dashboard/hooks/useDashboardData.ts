@@ -213,7 +213,7 @@ export const useDashboardData = () => {
         .neq("role", "admin");
 
       if (userRoleFilter === "both") {
-        query = query.in("role", ["pet_owner", "service_provider"]);
+        query = query.eq("role", "both_sp_po");
       } else if (userRoleFilter !== "all") {
         query = query.eq("role", userRoleFilter);
       }
