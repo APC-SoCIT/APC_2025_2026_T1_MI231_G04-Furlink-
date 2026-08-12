@@ -367,7 +367,11 @@ export default function ManagePetPage() {
                   <label className="form-label">Type *</label>
                   <select
                     value={petType}
-                    onChange={(e) => setPetType(e.target.value as "dog" | "cat")}
+                    onChange={(e) => {
+                      const newType = e.target.value as "dog" | "cat";
+                      setPetType(newType);
+                      setPetBreed("");
+                    }}
                     className="form-input"
                   >
                     <option value="dog">Dog</option>
@@ -391,21 +395,22 @@ export default function ManagePetPage() {
               <div className="form-grid-two">
                 <div className="form-group">
                   <label className="form-label">Breed *</label>
-                  <select
+                  <input
+                    type="text"
                     required
+                    list="edit-breed-options"
                     value={petBreed}
                     onChange={(e) => setPetBreed(e.target.value)}
                     className="form-input"
+                    placeholder={loadingBreeds ? "Loading breeds..." : `Type or select ${petType} breed...`}
                     disabled={loadingBreeds}
-                  >
-                    <option value="">
-                      {loadingBreeds ? "Loading breeds..." : `-- Select breed --`}
-                    </option>
+                  />
+                  <datalist id="edit-breed-options">
                     {breeds.map((b) => (
-                      <option key={b} value={b}>{b}</option>
+                      <option key={b} value={b} />
                     ))}
-                    <option value="Mixed Breed / Other">Mixed Breed / Other</option>
-                  </select>
+                    <option value="Mixed Breed / Other" />
+                  </datalist>
                 </div>
 
                 <div className="form-group">
