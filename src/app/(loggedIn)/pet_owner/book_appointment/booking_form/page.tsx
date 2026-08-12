@@ -725,6 +725,7 @@ function BookingFormContent() {
         {petForms.map((pet, index) => {
           const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
           const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
+          const breedListId = `booking-breed-options-${pet.id}`;
 
           return (
             <div key={pet.id} className="pet-form-card">
@@ -874,20 +875,21 @@ function BookingFormContent() {
                 <div className="form-grid-two">
                   <div className="form-group">
                     <label className="field-label">Breed *</label>
-                    <select
+                    <input
+                      type="text"
                       className="form-control"
+                      list={breedListId}
                       value={pet.breed}
                       onChange={(e) => updatePetField(pet.id, 'breed', e.target.value)}
+                      placeholder={loadingBreeds ? 'Loading breeds...' : `Type or select ${pet.petType.toLowerCase()} breed...`}
                       disabled={loadingBreeds}
-                    >
-                      <option value="">
-                        {loadingBreeds ? 'Loading breeds...' : '-- Select Breed --'}
-                      </option>
+                    />
+                    <datalist id={breedListId}>
                       {currentBreedList.map((b) => (
-                        <option key={b} value={b}>{b}</option>
+                        <option key={b} value={b} />
                       ))}
-                      <option value="Mixed Breed / Other">Mixed Breed / Other</option>
-                    </select>
+                      <option value="Mixed Breed / Other" />
+                    </datalist>
                   </div>
 
                   <div className="form-group">
