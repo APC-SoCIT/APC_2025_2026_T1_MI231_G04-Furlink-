@@ -66,7 +66,7 @@ export default function ManageBookingsPage() {
       case 'awaiting_approval':
         return ['pending_sp_response', 'pending', 'awaiting_approval'];
       case 'for_payment':
-        return ['approved_pending_payment', 'for_payment', 'unpaid'];
+        return ['to pay', 'approved_pending_payment', 'for_payment', 'unpaid'];
       case 'upcoming':
         return ['confirmed', 'paid', 'upcoming', 'in_progress'];
       case 'to_rate':
@@ -152,7 +152,6 @@ export default function ManageBookingsPage() {
     }
   };
 
-  // Standardize 24-hour SQL strings ("09:00:00") and 12-hour strings ("9:00 AM")
   const formatTimeDisplay = (timeStr: string) => {
     if (!timeStr) return '';
 
@@ -268,7 +267,6 @@ export default function ManageBookingsPage() {
               {bookings.map((item) => {
                 const petsCount = item.booking_pet_info?.length || 0;
 
-                // Collect unique service names across all pets
                 const allServiceNames = Array.from(
                   new Set(
                     item.booking_pet_info?.flatMap(
@@ -334,7 +332,6 @@ export default function ManageBookingsPage() {
             </div>
 
             <div className="summary-modal-body">
-              {/* Schedule Header Banner */}
               <div className="details-schedule-banner">
                 <FaCalendarAlt className="schedule-banner-icon" />
                 <div>
@@ -371,7 +368,6 @@ export default function ManageBookingsPage() {
                       <div>Size: <strong>{pet.booking_calculated_size?.toUpperCase()}</strong></div>
                     </div>
 
-                    {/* Availed Services */}
                     <div className="summary-services-box">
                       <div className="availed-title">AVAILED SERVICES:</div>
                       {pet.booking_service_info && pet.booking_service_info.length > 0 ? (
@@ -389,14 +385,12 @@ export default function ManageBookingsPage() {
                       )}
                     </div>
 
-                    {/* Grooming Notes */}
                     {pet.booking_grooming_notes && (
                       <div className="summary-grooming-notes">
                         <strong>Grooming Notes:</strong> {pet.booking_grooming_notes}
                       </div>
                     )}
 
-                    {/* Behaviors */}
                     <div className="summary-behaviors">
                       Behaviors:{' '}
                       {pet.booking_behavior && pet.booking_behavior.length > 0
@@ -404,7 +398,6 @@ export default function ManageBookingsPage() {
                         : 'None specified'}
                     </div>
 
-                    {/* Emergency Consent Status */}
                     <div
                       className={`summary-consent-badge ${
                         pet.booking_emergency_consent ? 'approved' : 'declined'
@@ -422,7 +415,6 @@ export default function ManageBookingsPage() {
 
               <hr className="summary-divider" />
 
-              {/* Total Financials Display */}
               <div className="summary-financials">
                 <div className="financial-row total-row">
                   <span>Total Amount (VAT Inclusive):</span>

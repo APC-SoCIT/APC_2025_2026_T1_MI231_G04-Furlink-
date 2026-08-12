@@ -19,6 +19,9 @@ import {
   FaMinus,
   FaChevronDown,
   FaCheckCircle,
+  FaCreditCard,
+  FaTimesCircle,
+  FaClock,
 } from 'react-icons/fa';
 import './booking_form.css';
 
@@ -112,16 +115,23 @@ function BookingFormContent() {
   const dateStr = searchParams.get('date') || '2026-08-20';
   const timeSlot = searchParams.get('time') || '9:00 AM';
   const queryPetsCount = parseInt(searchParams.get('pets') || '1', 10);
+  const statusParam = searchParams.get('status');
 
   const [slotCapacity, setSlotCapacity] = useState<number>(queryPetsCount || 1);
   const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
   const [userRegisteredPets, setUserRegisteredPets] = useState<RegisteredPet[]>([]);
 
+  // Track created booking ID for status updates
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+
   // Modal controls
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [showFailedModal, setShowFailedModal] = useState<boolean>(false);
+  const [showPayLaterSuccessModal, setShowPayLaterSuccessModal] = useState<boolean>(false);
   const [showPaymentBreakdown, setShowPaymentBreakdown] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
 
   // Services and Service Weight Options
   const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
@@ -132,6 +142,17 @@ function BookingFormContent() {
   const [dogBreeds, setDogBreeds] = useState<string[]>([]);
   const [catBreeds, setCatBreeds] = useState<string[]>([]);
   const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
+
+  // Automatically detect redirect status from PayMongo
+  useEffect(() => {
+    if (statusParam === 'success') {
+      setShowSuccessModal(true);
+      setShowSummaryModal(false);
+    } else if (statusParam === 'failed' || statusParam === 'cancelled') {
+      setShowFailedModal(true);
+      setShowSummaryModal(false);
+    }
+  }, [statusParam]);
 
   const formattedDateDisplay = useMemo(() => {
     try {
@@ -533,7 +554,6 @@ function BookingFormContent() {
     }, 0);
   }, [petForms]);
 
-  // File Upload Helper to Supabase Storage
   const uploadFileToBucket = async (file: File, path: string): Promise<string | null> => {
     const { data, error } = await supabase.storage.from('pet_documents').upload(path, file);
     if (error) {
@@ -544,149 +564,200 @@ function BookingFormContent() {
     return publicData.publicUrl;
   };
 
-  // Main Handle Confirm Booking & DB Insertion Function
-  const handleConfirmBooking = async () => {
-    setIsSubmitting(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert('User authentication failed. Please log in again.');
-        setIsSubmitting(false);
-        return;
+  // Process Booking Database Records
+  const createBookingInDatabase = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User authentication failed. Please log in again.');
+    }
+
+    if (activeBookingId) {
+      return { bookingInfoId: activeBookingId, userId: user.id };
+    }
+
+    const { data: bookingData, error: bookingErr } = await supabase
+      .from('booking_info')
+      .insert({
+        profiles_id: user.id,
+        sp_id: spId,
+        booking_date: dateStr,
+        booking_timeslot: timeSlot,
+        booking_status: 'pending_sp_response',
+        booking_total_amount: grandTotal,
+      })
+      .select()
+      .single();
+
+    if (bookingErr || !bookingData) {
+      throw new Error(bookingErr?.message || 'Failed to create booking.');
+    }
+
+    const bookingInfoId = bookingData.id;
+    setActiveBookingId(bookingInfoId);
+
+    for (const pet of petForms) {
+      let finalVaccineUrl = pet.vaccineUrl || '';
+      let finalIllnessUrl = pet.illnessUrl || null;
+      let regPetId = pet.selectedRegisteredPetId;
+
+      if (pet.vaccineFile) {
+        const filePath = `${user.id}/${Date.now()}_vaccine_${pet.vaccineFile.name}`;
+        const uploadedUrl = await uploadFileToBucket(pet.vaccineFile, filePath);
+        if (uploadedUrl) finalVaccineUrl = uploadedUrl;
       }
 
-      // 1. Insert into booking_info
-      const { data: bookingData, error: bookingErr } = await supabase
-        .from('booking_info')
-        .insert({
-          profiles_id: user.id,
-          sp_id: spId,
-          booking_date: dateStr,
-          booking_timeslot: timeSlot,
-          booking_status: 'pending_sp_response',
-          booking_total_amount: grandTotal,
-        })
-        .select()
-        .single();
-
-      if (bookingErr || !bookingData) {
-        throw new Error(bookingErr?.message || 'Failed to create booking.');
+      if (pet.illnessFile) {
+        const filePath = `${user.id}/${Date.now()}_illness_${pet.illnessFile.name}`;
+        const uploadedUrl = await uploadFileToBucket(pet.illnessFile, filePath);
+        if (uploadedUrl) finalIllnessUrl = uploadedUrl;
       }
 
-      const bookingInfoId = bookingData.id;
-
-      // 2. Process and insert each pet
-      for (const pet of petForms) {
-        let finalVaccineUrl = pet.vaccineUrl || '';
-        let finalIllnessUrl = pet.illnessUrl || null;
-        let regPetId = pet.selectedRegisteredPetId;
-
-        // If a new vaccine file was uploaded
-        if (pet.vaccineFile) {
-          const filePath = `${user.id}/${Date.now()}_vaccine_${pet.vaccineFile.name}`;
-          const uploadedUrl = await uploadFileToBucket(pet.vaccineFile, filePath);
-          if (uploadedUrl) finalVaccineUrl = uploadedUrl;
-        }
-
-        // If a new illness file was uploaded
-        if (pet.illnessFile) {
-          const filePath = `${user.id}/${Date.now()}_illness_${pet.illnessFile.name}`;
-          const uploadedUrl = await uploadFileToBucket(pet.illnessFile, filePath);
-          if (uploadedUrl) finalIllnessUrl = uploadedUrl;
-        }
-
-        // If user didn't pick a registered pet, auto-register the pet record first to satisfy foreign key constraint
-        if (!regPetId) {
-          const { data: newRegPet, error: regErr } = await supabase
-            .from('po_registered_pet')
-            .insert({
-              profiles_id: user.id,
-              pet_name: pet.petName,
-              pet_type: pet.petType.toLowerCase(),
-              pet_breed: pet.breed,
-              pet_gender: pet.gender.toLowerCase(),
-              pet_date_of_birth: pet.dob,
-              pet_weight: parseFloat(pet.weight),
-              pet_behaviors: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
-              pet_vaccine_url: finalVaccineUrl,
-              pet_illness_proof_url: finalIllnessUrl,
-              pet_grooming_notes: pet.groomingSpecs || null,
-              pet_emergency_consent: pet.emergencyConsent,
-            })
-            .select()
-            .single();
-
-          if (regErr || !newRegPet) {
-            throw new Error(regErr?.message || 'Failed to register pet context.');
-          }
-          regPetId = newRegPet.id;
-        }
-
-        // Normalize DB constraints for calculated size
-        let normalizedSize = pet.calculatedSize.toLowerCase().replace(/\s+/g, '_');
-        const allowedSizes = ['all', 'extra_small', 'small', 'medium', 'large', 'extra_large', 'cat'];
-        if (!allowedSizes.includes(normalizedSize)) {
-          normalizedSize = pet.petType.toLowerCase() === 'cat' ? 'cat' : 'medium';
-        }
-
-        // Insert into booking_pet_info
-        const { data: petInfoData, error: petInfoErr } = await supabase
-          .from('booking_pet_info')
+      if (!regPetId) {
+        const { data: newRegPet, error: regErr } = await supabase
+          .from('po_registered_pet')
           .insert({
-            booking_info_id: bookingInfoId,
-            registered_pet_id: regPetId,
-            booking_pet_name: pet.petName,
-            booking_pet_type: pet.petType.toLowerCase(),
-            booking_breed: pet.breed,
-            booking_gender: pet.gender.toLowerCase(),
-            booking_date_of_birth: pet.dob,
-            booking_weight: parseFloat(pet.weight),
-            booking_behavior: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
-            booking_vaccine_url: finalVaccineUrl,
-            booking_illness_proof_url: finalIllnessUrl,
-            booking_grooming_notes: pet.groomingSpecs || null,
-            booking_emergency_consent: pet.emergencyConsent,
-            booking_calculated_size: normalizedSize,
+            profiles_id: user.id,
+            pet_name: pet.petName,
+            pet_type: pet.petType.toLowerCase(),
+            pet_breed: pet.breed,
+            pet_gender: pet.gender.toLowerCase(),
+            pet_date_of_birth: pet.dob,
+            pet_weight: parseFloat(pet.weight),
+            pet_behaviors: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
+            pet_vaccine_url: finalVaccineUrl,
+            pet_illness_proof_url: finalIllnessUrl,
+            pet_grooming_notes: pet.groomingSpecs || null,
+            pet_emergency_consent: pet.emergencyConsent,
           })
           .select()
           .single();
 
-        if (petInfoErr || !petInfoData) {
-          throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
+        if (regErr || !newRegPet) {
+          throw new Error(regErr?.message || 'Failed to register pet context.');
         }
-
-        const bookingPetInfoId = petInfoData.id;
-
-        // 3. Insert into booking_service_info
-        for (const svcItem of pet.selectedServices) {
-          if (!svcItem.matchedOptionId) continue;
-
-          const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
-
-          const { error: svcInsertErr } = await supabase
-            .from('booking_service_info')
-            .insert({
-              booking_pet_info_id: bookingPetInfoId,
-              booking_services_id: svcItem.matchedOptionId,
-              booking_service_name: matchedSvcObj ? matchedSvcObj.service_name : 'Service',
-              booking_service_type: matchedSvcObj?.service_type || 'individual_service',
-              booking_price: svcItem.price,
-            });
-
-          if (svcInsertErr) {
-            throw new Error(svcInsertErr.message);
-          }
-        }
+        regPetId = newRegPet.id;
       }
 
+      let normalizedSize = pet.calculatedSize.toLowerCase().replace(/\s+/g, '_');
+      const allowedSizes = ['all', 'extra_small', 'small', 'medium', 'large', 'extra_large', 'cat'];
+      if (!allowedSizes.includes(normalizedSize)) {
+        normalizedSize = pet.petType.toLowerCase() === 'cat' ? 'cat' : 'medium';
+      }
+
+      const { data: petInfoData, error: petInfoErr } = await supabase
+        .from('booking_pet_info')
+        .insert({
+          booking_info_id: bookingInfoId,
+          registered_pet_id: regPetId,
+          booking_pet_name: pet.petName,
+          booking_pet_type: pet.petType.toLowerCase(),
+          booking_breed: pet.breed,
+          booking_gender: pet.gender.toLowerCase(),
+          booking_date_of_birth: pet.dob,
+          booking_weight: parseFloat(pet.weight),
+          booking_behavior: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
+          booking_vaccine_url: finalVaccineUrl,
+          booking_illness_proof_url: finalIllnessUrl,
+          booking_grooming_notes: pet.groomingSpecs || null,
+          booking_emergency_consent: pet.emergencyConsent,
+          booking_calculated_size: normalizedSize,
+        })
+        .select()
+        .single();
+
+      if (petInfoErr || !petInfoData) {
+        throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
+      }
+
+      const bookingPetInfoId = petInfoData.id;
+
+      for (const svcItem of pet.selectedServices) {
+        if (!svcItem.matchedOptionId) continue;
+
+        const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
+
+        const { error: svcInsertErr } = await supabase
+          .from('booking_service_info')
+          .insert({
+            booking_pet_info_id: bookingPetInfoId,
+            booking_services_id: svcItem.matchedOptionId,
+            booking_service_name: matchedSvcObj ? matchedSvcObj.service_name : 'Service',
+            booking_service_type: matchedSvcObj?.service_type || 'individual_service',
+            booking_price: svcItem.price,
+          });
+
+        if (svcInsertErr) {
+          throw new Error(svcInsertErr.message);
+        }
+      }
+    }
+
+    return { bookingInfoId, userId: user.id };
+  };
+
+  // Launch PayMongo Session
+  const handleConfirmBooking = async () => {
+    setIsSubmitting(true);
+    try {
+      const { bookingInfoId } = await createBookingInDatabase();
+
+      const response = await fetch('/api/paymongo/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: grandTotal,
+          description: `Pet Grooming Session on ${formattedDateDisplay}`,
+          bookingId: bookingInfoId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.checkoutUrl) {
+        throw new Error(result.error || 'Failed to initialize payment.');
+      }
+
+      window.open(result.checkoutUrl, '_blank');
+      
       setShowSummaryModal(false);
-      setShowSuccessModal(true);
+      setIsSubmitting(false);
+      setShowFailedModal(true);
+
     } catch (err: any) {
-      console.error('Booking confirmation failed:', err);
-      alert(`Booking Error: ${err.message || 'An error occurred while saving your booking.'}`);
-    } finally {
+      console.error('Booking processing error:', err);
+      alert(`Booking Error: ${err.message || 'An error occurred while initiating payment.'}`);
       setIsSubmitting(false);
     }
+  };
+
+  // Handle Pay Later action
+  const handlePayLater = async () => {
+    setIsSavingPayLater(true);
+    try {
+      const { bookingInfoId } = await createBookingInDatabase();
+
+      const { error: updateErr } = await supabase
+        .from('booking_info')
+        .update({ booking_status: 'to pay' })
+        .eq('id', bookingInfoId);
+
+      if (updateErr) {
+        throw new Error(updateErr.message);
+      }
+
+      setShowFailedModal(false);
+      setShowPayLaterSuccessModal(true);
+    } catch (err: any) {
+      console.error('Pay Later Save Error:', err);
+      alert(`Error saving booking for later: ${err.message}`);
+    } finally {
+      setIsSavingPayLater(false);
+    }
+  };
+
+  const handleConfirmPayLaterRedirect = () => {
+    setShowPayLaterSuccessModal(false);
+    router.push('/pet_owner/manage_bookings');
   };
 
   const handleReturnHome = () => {
@@ -703,7 +774,7 @@ function BookingFormContent() {
           <h1 className="form-main-title">Pet Information</h1>
         </div>
 
-        {/* Date & Pricing Bar */}
+        {/* Date & Pricing Summary Bar */}
         <div className="info-summary-card">
           <div className="summary-left">
             <div className="summary-date flex-item">
@@ -725,7 +796,6 @@ function BookingFormContent() {
         {petForms.map((pet, index) => {
           const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
           const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
-          const breedListId = `booking-breed-options-${pet.id}`;
 
           return (
             <div key={pet.id} className="pet-form-card">
@@ -875,21 +945,20 @@ function BookingFormContent() {
                 <div className="form-grid-two">
                   <div className="form-group">
                     <label className="field-label">Breed *</label>
-                    <input
-                      type="text"
+                    <select
                       className="form-control"
-                      list={breedListId}
                       value={pet.breed}
                       onChange={(e) => updatePetField(pet.id, 'breed', e.target.value)}
-                      placeholder={loadingBreeds ? 'Loading breeds...' : `Type or select ${pet.petType.toLowerCase()} breed...`}
                       disabled={loadingBreeds}
-                    />
-                    <datalist id={breedListId}>
+                    >
+                      <option value="">
+                        {loadingBreeds ? 'Loading breeds...' : '-- Select Breed --'}
+                      </option>
                       {currentBreedList.map((b) => (
-                        <option key={b} value={b} />
+                        <option key={b} value={b}>{b}</option>
                       ))}
-                      <option value="Mixed Breed / Other" />
-                    </datalist>
+                      <option value="Mixed Breed / Other">Mixed Breed / Other</option>
+                    </select>
                   </div>
 
                   <div className="form-group">
@@ -929,7 +998,7 @@ function BookingFormContent() {
                   </div>
                 </div>
 
-                {/* Automatically Calculated Size Badge */}
+                {/* Calculated Size Badge */}
                 <div className="calc-size-box">
                   Calculated Size: <strong>{pet.calculatedSize.toUpperCase()}</strong>
                 </div>
@@ -1131,7 +1200,6 @@ function BookingFormContent() {
                       <div>Size: <strong>{pet.calculatedSize.toUpperCase()}</strong></div>
                     </div>
 
-                    {/* Availed Services */}
                     <div className="summary-services-box">
                       <div className="availed-title">AVAILED SERVICES:</div>
                       {pet.selectedServices.map((sItem, sIndex) => {
@@ -1145,12 +1213,10 @@ function BookingFormContent() {
                       })}
                     </div>
 
-                    {/* Behaviors */}
                     <div className="summary-behaviors">
                       Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
                     </div>
 
-                    {/* Emergency Consent Status */}
                     <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
                       <FaExclamationCircle />
                       <span>
@@ -1163,7 +1229,19 @@ function BookingFormContent() {
 
               <hr className="summary-divider" />
 
-              {/* Total Financials Display */}
+              <div className="paymongo-supported-methods">
+                <div className="payment-notice-header">
+                  <FaCreditCard className="pay-icon" />
+                  <span>Secure Online Payment via PayMongo</span>
+                </div>
+                <div className="payment-badges-list">
+                  <span className="pay-badge gcash">GCash</span>
+                  <span className="pay-badge maya">Maya</span>
+                  <span className="pay-badge card">Cards</span>
+                  <span className="pay-badge qrph">QR Ph</span>
+                </div>
+              </div>
+
               <div className="summary-financials">
                 <div className="financial-row total-row">
                   <span>Total Service Amount (VAT Inclusive):</span>
@@ -1187,8 +1265,8 @@ function BookingFormContent() {
                           <span>₱{p.selectedServices.reduce((a, b) => a + b.price, 0).toFixed(2)}</span>
                         </div>
                       ))}
-                      <hr style={{ border: '0.5px dashed #cbd5e1', margin: '4px 0' }} />
-                      <div className="breakdown-item" style={{ fontWeight: 'bold' }}>
+                      <hr className="breakdown-dashed-hr" />
+                      <div className="breakdown-item bold-item">
                         <span>Grand Total:</span>
                         <span>₱{grandTotal.toFixed(2)}</span>
                       </div>
@@ -1211,26 +1289,82 @@ function BookingFormContent() {
                 onClick={handleConfirmBooking}
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Processing...' : 'Confirm Booking'}
+                {isSubmitting ? 'Opening Gateway...' : 'Pay with PayMongo'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 2. BOOKING REQUESTED SUCCESS MODAL */}
+      {/* 2. PAYMENT COMPLETED SUCCESS MODAL */}
       {showSuccessModal && (
         <div className="modal-backdrop">
           <div className="success-modal-card">
             <div className="success-icon-wrapper">
               <FaCheckCircle className="success-green-check" />
             </div>
-            <h2 className="success-title">Booking Requested!</h2>
+            <h2 className="success-title">Payment Completed!</h2>
             <p className="success-message">
-              Your appointment request has been submitted. Please wait for the provider to confirm your slot.
+              Your payment has been successfully processed and your booking request is submitted. Please wait for the provider to confirm your slot.
             </p>
             <button className="btn-return-home" onClick={handleReturnHome}>
               Return to Home
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. PAYMENT FAILED / INCOMPLETE MODAL */}
+      {showFailedModal && !showSuccessModal && (
+        <div className="modal-backdrop">
+          <div className="success-modal-card">
+            <div className="failed-icon-wrapper">
+              <FaTimesCircle className="failed-red-cross" />
+            </div>
+            <h2 className="failed-title">Payment Incomplete or Cancelled</h2>
+            <p className="success-message">
+              Your payment transaction was not completed. You can try paying again or save your booking to pay later from your dashboard.
+            </p>
+            <div className="failed-modal-actions">
+              <button
+                className="btn-try-again"
+                disabled={isSavingPayLater}
+                onClick={() => {
+                  setShowFailedModal(false);
+                  setShowSummaryModal(true);
+                }}
+              >
+                Try Again
+              </button>
+              <button
+                className="btn-pay-later"
+                disabled={isSavingPayLater}
+                onClick={handlePayLater}
+              >
+                <FaClock />
+                {isSavingPayLater ? 'Saving...' : 'Pay Later'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. PAY LATER SUCCESS CONFIRMATION MODAL */}
+      {showPayLaterSuccessModal && (
+        <div className="modal-backdrop">
+          <div className="success-modal-card">
+            <div className="success-icon-wrapper">
+              <FaCheckCircle className="success-green-check" />
+            </div>
+            <h2 className="success-title">Booking Saved!</h2>
+            <p className="success-message">
+              Your booking status has been updated to <strong>"To Pay"</strong>. You can view and manage your booking anytime from your appointments dashboard.
+            </p>
+            <button 
+              className="btn-return-home" 
+              onClick={handleConfirmPayLaterRedirect}
+            >
+              Go to Manage Bookings
             </button>
           </div>
         </div>
