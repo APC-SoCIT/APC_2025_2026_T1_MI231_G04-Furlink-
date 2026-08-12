@@ -7,7 +7,7 @@ export const validateForgotPasswordIdentifier = (identifier: string) => {
 
 export const validateForgotPasswordOtp = (otp: string) => {
   if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
-    return "Please enter a valid 6-digit OTP code.";
+    return "Invalid token. Please check the code or try again.";
   }
   return null;
 };

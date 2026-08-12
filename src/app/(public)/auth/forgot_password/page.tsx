@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ROUTES } from "@/config/routes";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
-import { 
-  validateForgotPasswordIdentifier, 
-  validateForgotPasswordOtp, 
-  validateNewPassword 
+import {
+  validateForgotPasswordIdentifier,
+  validateForgotPasswordOtp,
+  validateNewPassword
 } from "@/app/(public)/auth/validation/forgotPasswordValidation";
 import "@/app/(public)/auth/auth.css";
 
@@ -60,6 +60,7 @@ export default function ForgotPasswordPage() {
     if (prefilledIdentifier) {
       handleInitialIdentifierSubmit(null, prefilledIdentifier);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefilledIdentifier]);
 
   const checkRateLimit = (email: string, isResend = false) => {
@@ -124,19 +125,22 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      let currentEmail = targetIdentifier;
+      // Single lookup against auth.users only — resolves email (whether the
+      // person typed an email or a username) and whether it's confirmed,
+      // with no custom table or column involved.
+      const { data: accountData, error: rpcError } = await supabase
+        .rpc("resolve_account_for_password_reset", { identifier: targetIdentifier })
+        .maybeSingle();
 
-      if (!currentEmail.includes("@")) {
-        const { data: emailData, error: emailError } = await supabase
-          .rpc("get_email_for_username", { lookup_username: targetIdentifier });
-
-        if (emailError || !emailData) {
-          setError("Input is invalid or not registered. Please check or sign up.");
-          setLoading(false);
-          return;
-        }
-        currentEmail = emailData;
+      if (rpcError || !accountData || !accountData.is_confirmed) {
+        // Same generic message whether the account doesn't exist or exists
+        // but was never verified — avoids revealing which case it is.
+        setError("Account is unverified or not registered. Please check your credentials.");
+        setLoading(false);
+        return;
       }
+
+      const currentEmail = accountData.resolved_email;
 
       const rateCheck = checkRateLimit(currentEmail, true);
       if (!rateCheck.allowed) {
@@ -150,7 +154,7 @@ export default function ForgotPasswordPage() {
       });
 
       if (resetError) {
-        setError(resetError.message);
+        setError("Account is unverified or not registered.");
         setLoading(false);
         return;
       }
@@ -159,7 +163,7 @@ export default function ForgotPasswordPage() {
       setOtpTimer(OTP_VALIDITY_SECONDS);
       setStep("verify_otp");
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError("Account is unverified or not registered.");
     } finally {
       setLoading(false);
     }
@@ -169,7 +173,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     const validationError = validateForgotPasswordOtp(otpToken);
     if (validationError || otpTimer <= 0) {
-      setError(validationError || "Code has expired.");
+      setError("Invalid token. Please check the code or try again.");
       return;
     }
 
@@ -183,21 +187,15 @@ export default function ForgotPasswordPage() {
         type: "recovery",
       });
 
-      if (error) {
-        setError("Invalid or expired token. Please check the code or try again.");
-        setLoading(false);
-        return;
-      }
-
-      if (!data.session) {
-        setError("Verification succeeded, but session establishment failed. Please try again.");
+      if (error || !data.session) {
+        setError("Invalid token. Please check the code or try again.");
         setLoading(false);
         return;
       }
 
       setStep("reset_password");
     } catch {
-      setError("Failed to verify code. Please check your connection.");
+      setError("Invalid token. Please check the code or try again.");
     } finally {
       setLoading(false);
     }
@@ -253,14 +251,10 @@ export default function ForgotPasswordPage() {
         return;
       }
 
+      // Role comes straight from user_metadata set at signup — no profiles
+      // table lookup needed, consistent with relying only on Supabase Auth.
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: userProfile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user?.id)
-        .maybeSingle();
-
-      const role = userProfile?.role || user?.user_metadata?.role || 'pet_owner';
+      const role = user?.user_metadata?.role || 'pet_owner';
 
       router.refresh();
       if (role === 'service_provider') {
@@ -314,7 +308,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleVerifyOtp} className="signup-card" noValidate>
           <h1>VERIFY YOUR ACCOUNT</h1>
           <p className="otp-instructions">
-            Your account is unverified. We have sent a verification code to <strong>{resolvedEmail || identifier}</strong>. Please enter it below.
+            We have sent a verification code to <strong>{resolvedEmail || identifier}</strong>. Please enter it below.
           </p>
           <p className="otp-spam-note">
             Didn&apos;t receive it? Check your spam or trash folder.
