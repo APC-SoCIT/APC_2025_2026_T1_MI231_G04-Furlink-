@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-// THIS is the exact helper that worked in your original code
+// Supabase client component helper for session management
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
@@ -11,19 +11,21 @@ import CalendarModal from './components/CalendarModal';
 import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
-  // Ensure the client component helper initializes your session cookies properly
   const supabase = createClientComponentClient();
   
+  // State management
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  // Fetch bookings on component mount
   useEffect(() => {
     fetchBookings();
   }, []);
 
+  // Fetch bookings from Supabase with nested pet and service data
   const fetchBookings = async () => {
     try {
       setLoading(true);
@@ -50,6 +52,7 @@ export default function ServiceProviderDashboardPage() {
     }
   };
 
+  // Update booking status and rejection reason (if applicable)
   const handleUpdateStatus = async (id: string, newStatus: BookingStatus, reason?: string) => {
     try {
       const updatePayload: any = { 
@@ -65,6 +68,7 @@ export default function ServiceProviderDashboardPage() {
 
       if (error) throw error;
 
+      // Update local state to reflect changes
       setBookings((prev) =>
         prev.map((b) => (b.id === id ? { ...b, ...updatePayload } : b))
       );
@@ -74,6 +78,7 @@ export default function ServiceProviderDashboardPage() {
     }
   };
 
+  // Tab configuration for filtering bookings by status
   const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: BookingStatus[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
     { label: 'Verify Payment', value: 'approved', filter: ['approved'] },
@@ -82,21 +87,27 @@ export default function ServiceProviderDashboardPage() {
     { label: 'Cancelled', value: 'cancelled', filter: ['rejected', 'cancelled'] },
   ];
 
+  // Calculate revenue metrics
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  
+  // Total revenue includes: approved, paid, to_rate, and rated bookings
+  // Note: 'approved' status is included now, will be refined during PayMongo integration
   const totalRevenue = bookings
-    .filter(b => ['paid', 'to_rate', 'rated'].includes(b.booking_status))
+    .filter(b => ['approved', 'paid', 'to_rate', 'rated'].includes(b.booking_status))
     .reduce((sum, b) => sum + Number(b.booking_total_amount || 0), 0);
 
+  // Get active tab configuration and filter bookings
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
   const filteredBookings = filterBookingsByStatus(bookings, activeTab);
 
+  // Show loading state
   if (loading) {
     return <div className={styles.container}>Loading Dashboard...</div>;
   }
 
   return (
     <div className={styles.container}>
-      {/* Header */}
+      {/* Header - Revenue Card & Action Buttons */}
       <div className={styles.headerRow}>
         <div className={styles.revenueCard}>
           <div>
@@ -119,7 +130,7 @@ export default function ServiceProviderDashboardPage() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Booking Status Tabs */}
       <div className={styles.tabsGrid}>
         <div
           onClick={() => setActiveTab('all')}
@@ -147,7 +158,7 @@ export default function ServiceProviderDashboardPage() {
         })}
       </div>
 
-      {/* Table */}
+      {/* Bookings Table */}
       <div className={styles.tableContainer}>
         <div className={styles.tableHeaderBar}>
           <h3 style={{ fontWeight: 'extrabold', textTransform: 'uppercase' }}>
@@ -206,7 +217,7 @@ export default function ServiceProviderDashboardPage() {
         </table>
       </div>
 
-      {/* Booking Details Modal */}
+      {/* Booking Details Modal - for viewing and managing individual bookings */}
       {selectedBooking && (
         <BookingDetailsModal
           selectedBooking={selectedBooking}
@@ -215,7 +226,7 @@ export default function ServiceProviderDashboardPage() {
         />
       )}
 
-      {/* Calendar Modal */}
+      {/* Calendar Modal - for viewing appointments by date */}
       {showCalendar && (
         <CalendarModal
           bookings={bookings}
