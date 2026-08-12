@@ -130,7 +130,7 @@ export default function ForgotPasswordPage() {
       // with no custom table or column involved.
       const { data: accountData, error: rpcError } = await supabase
         .rpc("resolve_account_for_password_reset", { identifier: targetIdentifier })
-        .maybeSingle();
+        .maybeSingle<{ resolved_email: string; is_confirmed: boolean }>();
 
       if (rpcError || !accountData || !accountData.is_confirmed) {
         // Same generic message whether the account doesn't exist or exists
