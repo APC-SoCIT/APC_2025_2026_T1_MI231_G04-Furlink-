@@ -1,0 +1,333 @@
+/* ==========================================================================
+   MANAGE ACCOUNT STYLES
+   ========================================================================== */
+.manage-account-wrapper {
+  background-color: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 85vh;
+  padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.manage-account-card {
+  background-color: #fefdf6;
+  width: 100%;
+  max-width: 540px;
+  padding: 35px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+}
+
+.manage-account-card h1 {
+  font-size: 24px;
+  font-weight: bold;
+  color: #3b429f;
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.straight-layout-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.account-field-group {
+  background-color: #ffffff;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1.5px solid #3b429f;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 4px rgba(59, 66, 159, 0.03);
+}
+
+.account-field-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b429f;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-value {
+  font-size: 14px;
+  color: #333333;
+  word-break: break-all;
+}
+
+.field-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-field-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #3b429f;
+  border-radius: 6px;
+  font-size: 13px;
+  background-color: #ffffff;
+  color: #333333;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.account-field-group input:focus {
+  border-color: #2b5cd9;
+  box-shadow: 0 0 0 2px rgba(43, 92, 217, 0.15);
+}
+
+/* Hide native browser password reveal icons */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none !important;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-caps-lock-indicator {
+  display: none !important;
+}
+
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid #3b429f;
+  border-radius: 6px;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.input-with-prefix input {
+  border: none;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.input-prefix-box {
+  background-color: #f0f0f5;
+  color: #3b429f;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-right: 1px solid #3b429f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-container {
+  position: relative;
+  width: 100%;
+}
+
+.password-container input {
+  padding-right: 50px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 0;
+}
+
+.field-inline-error {
+  background-color: #fce8e6;
+  color: #c5221f;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* Icon-only Edit Button with Tooltip on Hover */
+.edit-icon-btn {
+  background: none;
+  border: none;
+  color: #2b5cd9;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.edit-icon-btn:hover {
+  background-color: #f0f4ff;
+}
+
+/* Tooltip implementation */
+.icon-tooltip {
+  position: relative;
+}
+
+.icon-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #3b429f;
+  color: #ffffff;
+  padding: 4px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 4px;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Custom Password Toggle Button Style */
+.toggle-password {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #3b429f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.toggle-password:hover {
+  background-color: rgba(59, 66, 159, 0.08);
+}
+
+.mini-btn-group {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.mini-save-btn {
+  flex: 1;
+  background-color: #2b5cd9;
+  color: #ffffff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.mini-save-btn:hover {
+  background-color: #234ab7;
+}
+
+.mini-cancel-btn {
+  flex: 1;
+  background-color: #e0ded6;
+  color: #333333;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.mini-cancel-btn:hover {
+  background-color: #d0cec6;
+}
+
+.success-banner {
+  background-color: #e6f4ea;
+  color: #137333;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.form-error-banner {
+  background-color: #fce8e6;
+  color: #c5221f;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Modal Confirmation Overlay */
+.confirmation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.confirmation-dialog {
+  background-color: #fefdf6;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.confirmation-dialog h3 {
+  color: #3b429f;
+  margin-bottom: 12px;
+}
+
+.confirmation-dialog p {
+  font-size: 14px;
+  color: #555555;
+  margin-bottom: 20px;
+}
+
+.save-btn {
+  background-color: #2b5cd9;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+.cancel-btn {
+  background-color: #e0ded6;
+  color: #333333;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
