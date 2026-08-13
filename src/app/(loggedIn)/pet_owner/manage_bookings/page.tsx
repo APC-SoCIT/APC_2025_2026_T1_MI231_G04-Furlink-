@@ -7,7 +7,9 @@ import {
   FaClock,
   FaCreditCard,
   FaCut,
-  FaStar,
+  FaTimesCircle,
+  FaUndo,
+  FaCheckCircle,
   FaCalendarAlt,
   FaHistory,
   FaCalendarTimes,
@@ -17,7 +19,13 @@ import {
 } from 'react-icons/fa';
 import './manage_bookings.css';
 
-type BookingTab = 'awaiting_approval' | 'for_payment' | 'upcoming' | 'to_rate';
+type BookingTab =
+  | 'awaiting_approval'
+  | 'to_pay'
+  | 'upcoming'
+  | 'decline_cancelled'
+  | 'refund'
+  | 'completed';
 
 type ServiceItem = {
   id: string;
@@ -45,6 +53,7 @@ type BookingRecord = {
   booking_date: string;
   booking_timeslot: string;
   booking_status: string;
+  booking_rejection_reason?: string | null;
   booking_total_amount: number;
   booking_pet_info?: PetInfoItem[];
 };
@@ -60,17 +69,21 @@ export default function ManageBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
 
-  // Map frontend tabs to backend status strings
+  // Mapped to exact values allowed by booking_info_booking_status_check
   const getStatusesForTab = (tab: BookingTab): string[] => {
     switch (tab) {
       case 'awaiting_approval':
-        return ['pending_sp_response', 'pending', 'awaiting_approval'];
-      case 'for_payment':
-        return ['to pay', 'approved_pending_payment', 'for_payment', 'unpaid'];
+        return ['pending_sp_response'];
+      case 'to_pay':
+        return ['to pay'];
       case 'upcoming':
-        return ['confirmed', 'paid', 'upcoming', 'in_progress'];
-      case 'to_rate':
-        return ['completed', 'to_rate'];
+        return ['approved', 'paid'];
+      case 'decline_cancelled':
+        return ['rejected', 'cancelled'];
+      case 'refund':
+        return ['to_refund', 'refunded']; // Extensible for future refund flags
+      case 'completed':
+        return ['to_rate', 'rated'];
       default:
         return [];
     }
@@ -98,6 +111,7 @@ export default function ManageBookingsPage() {
             booking_date,
             booking_timeslot,
             booking_status,
+            booking_rejection_reason,
             booking_total_amount,
             booking_pet_info (
               id,
@@ -142,8 +156,8 @@ export default function ManageBookingsPage() {
     try {
       const d = new Date(dateStr);
       return d.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
+        weekday: 'short',
+        month: 'short',
         day: 'numeric',
         year: 'numeric',
       });
@@ -169,6 +183,14 @@ export default function ManageBookingsPage() {
     }
 
     return timeStr;
+  };
+
+  const formatStatusLabel = (status: string) => {
+    return status.replace(/_/g, ' ').toUpperCase();
+  };
+
+  const getStatusCssClass = (status: string) => {
+    return status.replace(/\s+/g, '-').toLowerCase();
   };
 
   const handleOpenDetails = (booking: BookingRecord) => {
@@ -199,8 +221,8 @@ export default function ManageBookingsPage() {
           </div>
         </div>
 
-        {/* Tab Selection Cards */}
-        <div className="booking-tabs-grid">
+        {/* 6 Category Tab Selection Grid */}
+        <div className="booking-tabs-grid six-categories">
           <button
             className={`tab-card ${activeTab === 'awaiting_approval' ? 'active' : ''}`}
             onClick={() => setActiveTab('awaiting_approval')}
@@ -212,13 +234,13 @@ export default function ManageBookingsPage() {
           </button>
 
           <button
-            className={`tab-card ${activeTab === 'for_payment' ? 'active' : ''}`}
-            onClick={() => setActiveTab('for_payment')}
+            className={`tab-card ${activeTab === 'to_pay' ? 'active' : ''}`}
+            onClick={() => setActiveTab('to_pay')}
           >
             <div className="tab-icon-circle">
               <FaCreditCard />
             </div>
-            <span className="tab-label">For Payment</span>
+            <span className="tab-label">To Pay</span>
           </button>
 
           <button
@@ -228,17 +250,37 @@ export default function ManageBookingsPage() {
             <div className="tab-icon-circle">
               <FaCut />
             </div>
-            <span className="tab-label">Upcoming</span>
+            <span className="tab-label">Up coming</span>
           </button>
 
           <button
-            className={`tab-card ${activeTab === 'to_rate' ? 'active' : ''}`}
-            onClick={() => setActiveTab('to_rate')}
+            className={`tab-card ${activeTab === 'decline_cancelled' ? 'active' : ''}`}
+            onClick={() => setActiveTab('decline_cancelled')}
           >
             <div className="tab-icon-circle">
-              <FaStar />
+              <FaTimesCircle />
             </div>
-            <span className="tab-label">To Rate</span>
+            <span className="tab-label">Decline/Cancelled</span>
+          </button>
+
+          <button
+            className={`tab-card ${activeTab === 'refund' ? 'active' : ''}`}
+            onClick={() => setActiveTab('refund')}
+          >
+            <div className="tab-icon-circle">
+              <FaUndo />
+            </div>
+            <span className="tab-label">Refund</span>
+          </button>
+
+          <button
+            className={`tab-card ${activeTab === 'completed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('completed')}
+          >
+            <div className="tab-icon-circle">
+              <FaCheckCircle />
+            </div>
+            <span className="tab-label">Completed</span>
           </button>
         </div>
 
@@ -248,6 +290,7 @@ export default function ManageBookingsPage() {
             <div className="col-cell col-date">DATE & TIME</div>
             <div className="col-cell col-pets">NO. OF PETS</div>
             <div className="col-cell col-service">SERVICE</div>
+            <div className="col-cell col-status">STATUS</div>
             <div className="col-cell col-total">TOTAL</div>
             <div className="col-cell col-action">ACTION</div>
           </div>
@@ -260,7 +303,7 @@ export default function ManageBookingsPage() {
             <div className="table-empty-box">
               <FaCalendarTimes className="empty-calendar-icon" />
               <h3 className="empty-title">No appointments found.</h3>
-              <p className="empty-subtitle">Try checking a different tab or date range.</p>
+              <p className="empty-subtitle">There are no bookings matching this category status.</p>
             </div>
           ) : (
             <div className="table-body-rows">
@@ -292,6 +335,12 @@ export default function ManageBookingsPage() {
                       {allServiceNames.length > 0
                         ? allServiceNames.join(', ')
                         : 'Grooming Service'}
+                    </div>
+
+                    <div className="col-cell col-status">
+                      <span className={`status-pill ${getStatusCssClass(item.booking_status)}`}>
+                        {formatStatusLabel(item.booking_status)}
+                      </span>
                     </div>
 
                     <div className="col-cell col-total font-bold">
@@ -337,8 +386,17 @@ export default function ManageBookingsPage() {
                 <div>
                   <strong>{formatDateDisplay(selectedBooking.booking_date)}</strong>
                   <span> at {formatTimeDisplay(selectedBooking.booking_timeslot)}</span>
+                  <div className="modal-status-inline">
+                    Status: <span className="status-highlight">{formatStatusLabel(selectedBooking.booking_status)}</span>
+                  </div>
                 </div>
               </div>
+
+              {selectedBooking.booking_rejection_reason && (
+                <div className="rejection-reason-box">
+                  <strong>Rejection/Cancellation Reason:</strong> {selectedBooking.booking_rejection_reason}
+                </div>
+              )}
 
               {selectedBooking.booking_pet_info?.map((pet, pIdx) => {
                 const petTotal =
