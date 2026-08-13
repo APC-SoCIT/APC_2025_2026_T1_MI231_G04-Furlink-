@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 // Supabase client component helper for session management
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
@@ -12,6 +13,7 @@ import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
   const supabase = createClientComponentClient();
+  const router = useRouter(); // Router for navigation to Business Dashboard
   
   // State management
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,11 @@ export default function ServiceProviderDashboardPage() {
         </div>
 
         <div className={styles.actionButtons}>
-          <button className={styles.actionBtn}>
+          {/* Navigate to Business Dashboard route */}
+          <button 
+            className={styles.actionBtn}
+            onClick={() => router.push('/business_dashboard')}
+          >
             <FaChartLine size={24} /> Dashboard
           </button>
           <button 
