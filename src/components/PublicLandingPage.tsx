@@ -27,7 +27,7 @@ export default function PublicLandingPage() {
               Connect with trusted pet grooming professionals in your area. 
               Safe, reliable, and convenient pet care at your fingertips.
             </p>
-            <Link href="/login" className="cta-button">
+            <Link href="/auth/login" className="cta-button">
               <span>Book now</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>

@@ -1,12 +1,12 @@
 -- File: database/booking/01_create_booking_info.sql
--- Latest Update: July 24, 2026
+-- Latest Update: August 3, 2026
 
 -- Setup Booking Info Table
 -- Depends on: auth_module.profiles, public.sp_general_info
 
 CREATE TABLE IF NOT EXISTS public.booking_info (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    profiles_id UUID NOT NULL REFERENCES auth_module.profiles(id), -- the pet owner
+    profiles_id UUID NOT NULL REFERENCES auth_module.profiles(id),
     sp_id UUID NOT NULL REFERENCES public.sp_general_info(id),
     booking_date DATE NOT NULL,
     booking_timeslot TEXT NOT NULL,
@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS public.booking_info (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
+
+-- Added columns
+ALTER TABLE public.booking_info
+    ADD COLUMN IF NOT EXISTS booking_overall_rating INTEGER
+        CHECK (booking_overall_rating IS NULL OR booking_overall_rating BETWEEN 1 AND 5),
+    ADD COLUMN IF NOT EXISTS booking_staff_rating INTEGER
+        CHECK (booking_staff_rating IS NULL OR booking_staff_rating BETWEEN 1 AND 5),
+    ADD COLUMN IF NOT EXISTS booking_comment VARCHAR(250);
 
 CREATE OR REPLACE TRIGGER update_booking_info_modtime
     BEFORE UPDATE ON public.booking_info

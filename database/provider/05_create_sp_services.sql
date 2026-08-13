@@ -1,5 +1,5 @@
--- File: database/provider/07_create_sp_services.sql
--- Latest Update: July 24, 2026
+-- File: database/provider/05_create_sp_services.sql
+-- Latest Update: July 27, 2026
 
 -- Setup Service Provider Service Listings Table
 -- Depends on: public.sp_general_info (database/provider/01_create_sp_general_info.sql)
@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.sp_services (
     service_description VARCHAR(250) NOT NULL,
     service_notes VARCHAR(250),
     service_haircut_included BOOLEAN NOT NULL,
+    service_status TEXT NOT NULL DEFAULT 'active' CHECK (service_status IN ('active', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );

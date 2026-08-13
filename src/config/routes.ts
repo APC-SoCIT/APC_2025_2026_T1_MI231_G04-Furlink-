@@ -5,6 +5,9 @@ export const ROUTES = {
   AUTH: {
     LOGIN: "/login",
     REGISTER: "/register",
+    ADMIN_SIGNUP: "/auth/admin_signup",
+    ADMIN_FIRST_LOGIN: "/auth/admin_first_login",
+    FORGOT_PASSWORD: "/forgot_password",
     MANAGE_ACCOUNT: "/both_sp_po/manage_account",
   },
   PET_OWNER: {
