@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { FaArrowLeft, FaCaretUp, FaCaretDown, FaMinus } from 'react-icons/fa';
+import { FaFileExcel } from 'react-icons/fa';
 import { DashboardTab } from './type';
 import { formatCurrency, formatTrend, getTrendDirection, formatLargeNumber } from './utils';
+import Sidebar from './components/Sidebar';
 import BusinessPerformance from './components/BusinessPerformance';
 import SalesPerformance from './components/SalesPerformance';
+import CustomerInsights from './components/CustomerInsights';
 import styles from './business-dashboard.module.css';
 
 export default function BusinessDashboardPage() {
@@ -14,6 +15,14 @@ export default function BusinessDashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('business_performance');
   const [timeFilter, setTimeFilter] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const [petTypeFilter, setPetTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
+
+  // Get current date
+  const currentDate = new Date();
+  const dateDisplay = currentDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
   // Mock data - will be replaced with Supabase data later
   const mockMetrics = {
@@ -33,9 +42,9 @@ export default function BusinessDashboardPage() {
 
   // Render trend icon
   const renderTrendIcon = (value: number) => {
-    if (value > 0) return <FaCaretUp style={{ color: '#16a34a' }} />;
-    if (value < 0) return <FaCaretDown style={{ color: '#dc2626' }} />;
-    return <FaMinus style={{ color: '#64748b' }} />;
+    if (value > 0) return '📈';
+    if (value < 0) return '📉';
+    return '➡️';
   };
 
   // Render trend class
@@ -46,150 +55,131 @@ export default function BusinessDashboardPage() {
   };
 
   return (
-    <div className={styles.container}>
-      {/* Header with Back Button */}
-      <div className={styles.header}>
-        <h1 className={styles.title}>Business Dashboard</h1>
-        <Link href="/sp_dashboard">
-          <button className={styles.backButton}>
-            <FaArrowLeft style={{ marginRight: '0.5rem' }} />
-            Back to Dashboard
-          </button>
-        </Link>
-      </div>
+    <div className={styles.mainLayout}>
+      {/* Sidebar Navigation */}
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Tab Navigation */}
-      <div className={styles.tabsContainer}>
-        <button
-          className={`${styles.tab} ${activeTab === 'business_performance' ? styles.active : ''}`}
-          onClick={() => setActiveTab('business_performance')}
-        >
-          Business Performance
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'sales' ? styles.active : ''}`}
-          onClick={() => setActiveTab('sales')}
-        >
-          Sales
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'customer_insights' ? styles.active : ''}`}
-          onClick={() => setActiveTab('customer_insights')}
-        >
-          Customer Insights
-        </button>
-      </div>
-
-      {/* Filter Controls */}
-      <div className={styles.filterSection}>
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Time Period</label>
-          <select
-            className={styles.filterSelect}
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value as 'weekly' | 'monthly' | 'yearly')}
-          >
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Pet Type</label>
-          <select
-            className={styles.filterSelect}
-            value={petTypeFilter}
-            onChange={(e) => setPetTypeFilter(e.target.value as 'all' | 'dog' | 'cat')}
-          >
-            <option value="all">All Pets</option>
-            <option value="dog">Dogs Only</option>
-            <option value="cat">Cats Only</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Key Metrics Grid - Always Visible */}
-      <div className={styles.metricsGrid}>
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Total Revenue</div>
-          <div className={styles.metricValue}>{formatCurrency(mockMetrics.totalRevenue)}</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.revenueTrend)}
-            <span className={getTrendClass(mockMetrics.revenueTrend)}>
-              {formatTrend(mockMetrics.revenueTrend)} vs last period
-            </span>
+      {/* Main Content Area */}
+      <div className={styles.contentArea}>
+        {/* Header with Date and Report Button */}
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.title}>
+              {activeTab === 'business_performance' && 'Business Performance'}
+              {activeTab === 'sales' && 'Sales Performance'}
+              {activeTab === 'customer_insights' && 'Customer Insights'}
+            </h1>
+            <p className={styles.dateDisplay}>As of {dateDisplay}</p>
+          </div>
+          <div className={styles.headerRight}>
+            <button className={styles.reportButton} title="Generate Sales Report (coming soon)">
+              <FaFileExcel size={16} />
+              Generate Sales Report
+            </button>
           </div>
         </div>
 
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Total Bookings</div>
-          <div className={styles.metricValue}>{mockMetrics.totalBookings}</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.bookingsTrend)}
-            <span className={getTrendClass(mockMetrics.bookingsTrend)}>
-              {formatTrend(mockMetrics.bookingsTrend)} vs last period
-            </span>
-          </div>
-        </div>
+        {/* Main Content */}
+        <div className={styles.container}>
+          {/* Filter Controls */}
+          <div className={styles.filterSection}>
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Time Period</label>
+              <select
+                className={styles.filterSelect}
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value as 'weekly' | 'monthly' | 'yearly')}
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
 
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Avg Booking Value</div>
-          <div className={styles.metricValue}>{formatCurrency(mockMetrics.averageBookingValue)}</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.avgTrend)}
-            <span className={getTrendClass(mockMetrics.avgTrend)}>
-              {formatTrend(mockMetrics.avgTrend)} vs last period
-            </span>
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Pet Type</label>
+              <select
+                className={styles.filterSelect}
+                value={petTypeFilter}
+                onChange={(e) => setPetTypeFilter(e.target.value as 'all' | 'dog' | 'cat')}
+              >
+                <option value="all">Both (Dog & Cat)</option>
+                <option value="dog">Dogs Only</option>
+                <option value="cat">Cats Only</option>
+              </select>
+            </div>
           </div>
-        </div>
 
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Cancellation Rate</div>
-          <div className={styles.metricValue}>{mockMetrics.cancellationRate}%</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.cancelTrend)}
-            <span className={getTrendClass(mockMetrics.cancelTrend)}>
-              {formatTrend(Math.abs(mockMetrics.cancelTrend))} vs last period
-            </span>
-          </div>
-        </div>
+          {/* Key Metrics Grid - Always Visible */}
+          <div className={styles.metricsGrid}>
+            <div className={styles.metricCard}>
+              <div className={styles.metricLabel}>Gross Revenue</div>
+              <div className={styles.metricValue}>{formatCurrency(mockMetrics.totalRevenue)}</div>
+              <div className={styles.metricTrend}>
+                <span>{renderTrendIcon(mockMetrics.revenueTrend)}</span>
+                <span className={getTrendClass(mockMetrics.revenueTrend)}>
+                  {formatTrend(mockMetrics.revenueTrend)}
+                </span>
+              </div>
+            </div>
 
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Listing Views</div>
-          <div className={styles.metricValue}>{formatLargeNumber(mockMetrics.listingViews)}</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.viewsTrend)}
-            <span className={getTrendClass(mockMetrics.viewsTrend)}>
-              {formatTrend(mockMetrics.viewsTrend)} vs last period
-            </span>
-          </div>
-        </div>
+            <div className={styles.metricCard}>
+              <div className={styles.metricLabel}>Total Completed Bookings</div>
+              <div className={styles.metricValue}>{mockMetrics.totalBookings}</div>
+              <div className={styles.metricTrend}>
+                <span>{renderTrendIcon(mockMetrics.bookingsTrend)}</span>
+                <span className={getTrendClass(mockMetrics.bookingsTrend)}>
+                  {formatTrend(mockMetrics.bookingsTrend)}
+                </span>
+              </div>
+            </div>
 
-        <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Average Rating</div>
-          <div className={styles.metricValue}>{mockMetrics.averageRating}/5.0</div>
-          <div className={styles.metricTrend}>
-            {renderTrendIcon(mockMetrics.ratingTrend)}
-            <span className={getTrendClass(mockMetrics.ratingTrend)}>
-              {formatTrend(mockMetrics.ratingTrend)} vs last period
-            </span>
+            <div className={styles.metricCard}>
+              <div className={styles.metricLabel}>Listing Visitors</div>
+              <div className={styles.metricValue}>{formatLargeNumber(mockMetrics.listingViews)}</div>
+              <div className={styles.metricTrend}>
+                <span>{renderTrendIcon(mockMetrics.viewsTrend)}</span>
+                <span className={getTrendClass(mockMetrics.viewsTrend)}>
+                  {formatTrend(mockMetrics.viewsTrend)}
+                </span>
+              </div>
+            </div>
+
+            <div className={styles.metricCard}>
+              <div className={styles.metricLabel}>Avg/Customer</div>
+              <div className={styles.metricValue}>₱0</div>
+              <div className={styles.metricTrend}>
+                <span>➡️</span>
+                <span className={styles.trendNeutral}>0%</span>
+              </div>
+            </div>
+
+            <div className={styles.metricCard}>
+              <div className={styles.metricLabel}>Cancellations</div>
+              <div className={styles.metricValue}>00</div>
+              <div className={styles.metricTrend}>
+                <span>{renderTrendIcon(mockMetrics.cancelTrend)}</span>
+                <span className={getTrendClass(mockMetrics.cancelTrend)}>
+                  {formatTrend(Math.abs(mockMetrics.cancelTrend))}
+                </span>
+              </div>
+            </div>
           </div>
+
+          {/* Tab Content - Render Based on Active Tab */}
+          {activeTab === 'business_performance' && (
+            <BusinessPerformance timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
+          )}
+
+          {activeTab === 'sales' && (
+            <SalesPerformance timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
+          )}
+
+          {activeTab === 'customer_insights' && (
+            <CustomerInsights timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
+          )}
         </div>
       </div>
-
-      {/* Tab Content - Render Based on Active Tab */}
-      {activeTab === 'business_performance' && (
-        <BusinessPerformance timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
-      )}
-
-      {activeTab === 'sales' && (
-        <SalesPerformance timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
-      )}
-
-      {activeTab === 'customer_insights' && (
-        <CustomerInsights timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
-      )}
     </div>
   );
 }

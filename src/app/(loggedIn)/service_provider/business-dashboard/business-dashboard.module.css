@@ -1,34 +1,125 @@
-/* Business Dashboard Styling */
+/* Business Dashboard with Sidebar Layout */
 
-.container {
-  max-width: 1400px;
-  margin: 2rem auto;
-  padding: 2rem;
-  font-family: sans-serif;
-  color: #1e3a8a;
-  background-color: #f8fafc;
+.mainLayout {
+  display: flex;
   min-height: calc(100vh - 100px);
-  border-radius: 1.5rem;
+  background-color: #f8fafc;
 }
 
-/* Header */
-.header {
+/* Sidebar Styling */
+.sidebar {
+  width: 280px;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.sidebarOpen {
+  width: 280px;
+}
+
+.sidebarClosed {
+  width: 80px;
+}
+
+.sidebarHeader {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
 }
 
-.title {
-  font-size: 2rem;
+.sidebarTitle {
+  font-size: 1.25rem;
   font-weight: 900;
+  color: #1e3a8a;
+  margin: 0;
+  transition: opacity 0.3s;
+}
+
+.sidebarClosed .sidebarTitle {
+  display: none;
+}
+
+.collapseButton {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.5rem;
+  transition: color 0.2s;
+}
+
+.collapseButton:hover {
   color: #1e3a8a;
 }
 
-.backButton {
-  padding: 0.75rem 1.5rem;
+.sidebarNav {
+  flex: 1;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarTab {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-align: left;
+  border-left: 3px solid transparent;
+}
+
+.sidebarTab:hover {
+  background: #f8fafc;
+  color: #1e3a8a;
+}
+
+.sidebarTabActive {
+  background: #fffdf0;
+  color: #1e3a8a;
+  border-left-color: #facc15;
+}
+
+.sidebarTabIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.sidebarTabLabel {
+  transition: opacity 0.3s;
+}
+
+.sidebarClosed .sidebarTabLabel {
+  display: none;
+}
+
+.sidebarFooter {
+  padding: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.backLink {
+  text-decoration: none;
+}
+
+.backButtonSidebar {
+  width: 100%;
+  padding: 0.75rem 1rem;
   background: #f1f5f9;
   color: #1e3a8a;
   border: none;
@@ -36,47 +127,150 @@
   cursor: pointer;
   font-weight: bold;
   font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   transition: background 0.2s;
 }
 
-.backButton:hover {
+.backButtonSidebar:hover {
   background: #e2e8f0;
 }
 
-/* Tabs Navigation */
-.tabsContainer {
+.sidebarClosed .backButtonSidebar span {
+  display: none;
+}
+
+/* Mobile Sidebar */
+.mobileToggle {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  background: #1e3a8a;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  z-index: 200;
+}
+
+.sidebarOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+}
+
+/* Content Area */
+.contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #1e3a8a;
+  margin: 0;
+}
+
+.dateDisplay {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.reportButton {
+  padding: 0.75rem 1.5rem;
+  background: #1e3a8a;
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.reportButton:hover {
+  background: #1d4ed8;
+}
+
+.container {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* Filter Section */
+.filterSection {
   display: flex;
   gap: 1rem;
   margin-bottom: 2rem;
-  border-bottom: 2px solid #e2e8f0;
+  padding: 1rem;
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.tab {
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.95rem;
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filterLabel {
+  font-size: 0.8rem;
   font-weight: bold;
   color: #64748b;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-  margin-bottom: -2px;
+  text-transform: uppercase;
 }
 
-.tab:hover {
+.filterSelect {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: white;
   color: #1e3a8a;
-}
-
-.tab.active {
-  color: #1e3a8a;
-  border-bottom-color: #facc15;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 /* Metrics Grid */
 .metricsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -90,7 +284,7 @@
 }
 
 .metricLabel {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #64748b;
   font-weight: 600;
   margin-bottom: 0.5rem;
@@ -127,7 +321,7 @@
 /* Charts Section */
 .chartsSection {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -145,6 +339,7 @@
   font-weight: bold;
   color: #1e3a8a;
   margin-bottom: 1rem;
+  margin-top: 0;
 }
 
 .chart {
@@ -172,6 +367,7 @@
   font-size: 1.125rem;
   font-weight: bold;
   color: #1e3a8a;
+  margin: 0;
 }
 
 .table {
@@ -247,40 +443,6 @@
   margin-left: 0.5rem;
 }
 
-/* Filter Section */
-.filterSection {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding: 1rem;
-  background: white;
-  border-radius: 1rem;
-  border: 1px solid #f1f5f9;
-}
-
-.filterGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.filterLabel {
-  font-size: 0.8rem;
-  font-weight: bold;
-  color: #64748b;
-  text-transform: uppercase;
-}
-
-.filterSelect {
-  padding: 0.5rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  background: white;
-  color: #1e3a8a;
-  font-weight: bold;
-  cursor: pointer;
-}
-
 /* Pet Type Breakdown */
 .petBreakdown {
   display: grid;
@@ -313,7 +475,7 @@
   margin-bottom: 0.25rem;
 }
 
-/* Loading State */
+/* Loading & Empty States */
 .loading {
   text-align: center;
   padding: 3rem;
@@ -321,7 +483,6 @@
   font-size: 1.125rem;
 }
 
-/* Empty State */
 .emptyState {
   text-align: center;
   padding: 3rem;
@@ -333,8 +494,72 @@
   margin-bottom: 1rem;
 }
 
-/* Responsive */
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .chartsSection {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebarClosed {
+    width: 70px;
+  }
+
+  .filterSection {
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 768px) {
+  .mainLayout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 199;
+    width: 280px;
+  }
+
+  .sidebar.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .mobileToggle {
+    display: flex;
+  }
+
+  .sidebarOverlay.mobileOpen {
+    display: block;
+  }
+
+  .sidebarClosed {
+    width: 280px;
+  }
+
+  .sidebarClosed .sidebarTitle {
+    display: block;
+  }
+
+  .sidebarClosed .sidebarTabLabel {
+    display: inline;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .headerRight {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .container {
     padding: 1rem;
   }
@@ -347,11 +572,34 @@
     grid-template-columns: 1fr;
   }
 
-  .tabsContainer {
-    flex-wrap: wrap;
-  }
-
   .petBreakdown {
     grid-template-columns: 1fr;
+  }
+
+  .filterSection {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .metricsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .reportButton {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+
+  .chartContainer {
+    padding: 1rem;
+  }
+
+  .chart {
+    height: 250px;
   }
 }

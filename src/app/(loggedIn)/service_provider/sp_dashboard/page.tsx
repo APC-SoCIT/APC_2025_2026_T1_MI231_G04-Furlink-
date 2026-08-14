@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 // Supabase client component helper for session management
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import Link from "next/link";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
 import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
@@ -13,7 +13,6 @@ import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
   const supabase = createClientComponentClient();
-  const router = useRouter(); // Router for navigation to Business Dashboard
   
   // State management
   const [loading, setLoading] = useState(true);
@@ -120,16 +119,15 @@ export default function ServiceProviderDashboardPage() {
         </div>
 
         <div className={styles.actionButtons}>
-          {/* Navigate to Business Dashboard route */}
-          <button 
-            className={styles.actionBtn}
-            onClick={() => router.push('/business_dashboard')}
-          >
-            <FaChartLine size={24} /> Dashboard
-          </button>
+          <Link href="/service_provider/business-dashboard" style={{ minWidth: '120px' }}>
+            <button className={styles.actionBtn} style={{ minWidth: '120px' }}>
+              <FaChartLine size={24} /> Dashboard
+            </button>
+          </Link>
           <button 
             className={styles.actionBtn}
             onClick={() => setShowCalendar(true)}
+            style={{ minWidth: '120px' }}
           >
             <FaCalendarAlt size={24} /> Calendar
           </button>
