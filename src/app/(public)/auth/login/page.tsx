@@ -414,7 +414,7 @@ export default function LoginPage() {
             <input 
                 type={showPassword ? "text" : "password"} 
                 className={touched.password && errors.password ? "input-error" : ""}
-                placeholder="Password (max 16 chars)" 
+                placeholder="Password" 
                 value={formData.password}
                 onChange={handlePasswordChange}
                 onBlur={handleBlur}

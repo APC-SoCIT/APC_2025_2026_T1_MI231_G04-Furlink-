@@ -431,7 +431,7 @@ export default function ManageAccountPage() {
                     <div className="password-container">
                       <input
                         type={showPassword ? "text" : "password"}
-                        placeholder="New Password (6-12 chars)"
+                        placeholder="New Password"
                         value={tempPassword}
                         onChange={(e) => setTempPassword(e.target.value)}
                         maxLength={12}

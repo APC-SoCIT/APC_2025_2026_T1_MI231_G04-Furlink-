@@ -362,7 +362,7 @@ export default function ForgotPasswordPage() {
             <div className="password-container">
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="New Password (6-16 chars)"
+                placeholder="New Password"
                 value={passwords.newPassword}
                 onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
                 maxLength={16}
