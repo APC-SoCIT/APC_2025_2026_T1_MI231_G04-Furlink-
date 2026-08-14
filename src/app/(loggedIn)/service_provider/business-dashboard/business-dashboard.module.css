@@ -318,10 +318,10 @@
   color: #64748b;
 }
 
-/* Charts Section */
+/* Charts Section - Two charts side by side */
 .chartsSection {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -344,7 +344,7 @@
 
 .chart {
   width: 100%;
-  height: 300px;
+  height: 350px;
   position: relative;
 }
 
@@ -401,6 +401,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding: 1rem;
 }
 
 .serviceItem {
@@ -448,6 +449,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
+  padding: 1rem;
 }
 
 .petItem {
@@ -601,5 +603,17 @@
 
   .chart {
     height: 250px;
+  }
+
+  .petBreakdown {
+    grid-template-columns: 1fr;
+  }
+
+  .servicesList {
+    padding: 0.5rem;
+  }
+
+  .serviceItem {
+    padding: 0.75rem;
   }
 }
