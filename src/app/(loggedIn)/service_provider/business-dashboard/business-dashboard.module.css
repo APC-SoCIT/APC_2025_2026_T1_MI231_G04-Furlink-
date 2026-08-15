@@ -617,3 +617,11 @@
     padding: 0.75rem;
   }
 }
+.mainLayout {
+  display: flex;
+  min-height: calc(100vh - 100px); /* Assumes your global header is roughly 100px tall */
+  background-color: #f8fafc;
+  overflow: hidden; 
+  /* ADD THIS IF YOU WANT A VISUAL GAP BETWEEN THE GLOBAL NAV AND DASHBOARD */
+  margin-top: 20px; 
+}
