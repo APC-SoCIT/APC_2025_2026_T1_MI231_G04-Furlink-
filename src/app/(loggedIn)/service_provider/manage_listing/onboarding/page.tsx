@@ -1,7 +1,7 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/page.tsx */
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { ROUTES } from "@/config/routes";
@@ -24,11 +24,17 @@ export default function ServiceProviderOnboardingPage() {
   // --- Flow & UI State ---
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); 
+  
+  // NEW: Application Status States
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true); 
+  const [appStatus, setAppStatus] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  
   const [providerId, setProviderId] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // --- Business Profile State ---
+  // Note: These start blank, giving rejected users the "fresh form" experience they need.
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
     isBranch: false,
@@ -39,7 +45,7 @@ export default function ServiceProviderOnboardingPage() {
     socialMediaUrl: "",
     googleMapUrl: "",
     typeOfService: "Pet Grooming",
-    useDefaultWaiver: false, // NEW: State for platform waiver checkbox
+    useDefaultWaiver: false, 
     operatingHours: [{
       days: [],
       startTime: "09:00",
@@ -63,11 +69,44 @@ export default function ServiceProviderOnboardingPage() {
   const { errors: validationErrors, setErrors: setValidationErrors, setFieldError, clearFieldError, validate } = useValidation();
   const files = useFileUploads(supabase, providerId, { setFieldError, clearFieldError });
   
-  // Service management hook (handles state, validation rules, and DB saving for sp_services)
   const { 
     services, addService, removeService, updateService, 
     addPricingRow, removePricingRow, updatePricing, saveServicesToSupabase 
   } = useServiceManager();
+
+  /* -------------------------------------------------------------------- */
+  /* INITIAL DATA FETCH & STATUS CHECK                                    */
+  /* -------------------------------------------------------------------- */
+  useEffect(() => {
+    const checkApplicationStatus = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        // We set this so useValidation knows the user's ID to prevent them from flagging their own duplicate business name
+        setProviderId(user.id);
+
+        const { data, error } = await supabase
+          .from('sp_general_info')
+          .select('registration_status, registration_rejection_reason')
+          .eq('profiles_id', user.id)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') throw error; // Ignore no rows error (new user)
+
+        if (data) {
+          setAppStatus(data.registration_status);
+          setRejectionReason(data.registration_rejection_reason);
+        }
+      } catch (err) {
+        console.error("Error checking application status:", err);
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    };
+
+    checkApplicationStatus();
+  }, [supabase]);
 
   /* -------------------------------------------------------------------- */
   /* Input Handlers                                                       */
@@ -176,8 +215,6 @@ export default function ServiceProviderOnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // 1. Process and upload document files to storage
-      // If they opted for the default waiver, we can save a specific string or null here based on your DB needs
       const waiverUrl = businessInfo.useDefaultWaiver 
         ? "PLATFORM_DEFAULT_WAIVER" 
         : files.waiverFile 
@@ -205,6 +242,7 @@ export default function ServiceProviderOnboardingPage() {
         : businessInfo.businessName.trim();
 
       // 2. Upsert Core Business Profile (sp_general_info)
+      // Because profiles_id is UNIQUE, this safely overwrites the rejected record and resets status back to pending.
       const payload = {
         profiles_id: user.id,
         business_name: finalBusinessName,
@@ -284,7 +322,8 @@ export default function ServiceProviderOnboardingPage() {
 
       // 5. Completion
       setShowConfirmModal(false);
-      router.push(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING);
+      setAppStatus('pending'); // Manually trigger the pending UI screen
+      window.scrollTo({ top: 0, behavior: "smooth" });
 
     } catch (err) {
       console.error("SUBMISSION FAILED:", JSON.stringify(err, null, 2), err);
@@ -296,12 +335,53 @@ export default function ServiceProviderOnboardingPage() {
     }
   };
 
-  if (isLoading) return <div className="loading-screen">Loading Application...</div>;
 
+  /* -------------------------------------------------------------------- */
+  /* CONDITIONAL RENDERING BASED ON STATUS                                */
+  /* -------------------------------------------------------------------- */
+  
+  if (isCheckingStatus) {
+    return <div className="loading-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', color: '#0E2679', fontWeight: 'bold' }}>Loading Application...</div>;
+  }
+
+  // BLOCK: Already Pending
+  if (appStatus === 'pending') {
+    return (
+      <div className="apply-provider-wrapper" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <h1 className="page-title">Application Under Review</h1>
+        <div style={{ background: '#f8fafc', padding: '40px', borderRadius: '12px', border: '1px solid #e2e8f0', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+          <h2 style={{ color: '#0E2679', marginBottom: '16px' }}>Your application is currently pending admin approval.</h2>
+          <p style={{ color: '#4b5563', lineHeight: '1.6' }}>We will notify you once your business has been reviewed. You cannot submit another application while one is actively under review. Please check back later.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // BLOCK: Already Approved (They shouldn't theoretically hit this page, but as a safeguard)
+  if (appStatus === 'approved') {
+    return (
+      <div className="apply-provider-wrapper" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#ecfdf5', padding: '40px', borderRadius: '12px', border: '1px solid #a7f3d0', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+          <h2 style={{ color: '#059669', marginBottom: '16px' }}>You are already an approved Service Provider!</h2>
+          <button onClick={() => router.push(ROUTES.SERVICE_PROVIDER.DASHBOARD)} className="btn-primary" style={{ marginTop: '20px' }}>Go to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ALLOW: 'rejected' or null (New Users)
   return (
     <div className="apply-provider-wrapper">
       <h1 className="page-title">Service Provider Application</h1>
       
+      {/* NEW: Rejection Banner Alert */}
+      {appStatus === 'rejected' && (
+        <div className="error-banner" style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#b91c1c', marginBottom: '25px', padding: '16px', borderRadius: '8px' }}>
+          <strong>Your previous application was rejected.</strong>
+          <p style={{ margin: '8px 0 0 0' }}><strong>Reason:</strong> {rejectionReason || "Please review our guidelines and try submitting a new application."}</p>
+        </div>
+      )}
+
       {/* Dynamic Wizard Progress Indicator */}
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '30px' }}>
         <span style={{ fontWeight: step === 1 ? '700' : 'normal', color: step === 1 ? '#0E2679' : '#9ca3af' }}>1. Business Info</span>
@@ -328,7 +408,6 @@ export default function ServiceProviderOnboardingPage() {
                 <label>Business Name*</label>
                 <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={validationErrors.businessName ? "input-error" : ""} />
                 
-                {/* Branch Checkbox with Fixed Layout */}
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginTop: '6px', fontSize: '0.8rem', fontWeight: 'normal', color: '#4b5563', cursor: 'pointer', width: 'fit-content' }}>
                   <input 
                     type="checkbox" 
@@ -341,7 +420,6 @@ export default function ServiceProviderOnboardingPage() {
                 {validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}
               </div>
 
-              {/* Conditional Branch Name Input */}
               {businessInfo.isBranch && (
                 <div className="form-group fade-in-fast">
                   <label>Branch Name / Location*</label>
@@ -470,7 +548,6 @@ export default function ServiceProviderOnboardingPage() {
           <section className="form-section">
             <h2>Documents & Uploads</h2>
             
-            {/* NEW: Waiver Guidelines & Checkbox Box */}
             <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
               <span style={{ fontWeight: '600', color: '#0E2679', display: 'block', marginBottom: '8px' }}>📄 Liability Waiver Guidelines</span>
               <p style={{ fontSize: '0.85rem', color: '#4b5563', margin: '0 0 10px 0', lineHeight: '1.5' }}>
@@ -484,7 +561,6 @@ export default function ServiceProviderOnboardingPage() {
                   checked={businessInfo.useDefaultWaiver} 
                   onChange={(e) => {
                     setBusinessInfo(prev => ({ ...prev, useDefaultWaiver: e.target.checked }));
-                    // Optional: clear file if they check the box
                     if (e.target.checked && files.waiverFile) files.setWaiverFile(null);
                   }} 
                   style={{ cursor: 'pointer', margin: 0, width: 'auto' }}
@@ -496,7 +572,6 @@ export default function ServiceProviderOnboardingPage() {
             <div className="form-grid-2">
               <div className="form-group">
                 <label>Waiver</label>
-                {/* Dynamically disable the upload button if they check the default waiver box */}
                 <label className="file-btn" style={{ pointerEvents: businessInfo.useDefaultWaiver ? 'none' : 'auto', opacity: businessInfo.useDefaultWaiver ? 0.6 : 1, background: businessInfo.useDefaultWaiver ? '#f1f5f9' : '' }}>
                   📁 <span>{businessInfo.useDefaultWaiver ? "Using Platform Waiver" : "Select File (Max 1MB)"}</span>
                   <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden disabled={businessInfo.useDefaultWaiver} />
@@ -632,7 +707,6 @@ export default function ServiceProviderOnboardingPage() {
           </div>
         </div>
       )}
-
 
       {/* --- Confirmation / Review Modal --- */}
       <ConfirmationModal
