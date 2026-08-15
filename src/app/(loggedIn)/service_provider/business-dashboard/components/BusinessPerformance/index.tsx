@@ -3,68 +3,65 @@ import BookingsByDay from './components/BookingsByDay';
 import PetTypeDistribution from './components/PetTypeDistribution';
 import ServiceBreakdown from './components/ServiceBreakdown';
 import BookedHours from './components/BookedHours';
+import { processBusinessPerformanceData } from '@/utils/analyticsCalculations';
 import styles from '../../business-dashboard.module.css';
 
 interface BusinessPerformanceProps {
   timeFilter: 'weekly' | 'monthly' | 'yearly';
   petTypeFilter: 'all' | 'dog' | 'cat';
+  bookings: any[];
+  pets: any[];
+  services: any[];
 }
 
-export default function BusinessPerformance({ timeFilter, petTypeFilter }: BusinessPerformanceProps) {
-  // Mock data for bookings by day/week
-  const mockBookingsByDay = useMemo(() => ({
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    dogValues: [5, 8, 6, 10, 7, 4, 2],
-    catValues: [3, 4, 4, 6, 5, 3, 1],
-  }), []);
+export default function BusinessPerformance({ 
+  timeFilter, 
+  petTypeFilter, 
+  bookings, 
+  pets, 
+  services 
+}: BusinessPerformanceProps) {
+  
+  // Transform raw Supabase data into aggregated metrics for charts
+  const analytics = useMemo(() => {
+    return processBusinessPerformanceData(bookings, pets, services);
+  }, [bookings, pets, services]);
 
-  // Mock data for pet type distribution (doughnut)
-  const mockPetTypeDistribution = useMemo(() => ({
-    labels: ['Dogs', 'Cats'],
-    values: [65, 35],
-  }), []);
+  // Extract totals for performance cards
+  const totalDogs = analytics.petTypeDistribution.values[0];
+  const totalCats = analytics.petTypeDistribution.values[1];
+  const totalPetsCount = totalDogs + totalCats;
 
-  // Mock data for service breakdown
-  const mockServiceBreakdown = useMemo(() => [
-    { name: 'Full Grooming', bookings: 25, percentage: 25 },
-    { name: 'Pooch', bookings: 50, percentage: 50 },
-    { name: 'Nail Clipping', bookings: 25, percentage: 25 },
-  ], []);
-
-  // Mock data for booked hours
-  const mockBookedHours = useMemo(() => ({
-    timeLabels: ['9:00 AM', '10:30 AM', '12:00 PM', '1:30 PM', '3:00 PM', '4:30 PM'],
-    dogValues: [1, 0, 0, 0, 0, 1],
-    catValues: [0, 0, 0, 0, 0, 0],
-  }), []);
+  const dogPercentage = totalPetsCount > 0 ? ((totalDogs / totalPetsCount) * 100).toFixed(0) : '0';
+  const catPercentage = totalPetsCount > 0 ? ((totalCats / totalPetsCount) * 100).toFixed(0) : '0';
 
   return (
     <div>
       {/* Charts Grid - Bookings by Day and Pet Type Distribution */}
       <div className={styles.chartsSection}>
         <BookingsByDay 
-          dogData={mockBookingsByDay.dogValues} 
-          catData={mockBookingsByDay.catValues}
-          labels={mockBookingsByDay.labels}
+          dogData={analytics.bookingsByDay.dogValues} 
+          catData={analytics.bookingsByDay.catValues}
+          labels={analytics.bookingsByDay.labels}
           petTypeFilter={petTypeFilter}
         />
 
         <PetTypeDistribution 
-          data={mockPetTypeDistribution.values} 
-          labels={mockPetTypeDistribution.labels}
+          data={analytics.petTypeDistribution.values} 
+          labels={analytics.petTypeDistribution.labels}
         />
       </div>
 
       {/* Service Breakdown and Booked Hours Grid */}
       <div className={styles.chartsSection}>
-        <ServiceBreakdown services={mockServiceBreakdown} />
+        <ServiceBreakdown services={analytics.serviceBreakdown} />
 
         <BookedHours 
-          timeLabels={mockBookedHours.timeLabels}
-          dogData={mockBookedHours.dogValues}
-          catData={mockBookedHours.catValues}
+          timeLabels={analytics.bookedHours.timeLabels}
+          dogData={analytics.bookedHours.dogValues}
+          catData={analytics.bookedHours.catValues}
           petTypeFilter={petTypeFilter}
-          busiestHour="9:00 AM"
+          busiestHour={analytics.bookedHours.busiestHour}
         />
       </div>
 
@@ -75,26 +72,14 @@ export default function BusinessPerformance({ timeFilter, petTypeFilter }: Busin
           <div className={styles.petItem}>
             <div className={styles.petType}>🐕</div>
             <div className={styles.petLabel}>Dogs</div>
-            <div className={styles.petStat}>
-              {mockBookingsByDay.dogValues.reduce((a, b) => a + b, 0)} bookings
-            </div>
-            <div className={styles.petStat}>
-              {((mockBookingsByDay.dogValues.reduce((a, b) => a + b, 0) / 
-                (mockBookingsByDay.dogValues.reduce((a, b) => a + b, 0) + 
-                 mockBookingsByDay.catValues.reduce((a, b) => a + b, 0))) * 100).toFixed(0)}% of total
-            </div>
+            <div className={styles.petStat}>{totalDogs} bookings</div>
+            <div className={styles.petStat}>{dogPercentage}% of total</div>
           </div>
           <div className={styles.petItem}>
             <div className={styles.petType}>🐱</div>
             <div className={styles.petLabel}>Cats</div>
-            <div className={styles.petStat}>
-              {mockBookingsByDay.catValues.reduce((a, b) => a + b, 0)} bookings
-            </div>
-            <div className={styles.petStat}>
-              {((mockBookingsByDay.catValues.reduce((a, b) => a + b, 0) / 
-                (mockBookingsByDay.dogValues.reduce((a, b) => a + b, 0) + 
-                 mockBookingsByDay.catValues.reduce((a, b) => a + b, 0))) * 100).toFixed(0)}% of total
-            </div>
+            <div className={styles.petStat}>{totalCats} bookings</div>
+            <div className={styles.petStat}>{catPercentage}% of total</div>
           </div>
         </div>
       </div>
