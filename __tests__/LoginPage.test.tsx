@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   createMockSupabaseClient,
@@ -284,10 +284,19 @@ describe('LoginPage - unconfirmed-email OTP flow', () => {
       data: { user: null },
       error: { message: 'Email not confirmed' },
     });
+    // Mocked so that IF the rate limit fails to block (see note below),
+    // the test fails on the real assertion instead of crashing on an
+    // unmocked resend() call.
+    mockClient.auth.resend.mockResolvedValue({ error: null });
 
     render(<LoginPage />);
     await fillAndSubmit('new.user@gmail.com', 'Passw0rd!');
 
+    // NOTE: as of the current page.tsx, triggerVerificationFlow() calls
+    // localStorage.removeItem(...) BEFORE checkLoginRateLimit(), which wipes
+    // any pre-existing attempt count on every submit. That means this
+    // assertion will currently fail against real app behavior — this is a
+    // genuine bug to flag/fix in page.tsx, not a bug in this test.
     expect(
       await screen.findByText(/reached the maximum requests/i)
     ).toBeInTheDocument();
@@ -373,7 +382,9 @@ describe('LoginPage - unconfirmed-email OTP flow', () => {
       await fillAndSubmit('new.user@gmail.com', 'Passw0rd!');
       await screen.findByRole('heading', { name: /verify your account/i });
 
-      jest.advanceTimersByTime(120_000); // 2 minutes
+      await act(async () => {
+        jest.advanceTimersByTime(120_000); // 2 minutes
+      });
 
       await waitFor(() =>
         expect(screen.getByText(/code expired/i)).toBeInTheDocument()
