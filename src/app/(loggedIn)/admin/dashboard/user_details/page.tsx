@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ROUTES } from "@/config/routes";
-import { FaArrowLeft, FaTimes, FaUser, FaHistory, FaExclamationTriangle, 
-  FaPaperPlane, FaChevronDown, FaUserSlash, } from "react-icons/fa";
+import { FaArrowLeft, FaTimes, FaUser, FaHistory, FaExclamationTriangle,
+  FaPaperPlane, FaChevronDown, FaChevronUp, FaUserSlash, FaUserCheck, } from "react-icons/fa";
 import styles from "./page.module.css";
 
 interface BookingServiceInfo {
@@ -54,7 +54,27 @@ interface UserProfile {
   created_at: string | null;
 }
 
-// Roles that should have an email shown (pulled from sp_general_info.business_email)
+interface WarningRow {
+  id: string;
+  warning_message: string;
+  created_at: string | null;
+  severity: string;
+  status: string; 
+  expires_at: string | null;
+}
+
+interface SuspensionRow {
+  id: string;
+  reason: string;
+  triggered_by_warning_ids: string[];
+  suspended_at: string;
+  suspended_until: string;
+  lifted_at: string | null;
+  lifted_by: string | null;
+  status: string; 
+}
+
+// Roles that should have an email shown 
 const ROLES_WITH_EMAIL = ["service_provider", "both"];
 
 // Human-friendly labels for booking_status
@@ -67,6 +87,9 @@ const STATUS_LABELS: Record<string, string> = {
   to_rate: "To Rate",
   rated: "Rated",
 };
+
+const SUSPENSION_DAYS = 7;
+const WARNING_THRESHOLD = 3;
 
 export default function PODetailsPage() {
   const searchParams = useSearchParams();
@@ -83,14 +106,44 @@ export default function PODetailsPage() {
   // Modal state
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
 
+  // Warnings state
+  const [warnings, setWarnings] = useState<WarningRow[]>([]);
+  const [warningsLoading, setWarningsLoading] = useState(true);
+  const [warningMessage, setWarningMessage] = useState("");
+  const [sendingWarning, setSendingWarning] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Suspension state
+  const [currentSuspension, setCurrentSuspension] = useState<SuspensionRow | null>(null);
+  const [suspensionLoading, setSuspensionLoading] = useState(true);
+  const [suspending, setSuspending] = useState(false);
+  const [liftingSuspension, setLiftingSuspension] = useState(false);
+  const [autoSuspended, setAutoSuspended] = useState(false); // drives the "auto" styling on the banner
+
+  // Feedback for admin actions
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Confirmation modals 
+  const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
+  const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
+  const [showLiftConfirm, setShowLiftConfirm] = useState(false);
+
+  // Result modal shown when a warning triggers an auto-suspension
+  const [autoSuspendNotice, setAutoSuspendNotice] = useState<string | null>(null);
+
   useEffect(() => {
     if (userId) {
       fetchUserDetails();
       fetchBookingHistory();
+      fetchWarnings();
+      fetchCurrentSuspension();
     } else {
       setError("No User ID found in URL.");
       setLoading(false);
       setBookingsLoading(false);
+      setWarningsLoading(false);
+      setSuspensionLoading(false);
     }
   }, [userId]);
 
@@ -120,7 +173,7 @@ export default function PODetailsPage() {
     }
   };
 
-  // Pulls the business email from sp_general_info, linked via profiles_id
+  // Business email from sp_general_info, linked via profiles_id
   const fetchBusinessEmail = async () => {
     try {
       const { data, error } = await supabase
@@ -135,7 +188,7 @@ export default function PODetailsPage() {
       console.error("Error fetching business email:", err);
     }
   };
-  
+
   const fetchBookingHistory = async () => {
     try {
       setBookingsLoading(true);
@@ -185,6 +238,275 @@ export default function PODetailsPage() {
     }
   };
 
+  const fetchWarnings = async () => {
+    try {
+      setWarningsLoading(true);
+      const { data, error } = await supabase
+        .from("user_warnings")
+        .select("id, warning_message, created_at, severity, status, expires_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setWarnings(data || []);
+    } catch (err: any) {
+      console.error("Error fetching warnings:", err);
+    } finally {
+      setWarningsLoading(false);
+    }
+  };
+
+  // Most recet active suspension (if any)
+  const fetchCurrentSuspension = async () => {
+    try {
+      setSuspensionLoading(true);
+      const { data, error } = await supabase
+        .from("user_suspensions")
+        .select(
+          "id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status"
+        )
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("suspended_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setCurrentSuspension(data || null);
+    } catch (err: any) {
+      console.error("Error fetching suspension:", err);
+    } finally {
+      setSuspensionLoading(false);
+    }
+  };
+
+  // Suspension
+  const performSuspension = async (
+    warningIds: string[],
+    reason: string
+  ): Promise<SuspensionRow> => {
+    const suspendedUntil = new Date(
+      Date.now() + SUSPENSION_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const { data, error } = await supabase
+      .from("user_suspensions")
+      .insert({
+        user_id: userId,
+        reason,
+        triggered_by_warning_ids: warningIds,
+        suspended_until: suspendedUntil,
+        status: "active",
+      })
+      .select(
+        "id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status"
+      )
+      .single();
+
+    if (error) throw error;
+
+    const { error: profileError } = await supabase.rpc("suspend_user_profile", {
+      target_user_id: userId,
+      new_status: "suspended",
+    });
+
+    if (profileError) {
+      console.error("Failed to update profile status:", profileError);
+      throw profileError;
+    }
+
+    if (warningIds.length > 0) {
+      const { error: updateError } = await supabase
+        .from("user_warnings")
+        .update({ status: "consumed" })
+        .in("id", warningIds);
+
+      if (updateError) throw updateError;
+
+      setWarnings((prev) =>
+        prev.map((w) =>
+          warningIds.includes(w.id) ? { ...w, status: "consumed" } : w
+        )
+      );
+    }
+
+    setCurrentSuspension(data);
+    return data;
+  };
+
+  // Opens the confirmation modal
+  const handleSendWarning = () => {
+    if (!warningMessage.trim() || !userId) return;
+    setShowSendWarningConfirm(true);
+  };
+
+  // Runs insert/auto-suspend logic
+  const confirmSendWarning = async () => {
+    const trimmed = warningMessage.trim();
+    if (!trimmed || !userId) return;
+
+    setActionError(null);
+    setActionSuccess(null);
+    setAutoSuspended(false);
+    setAutoSuspendNotice(null);
+    setSendingWarning(true);
+    try {
+      const {
+        data: { user: adminUser },
+      } = await supabase.auth.getUser();
+
+      const { data: newWarning, error } = await supabase
+        .from("user_warnings")
+        .insert({
+          user_id: userId,
+          warning_message: trimmed,
+          issued_by: adminUser?.id || null,
+        })
+        .select("id, warning_message, created_at, severity, status, expires_at")
+        .single();
+
+      if (error) throw error;
+
+      const updatedWarnings = [newWarning, ...warnings];
+      setWarnings(updatedWarnings);
+      setWarningMessage("");
+
+      // Only auto-suspend if the user isnt already in an active suspension
+      const activeWarnings = updatedWarnings.filter((w) => w.status === "active");
+      const alreadySuspended =
+        !!currentSuspension &&
+        currentSuspension.status === "active" &&
+        new Date(currentSuspension.suspended_until) > new Date();
+
+      if (activeWarnings.length >= WARNING_THRESHOLD && !alreadySuspended) {
+        const warningIds = activeWarnings.map((w) => w.id);
+        await performSuspension(
+          warningIds,
+          `Auto-suspended: reached ${activeWarnings.length} active warnings`
+        );
+        setAutoSuspended(true);
+        setAutoSuspendNotice(
+          `This was the ${getOrdinal(
+            activeWarnings.length
+          )} active warning, so the user was automatically suspended for ${SUSPENSION_DAYS} days.`
+        );
+      } else {
+        setActionSuccess("Warning issued.");
+      }
+    } catch (err: any) {
+      console.error("Error sending warning:", {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        raw: err,
+      });
+      setActionError(err?.message || err?.details || "Failed to send warning.");
+    } finally {
+      setSendingWarning(false);
+      setShowSendWarningConfirm(false);
+    }
+  };
+
+  // Opens the confirmation modal
+  const handleSuspend = () => {
+    if (!userId) return;
+    setShowSuspendConfirm(true);
+  };
+
+  // Runs the suspension logic
+  const confirmSuspend = async () => {
+    if (!userId) return;
+
+    const activeWarnings = warnings.filter((w) => w.status === "active");
+
+    setActionError(null);
+    setActionSuccess(null);
+    setAutoSuspended(false);
+    setSuspending(true);
+    try {
+      const warningIds = activeWarnings.map((w) => w.id);
+      await performSuspension(
+        warningIds,
+        warningIds.length > 0
+          ? `Manual suspension by admin (${warningIds.length} active warning${
+              warningIds.length === 1 ? "" : "s"
+            })`
+          : "Manual suspension by admin"
+      );
+      setActionSuccess(`User suspended for ${SUSPENSION_DAYS} days.`);
+    } catch (err: any) {
+      console.error("Error suspending user:", {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        raw: err,
+      });
+      setActionError(err?.message || err?.details || "Failed to suspend user.");
+    } finally {
+      setSuspending(false);
+      setShowSuspendConfirm(false);
+    }
+  };
+
+  // Opens the confirmation modal (called by the "Lift Suspension" button)
+  const handleLiftSuspension = () => {
+    if (!userId || !currentSuspension) return;
+    setShowLiftConfirm(true);
+  };
+
+  // Runs the actual lift logic (called by the confirm modal)
+  const confirmLiftSuspension = async () => {
+    if (!userId || !currentSuspension) return;
+
+    setActionError(null);
+    setActionSuccess(null);
+    setAutoSuspended(false);
+    setLiftingSuspension(true);
+    try {
+      const {
+        data: { user: adminUser },
+      } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from("user_suspensions")
+        .update({
+          status: "lifted",
+          lifted_at: new Date().toISOString(),
+          lifted_by: adminUser?.id || null,
+        })
+        .eq("id", currentSuspension.id);
+
+      if (error) throw error;
+
+      const { error: profileError } = await supabase.rpc("suspend_user_profile", {
+        target_user_id: userId,
+        new_status: "active",
+      });
+
+      if (profileError) {
+        console.error("Failed to lift profile status:", profileError);
+        throw profileError;
+      }
+
+      setCurrentSuspension(null);
+      setActionSuccess("Suspension lifted.");
+    } catch (err: any) {
+      console.error("Error lifting suspension:", {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        raw: err,
+      });
+      setActionError(err?.message || err?.details || "Failed to lift suspension.");
+    } finally {
+      setLiftingSuspension(false);
+      setShowLiftConfirm(false);
+    }
+  };
+
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -194,7 +516,18 @@ export default function PODetailsPage() {
     });
   };
 
-  // Combines booking_date booking_timeslot into proper formating 
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  // Combines booking_date booking_timeslot into proper formating
   const formatDateWithSlot = (dateString: string, timeslot: string) => {
     const datePart = formatDate(dateString);
     return timeslot ? `${datePart} at ${timeslot}` : datePart;
@@ -202,6 +535,22 @@ export default function PODetailsPage() {
 
   const formatStatusLabel = (status: string) =>
     STATUS_LABELS[status] || status.replace(/_/g, " ");
+
+  // 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th", 11-13 -> "th", etc.
+  const getOrdinal = (n: number) => {
+    const rem100 = n % 100;
+    if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+    switch (n % 10) {
+      case 1:
+        return `${n}st`;
+      case 2:
+        return `${n}nd`;
+      case 3:
+        return `${n}rd`;
+      default:
+        return `${n}th`;
+    }
+  };
 
   const getServiceSummary = (booking: BookingRow) => {
     const names = new Set<string>();
@@ -212,6 +561,13 @@ export default function PODetailsPage() {
   };
 
   const showEmail = !!user?.role && ROLES_WITH_EMAIL.includes(user.role);
+
+  const activeWarningCount = warnings.filter((w) => w.status === "active").length;
+
+  const isSuspended =
+    !!currentSuspension &&
+    currentSuspension.status === "active" &&
+    new Date(currentSuspension.suspended_until) > new Date();
 
   if (loading)
     return (
@@ -240,12 +596,45 @@ export default function PODetailsPage() {
           <h1 className={styles["page-title"]}>
             {user.first_name} {user.last_name}
           </h1>
-          {user.role && (
-            <span className={styles["role-pill"]}>
-              {user.role.replace(/_/g, " ")}
-            </span>
-          )}
+          <div className={styles["header-pills"]}>
+            {isSuspended && (
+              <span className={styles["suspended-pill"]}>Suspended</span>
+            )}
+            {user.role && (
+              <span className={styles["role-pill"]}>
+                {user.role.replace(/_/g, " ")}
+              </span>
+            )}
+          </div>
         </div>
+
+        {isSuspended && currentSuspension && (
+          <div
+            className={`${styles["suspension-banner"]} ${
+              autoSuspended ? styles["suspension-banner-auto"] : ""
+            }`}
+          >
+            <FaUserSlash />
+            <span>
+              {autoSuspended && (
+                <strong className={styles["auto-tag"]}>Auto-suspended — </strong>
+              )}
+              This user is suspended until{" "}
+              <strong>{formatDateTime(currentSuspension.suspended_until)}</strong>.
+              {" "}Reason: {currentSuspension.reason}
+            </span>
+          </div>
+        )}
+
+        {(actionError || actionSuccess) && (
+          <div
+            className={
+              actionError ? styles["action-error"] : styles["action-success"]
+            }
+          >
+            {actionError || actionSuccess}
+          </div>
+        )}
 
         {/* MAIN TWO-COLUMN LAYOUT */}
         <div className={styles["details-grid"]}>
@@ -299,24 +688,85 @@ export default function PODetailsPage() {
               <div className={styles["admin-block"]}>
                 <div className={styles["admin-block-label-row"]}>
                   <span className={styles["admin-block-label"]}>Issue Warning</span>
-                  <span className={styles["count-pill"]}>Count: 0</span>
+                  <span
+                    className={`${styles["count-pill"]} ${
+                      activeWarningCount >= WARNING_THRESHOLD
+                        ? styles["count-pill-danger"]
+                        : ""
+                    }`}
+                  >
+                    Count: {warningsLoading ? "…" : activeWarningCount}
+                  </span>
                 </div>
                 <textarea
                   className={styles["warning-textarea"]}
                   placeholder="Type warning message here..."
                   rows={3}
+                  value={warningMessage}
+                  onChange={(e) => setWarningMessage(e.target.value)}
+                  disabled={sendingWarning}
                 />
-                <button className={styles["btn-send-notification"]}>
-                  <FaPaperPlane /> Send Notification
+                <button
+                  className={styles["btn-send-notification"]}
+                  onClick={handleSendWarning}
+                  disabled={sendingWarning || !warningMessage.trim()}
+                >
+                  <FaPaperPlane />
+                  {sendingWarning ? "Sending..." : "Send Warning"}
                 </button>
+                {activeWarningCount >= WARNING_THRESHOLD - 1 && !isSuspended && (
+                  <p className={styles["threshold-note"]}>
+                    {activeWarningCount + 1 >= WARNING_THRESHOLD
+                      ? `The next warning will automatically suspend this user for ${SUSPENSION_DAYS} days.`
+                      : `This user has ${activeWarningCount} active warning${
+                          activeWarningCount === 1 ? "" : "s"
+                        }.`}
+                  </p>
+                )}
               </div>
 
               <hr className={styles["admin-divider"]} />
 
               {/* View History */}
-              <button className={styles["btn-view-history"]}>
-                <FaChevronDown /> View History (0)
+              <button
+                className={styles["btn-view-history"]}
+                onClick={() => setShowHistory((prev) => !prev)}
+              >
+                {showHistory ? <FaChevronUp /> : <FaChevronDown />}
+                View History ({warningsLoading ? "…" : warnings.length})
               </button>
+
+              {showHistory && (
+                <div className={styles["warning-history-list"]}>
+                  {warningsLoading ? (
+                    <p className={styles["warning-history-empty"]}>Loading...</p>
+                  ) : warnings.length === 0 ? (
+                    <p className={styles["warning-history-empty"]}>
+                      No warnings issued yet.
+                    </p>
+                  ) : (
+                    warnings.map((w) => (
+                      <div key={w.id} className={styles["warning-history-item"]}>
+                        <div className={styles["warning-history-top"]}>
+                          <span
+                            className={`${styles["warning-status-tag"]} ${
+                              styles[`warning-status-${w.status}`] || ""
+                            }`}
+                          >
+                            {w.status}
+                          </span>
+                          <span className={styles["warning-history-date"]}>
+                            {formatDateTime(w.created_at)}
+                          </span>
+                        </div>
+                        <p className={styles["warning-history-message"]}>
+                          {w.warning_message}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
 
               <hr className={styles["admin-divider"]} />
 
@@ -324,11 +774,29 @@ export default function PODetailsPage() {
               <div className={styles["admin-block"]}>
                 <span className={styles["admin-block-label"]}>Account Suspension</span>
                 <p className={styles["admin-block-desc"]}>
-                  Temporarily disable this user's access for 7 days.
+                  {isSuspended && currentSuspension
+                    ? `Suspended until ${formatDateTime(currentSuspension.suspended_until)}.`
+                    : `Temporarily disable this user's access for ${SUSPENSION_DAYS} days. This also happens automatically once the user reaches ${WARNING_THRESHOLD} active warnings.`}
                 </p>
-                <button className={styles["btn-suspend"]}>
-                  <FaUserSlash /> Suspend for 1 Week
-                </button>
+                {isSuspended ? (
+                  <button
+                    className={styles["btn-lift-suspend"]}
+                    onClick={handleLiftSuspension}
+                    disabled={liftingSuspension}
+                  >
+                    <FaUserCheck />
+                    {liftingSuspension ? "Lifting..." : "Lift Suspension"}
+                  </button>
+                ) : (
+                  <button
+                    className={styles["btn-suspend"]}
+                    onClick={handleSuspend}
+                    disabled={suspending || suspensionLoading}
+                  >
+                    <FaUserSlash />
+                    {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
+                  </button>
+                )}
               </div>
             </section>
           </div>
@@ -548,6 +1016,212 @@ export default function PODetailsPage() {
               ) : (
                 <p>No pets recorded for this booking.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEND WARNING CONFIRMATION MODAL */}
+      {showSendWarningConfirm && (
+        <div
+          className={styles["modal-overlay"]}
+          onClick={() => !sendingWarning && setShowSendWarningConfirm(false)}
+        >
+          <div
+            className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Confirm Warning</h3>
+              <button
+                className={styles["btn-close-modal"]}
+                onClick={() => setShowSendWarningConfirm(false)}
+                disabled={sendingWarning}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className={styles["confirm-modal-message"]}>
+              Send this warning to{" "}
+              <strong>
+                {user.first_name} {user.last_name}
+              </strong>
+              ?
+              {activeWarningCount + 1 >= WARNING_THRESHOLD && !isSuspended && (
+                <>
+                  {" "}
+                  This will be their {activeWarningCount + 1}
+                  {activeWarningCount + 1 === 1
+                    ? "st"
+                    : activeWarningCount + 1 === 2
+                    ? "nd"
+                    : activeWarningCount + 1 === 3
+                    ? "rd"
+                    : "th"}{" "}
+                  active warning, which will automatically suspend the user
+                  for {SUSPENSION_DAYS} days.
+                </>
+              )}
+            </p>
+            <p className={styles["confirm-modal-message"]}>
+              <em>&ldquo;{warningMessage.trim()}&rdquo;</em>
+            </p>
+
+            <div className={styles["confirm-modal-actions"]}>
+              <button
+                className={styles["btn-confirm-cancel"]}
+                onClick={() => setShowSendWarningConfirm(false)}
+                disabled={sendingWarning}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles["btn-confirm-proceed"]}
+                onClick={confirmSendWarning}
+                disabled={sendingWarning}
+              >
+                {sendingWarning ? "Sending..." : "Send Warning"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUSPEND CONFIRMATION MODAL */}
+      {showSuspendConfirm && (
+        <div
+          className={styles["modal-overlay"]}
+          onClick={() => !suspending && setShowSuspendConfirm(false)}
+        >
+          <div
+            className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Confirm Suspension</h3>
+              <button
+                className={styles["btn-close-modal"]}
+                onClick={() => setShowSuspendConfirm(false)}
+                disabled={suspending}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className={styles["confirm-modal-message"]}>
+              Suspend{" "}
+              <strong>
+                {user.first_name} {user.last_name}
+              </strong>{" "}
+              for {SUSPENSION_DAYS} days? They will be unable to access their
+              account until the suspension lifts.
+            </p>
+
+            <div className={styles["confirm-modal-actions"]}>
+              <button
+                className={styles["btn-confirm-cancel"]}
+                onClick={() => setShowSuspendConfirm(false)}
+                disabled={suspending}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles["btn-confirm-danger"]}
+                onClick={confirmSuspend}
+                disabled={suspending}
+              >
+                {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIFT SUSPENSION CONFIRMATION MODAL */}
+      {showLiftConfirm && (
+        <div
+          className={styles["modal-overlay"]}
+          onClick={() => !liftingSuspension && setShowLiftConfirm(false)}
+        >
+          <div
+            className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Lift Suspension</h3>
+              <button
+                className={styles["btn-close-modal"]}
+                onClick={() => setShowLiftConfirm(false)}
+                disabled={liftingSuspension}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className={styles["confirm-modal-message"]}>
+              Lift{" "}
+              <strong>
+                {user.first_name} {user.last_name}
+              </strong>
+              &apos;s suspension early? Their account will regain access
+              immediately.
+            </p>
+
+            <div className={styles["confirm-modal-actions"]}>
+              <button
+                className={styles["btn-confirm-cancel"]}
+                onClick={() => setShowLiftConfirm(false)}
+                disabled={liftingSuspension}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles["btn-confirm-proceed"]}
+                onClick={confirmLiftSuspension}
+                disabled={liftingSuspension}
+              >
+                {liftingSuspension ? "Lifting..." : "Lift Suspension"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* AUTO-SUSPEND RESULT MODAL */}
+      {autoSuspendNotice && (
+        <div
+          className={styles["modal-overlay"]}
+          onClick={() => setAutoSuspendNotice(null)}
+        >
+          <div
+            className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>User Auto-Suspended</h3>
+              <button
+                className={styles["btn-close-modal"]}
+                onClick={() => setAutoSuspendNotice(null)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className={styles["confirm-modal-message"]}>
+              Warning issued for{" "}
+              <strong>
+                {user.first_name} {user.last_name}
+              </strong>
+              . {autoSuspendNotice}
+            </p>
+
+            <div className={styles["confirm-modal-actions"]}>
+              <button
+                className={styles["btn-confirm-proceed"]}
+                onClick={() => setAutoSuspendNotice(null)}
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

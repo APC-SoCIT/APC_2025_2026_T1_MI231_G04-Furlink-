@@ -628,3 +628,238 @@
   color: #374151;
   border-bottom: 1px solid #f3f4f6;
 }
+
+/* Header pills wrapper */
+.header-pills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.suspended-pill {
+  display: inline-block;
+  padding: 6px 18px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  background-color: #dc2626;
+  white-space: nowrap;
+}
+
+/* Suspension banner */
+.suspension-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+/* Action feedback banners */
+.action-error,
+.action-success {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.action-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.action-success {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+/* Warning count pill - danger state */
+.count-pill-danger {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.threshold-note {
+  font-size: 0.78rem;
+  color: #b45309;
+  margin: 2px 0 0 0;
+}
+
+/* Warning history list */
+.warning-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.warning-history-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.warning-history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.warning-status-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.warning-status-active {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.warning-status-consumed {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.warning-status-voided {
+  background: #f3f4f6;
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+.warning-history-message {
+  font-size: 0.85rem;
+  color: #374151;
+  margin: 0;
+}
+
+.warning-history-date {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.warning-history-empty {
+  font-size: 0.82rem;
+  color: #9ca3af;
+  margin: 8px 0;
+}
+
+/* Lift suspension button */
+.btn-lift-suspend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #d1fae5;
+  color: #047857;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-lift-suspend:hover:not(:disabled) {
+  background-color: #a7f3d0;
+}
+
+.btn-lift-suspend:disabled,
+.btn-suspend:disabled,
+.btn-send-notification:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Confirmation modals (Send Warning / Suspend / Lift Suspension) */
+.confirm-modal-box {
+  max-width: 440px;
+}
+
+.confirm-modal-message {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.5;
+  margin: 0 0 14px 0;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-confirm-cancel {
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-confirm-cancel:hover:not(:disabled) {
+  background-color: #e5e7eb;
+}
+
+.btn-confirm-proceed {
+  background: #10245c;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-confirm-proceed:hover:not(:disabled) {
+  background-color: #0c1b47;
+}
+
+.btn-confirm-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-confirm-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.btn-confirm-cancel:disabled,
+.btn-confirm-proceed:disabled,
+.btn-confirm-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
