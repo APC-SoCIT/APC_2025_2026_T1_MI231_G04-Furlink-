@@ -4,17 +4,28 @@
 import React from "react";
 import { POSITION_OPTIONS } from "./constants";
 
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  data: any;
+  files: any;
+  services: any[];
+  isSubmitting: boolean;
+}
+
 /**
  * ConfirmationModal
  * ---------------------------------------------------------------------------
  * Pure "review before submit" summary. 
  * Now includes Services & Packages list + Image Previews for files.
  */
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, isSubmitting }) => {
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, isSubmitting }: ConfirmationModalProps) => {
   if (!isOpen) return null;
 
   /** Turns a File object OR a stored Supabase URL into a human-friendly file name. */
-  const getFileName = (fileOrUrl) => {
+  // Fix 1: Explicit 'any' type for fileOrUrl
+  const getFileName = (fileOrUrl: any) => {
     if (!fileOrUrl) return "None";
     if (fileOrUrl instanceof File) return fileOrUrl.name;
 
@@ -22,6 +33,10 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
       try {
         const decoded = decodeURIComponent(fileOrUrl);
         const baseName = decoded.split('/').pop();
+        
+        // Fix 2: Handle 'baseName is possibly undefined'
+        if (!baseName) return "File";
+        
         return baseName.replace(/^\d+_/, ''); // strip the timestamp prefix
       } catch (e) { return "Existing File"; }
     }
@@ -29,7 +44,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
   };
 
   /** Generates a local blob URL for new image files or passes through the existing URL for previews */
-  const getPreviewUrl = (fileOrUrl) => {
+  // Fix 3: Explicit 'any' type for fileOrUrl
+  const getPreviewUrl = (fileOrUrl: any) => {
     if (!fileOrUrl) return null;
     if (typeof fileOrUrl === 'string') return fileOrUrl;
     if (fileOrUrl instanceof File && fileOrUrl.type.startsWith('image/')) {
@@ -40,13 +56,17 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
 
   // Merge existing + newly selected files into one display list with previews.
   const finalFacilities = [
-    ...(files.existingFacilityImages || []).map(f => ({ name: getFileName(f.image_url), status: 'Existing', preview: getPreviewUrl(f.image_url) })),
-    ...(files.facilityImages || []).map(f => ({ name: f.name, status: 'New', preview: getPreviewUrl(f) })),
+    // Fix 4: Explicit 'any' type for f
+    ...(files.existingFacilityImages || []).map((f: any) => ({ name: getFileName(f.image_url), status: 'Existing', preview: getPreviewUrl(f.image_url) })),
+    // Fix 5: Explicit 'any' type for f
+    ...(files.facilityImages || []).map((f: any) => ({ name: f.name, status: 'New', preview: getPreviewUrl(f) })),
   ];
 
   const finalPayments = [
-    ...(files.existingPaymentChannels || []).map(f => ({ name: getFileName(f.file_url), status: 'Existing', preview: getPreviewUrl(f.file_url) })),
-    ...(files.paymentChannelFiles || []).map(f => ({ name: f.name, status: 'New', preview: getPreviewUrl(f) })),
+    // Fix 6: Explicit 'any' type for f
+    ...(files.existingPaymentChannels || []).map((f: any) => ({ name: getFileName(f.file_url), status: 'Existing', preview: getPreviewUrl(f.file_url) })),
+    // Fix 7: Explicit 'any' type for f
+    ...(files.paymentChannelFiles || []).map((f: any) => ({ name: f.name, status: 'New', preview: getPreviewUrl(f) })),
   ];
 
   let waiverInfo = { name: "None", status: "" };
@@ -63,7 +83,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
     permitInfo = { name: getFileName(files.existingPermitUrl), status: "Existing" };
   }
 
-  const hoursDisplay = (data.operatingHours || []).map(slot =>
+  // Fix 8: Explicit 'any' type for slot
+  const hoursDisplay = (data.operatingHours || []).map((slot: any) =>
     `${slot.days.join(", ")} (${slot.startTime} - ${slot.endTime})`
   ).join("; ");
 
@@ -105,7 +126,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
 
               <div className="review-row" style={{ marginTop: '10px' }}><span className="review-label" style={{ fontWeight: '600', color: '#0E2679' }}>Facilities ({finalFacilities.length}):</span></div>
               <ul className="review-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {finalFacilities.map((f, i) => (
+                {finalFacilities.map((f: any, i: number) => (
                   <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {f.preview ? (
                       <img src={f.preview} alt="preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #d1d5db' }} />
@@ -120,7 +141,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
 
               <div className="review-row" style={{ marginTop: '10px' }}><span className="review-label" style={{ fontWeight: '600', color: '#0E2679' }}>Payment QR ({finalPayments.length}):</span></div>
               <ul className="review-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {finalPayments.map((f, i) => (
+                {finalPayments.map((f: any, i: number) => (
                   <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {f.preview ? (
                       <img src={f.preview} alt="preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #d1d5db' }} />
@@ -140,7 +161,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
               
               {services && services.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  {services.map((svc, idx) => (
+                  {services.map((svc: any, idx: number) => (
                     <div key={idx} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', background: '#f8fafc' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <div>
@@ -163,7 +184,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, data, files, services, 
                             </tr>
                           </thead>
                           <tbody>
-                            {svc.pricing.map((p, pIdx) => (
+                            {/* Fix 9 & 10: Explicit 'any' and 'number' type for p and pIdx */}
+                            {svc.pricing.map((p: any, pIdx: number) => (
                               <tr key={pIdx} style={{ borderTop: '1px solid #e5e7eb' }}>
                                 <td style={{ padding: '8px', textTransform: 'capitalize' }}>{p.petType}</td>
                                 <td style={{ padding: '8px' }}>

@@ -22,19 +22,18 @@ export default function ServiceProviderOnboardingPage() {
   const supabase = createClientComponentClient();
 
   // --- Flow & UI State ---
-  const [step, setStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState<number>(1);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
-  // NEW: Application Status States
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true); 
+  // Application Status States
+  const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(true); 
   const [appStatus, setAppStatus] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   
-  const [providerId, setProviderId] = useState(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
 
   // --- Business Profile State ---
-  // Note: These start blank, giving rejected users the "fresh form" experience they need.
   const [businessInfo, setBusinessInfo] = useState({
     businessName: "",
     isBranch: false,
@@ -47,7 +46,7 @@ export default function ServiceProviderOnboardingPage() {
     typeOfService: "Pet Grooming",
     useDefaultWaiver: false, 
     operatingHours: [{
-      days: [],
+      days: [] as string[],
       startTime: "09:00",
       endTime: "17:00",
       slotDurationHours: 1,
@@ -83,7 +82,6 @@ export default function ServiceProviderOnboardingPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         
-        // We set this so useValidation knows the user's ID to prevent them from flagging their own duplicate business name
         setProviderId(user.id);
 
         const { data, error } = await supabase
@@ -92,13 +90,13 @@ export default function ServiceProviderOnboardingPage() {
           .eq('profiles_id', user.id)
           .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') throw error; // Ignore no rows error (new user)
+        if (error && error.code !== 'PGRST116') throw error;
 
         if (data) {
           setAppStatus(data.registration_status);
           setRejectionReason(data.registration_rejection_reason);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error checking application status:", err);
       } finally {
         setIsCheckingStatus(false);
@@ -111,7 +109,7 @@ export default function ServiceProviderOnboardingPage() {
   /* -------------------------------------------------------------------- */
   /* Input Handlers                                                       */
   /* -------------------------------------------------------------------- */
-  const handleBusinessChange = (e) => {
+  const handleBusinessChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
     if (name === "description" && value.length > DESCRIPTION_MAX_LENGTH) return;
@@ -131,32 +129,32 @@ export default function ServiceProviderOnboardingPage() {
     setBusinessInfo((prev) => ({ ...prev, [name]: value }));
   };
 
-  const toggleDay = (slotIndex, day) => {
+  const toggleDay = (slotIndex: number, day: string) => {
     setBusinessInfo((prev) => {
       const used = prev.operatingHours.some((s, i) => i !== slotIndex && s.days.includes(day));
       if (used) return prev;
       return {
         ...prev,
         operatingHours: prev.operatingHours.map((slot, i) =>
-          i === slotIndex ? { ...slot, days: slot.days.includes(day) ? slot.days.filter((d) => d !== day) : [...slot.days, day] } : slot
+          i === slotIndex ? { ...slot, days: slot.days.includes(day) ? slot.days.filter((d: string) => d !== day) : [...slot.days, day] } : slot
         ),
       };
     });
   };
 
-  const isDayDisabled = (slotIndex, day) => businessInfo.operatingHours.some((slot, i) => i !== slotIndex && slot.days.includes(day));
-  const addTimeSlot = () => setBusinessInfo((prev) => ({ ...prev, operatingHours: [...prev.operatingHours, { days: [], startTime: "09:00", endTime: "17:00" }] }));
-  const removeTimeSlot = (index) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.filter((_, i) => i !== index) }));
-  const handleTimeChange = (slotIndex, type, value) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.map((slot, i) => (i === slotIndex ? { ...slot, [type]: value } : slot)) }));
+  const isDayDisabled = (slotIndex: number, day: string) => businessInfo.operatingHours.some((slot, i) => i !== slotIndex && slot.days.includes(day));
+  const addTimeSlot = () => setBusinessInfo((prev) => ({ ...prev, operatingHours: [...prev.operatingHours, { days: [] as string[], startTime: "09:00", endTime: "17:00", slotDurationHours: 1, slotDurationMinutes: 0, capacityPerSlot: 1 }] }));
+  const removeTimeSlot = (index: number) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.filter((_, i) => i !== index) }));
+  const handleTimeChange = (slotIndex: number, type: string, value: any) => setBusinessInfo((prev) => ({ ...prev, operatingHours: prev.operatingHours.map((slot, i) => (i === slotIndex ? { ...slot, [type]: value } : slot)) }));
 
-  const handleEmployeeChange = (index, field, value) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
+  const handleEmployeeChange = (index: number, field: string, value: string) => setEmployees((prev) => prev.map((emp, i) => (i === index ? { ...emp, [field]: value } : emp)));
   const addEmployee = () => setEmployees((prev) => [...prev, { firstName: "", lastName: "", position: "" }]);
-  const removeEmployee = (index) => setEmployees((prev) => prev.filter((_, i) => i !== index));
+  const removeEmployee = (index: number) => setEmployees((prev) => prev.filter((_, i) => i !== index));
 
   /* -------------------------------------------------------------------- */
   /* Flow Control: Validating & Proceeding to Review                      */
   /* -------------------------------------------------------------------- */
-  const handleNextStep = async (e) => {
+  const handleNextStep = async (e: React.FormEvent) => {
     e.preventDefault();
     const isValid = await validate(supabase, providerId, businessInfo, employees, {
       facilityCount: files.facilityCount,
@@ -174,16 +172,16 @@ export default function ServiceProviderOnboardingPage() {
 
   const handleReviewServices = () => {
     let isValid = true;
-    let newErrors = { ...validationErrors };
+    let newErrors: Record<string, string> = { ...(validationErrors as Record<string, string>) };
     
     if (services.length === 0) {
       newErrors.general = "Please add at least one service.";
       isValid = false;
     }
 
-    services.forEach((s, si) => {
+    services.forEach((s: any, si: number) => {
       if (!s.name.trim()) { newErrors[`service_${si}_name`] = "Required"; isValid = false; }
-      s.pricing.forEach((p, pi) => {
+      s.pricing.forEach((p: any, pi: number) => {
         if (!p.price || parseFloat(p.price) <= 0) { newErrors[`service_${si}_pricing_${pi}_price`] = "Required"; isValid = false; }
         if (p.size !== "cat" && p.size !== "all") {
           if (p.minWeight === "" || p.maxWeight === "") {
@@ -223,26 +221,25 @@ export default function ServiceProviderOnboardingPage() {
 
       const permitUrl = files.businessPermitFile ? await files.uploadFileToStorage(user.id, "permits", files.businessPermitFile) : (files.existingPermitUrl || null);
       
-      const newFacilityUrls = [];
+      const newFacilityUrls: string[] = [];
       for (const f of files.facilityImages) {
         const u = await files.uploadFileToStorage(user.id, "facilities", f);
         if (u) newFacilityUrls.push(u);
       }
 
-      const newPaymentUrls = [];
+      const newPaymentUrls: string[] = [];
       for (const f of files.paymentChannelFiles) {
         const u = await files.uploadFileToStorage(user.id, "payments", f);
         if (u) newPaymentUrls.push(u);
       }
       
-      const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : (files.existingPaymentChannels?.[0]?.file_url || null);
+      // FIX: Added 'as any[]' so TypeScript stops treating this array as strictly never[]
+      const finalPaymentUrl = newPaymentUrls.length > 0 ? newPaymentUrls.join(',') : ((files.existingPaymentChannels as any[])?.[0]?.file_url || null);
 
       const finalBusinessName = businessInfo.isBranch && businessInfo.branchName.trim() !== ""
         ? `${businessInfo.businessName.trim()} - ${businessInfo.branchName.trim()}`
         : businessInfo.businessName.trim();
 
-      // 2. Upsert Core Business Profile (sp_general_info)
-      // Because profiles_id is UNIQUE, this safely overwrites the rejected record and resets status back to pending.
       const payload = {
         profiles_id: user.id,
         business_name: finalBusinessName,
@@ -273,13 +270,12 @@ export default function ServiceProviderOnboardingPage() {
       if (upsertError) throw upsertError;
       const currentProviderId = upsertData.id;
 
-      // 3. Clear and replace nested relation data (Hours & Employees only)
       await Promise.all([
         supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId),
         supabase.from("sp_employees_info").delete().eq("sp_id", currentProviderId),
       ]);
 
-      const hoursPayload = [];
+      const hoursPayload: any[] = [];
       businessInfo.operatingHours.forEach(slot => {
         const totalMinutes = (slot.slotDurationHours * 60) + slot.slotDurationMinutes;
         slot.days.forEach(day => {
@@ -316,16 +312,14 @@ export default function ServiceProviderOnboardingPage() {
         if (sError) throw sError;
       }
 
-      // 4. Save Services & Pricing
       const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId);
       if (!serviceSaveResult.success) throw new Error("Services save failed: " + serviceSaveResult.message);
 
-      // 5. Completion
       setShowConfirmModal(false);
-      setAppStatus('pending'); // Manually trigger the pending UI screen
+      setAppStatus('pending');
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("SUBMISSION FAILED:", JSON.stringify(err, null, 2), err);
       setFieldError("general", "Submission failed: " + (err.message || err.details || "An unexpected error occurred."));
       setShowConfirmModal(false);
@@ -335,7 +329,6 @@ export default function ServiceProviderOnboardingPage() {
     }
   };
 
-
   /* -------------------------------------------------------------------- */
   /* CONDITIONAL RENDERING BASED ON STATUS                                */
   /* -------------------------------------------------------------------- */
@@ -344,7 +337,6 @@ export default function ServiceProviderOnboardingPage() {
     return <div className="loading-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', color: '#0E2679', fontWeight: 'bold' }}>Loading Application...</div>;
   }
 
-  // BLOCK: Already Pending
   if (appStatus === 'pending') {
     return (
       <div className="apply-provider-wrapper" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -357,7 +349,6 @@ export default function ServiceProviderOnboardingPage() {
     );
   }
 
-  // BLOCK: Already Approved (They shouldn't theoretically hit this page, but as a safeguard)
   if (appStatus === 'approved') {
     return (
       <div className="apply-provider-wrapper" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -368,12 +359,10 @@ export default function ServiceProviderOnboardingPage() {
     );
   }
 
-  // ALLOW: 'rejected' or null (New Users)
   return (
     <div className="apply-provider-wrapper">
       <h1 className="page-title">Service Provider Application</h1>
       
-      {/* NEW: Rejection Banner Alert */}
       {appStatus === 'rejected' && (
         <div className="error-banner" style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#b91c1c', marginBottom: '25px', padding: '16px', borderRadius: '8px' }}>
           <strong>Your previous application was rejected.</strong>
@@ -381,22 +370,18 @@ export default function ServiceProviderOnboardingPage() {
         </div>
       )}
 
-      {/* Dynamic Wizard Progress Indicator */}
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '30px' }}>
         <span style={{ fontWeight: step === 1 ? '700' : 'normal', color: step === 1 ? '#0E2679' : '#9ca3af' }}>1. Business Info</span>
         <span style={{ color: '#9ca3af' }}>&gt;</span>
         <span style={{ fontWeight: step === 2 ? '700' : 'normal', color: step === 2 ? '#0E2679' : '#9ca3af' }}>2. Services & Pricing</span>
       </div>
 
-      {validationErrors.general && (
+      {(validationErrors as any).general && (
         <div className="error-banner">
-          <span>⚠️ {validationErrors.general}</span>
+          <span>⚠️ {(validationErrors as any).general}</span>
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* STEP 1: BUSINESS INFO, DOCS, STAFF & HOURS */}
-      {/* ========================================== */}
       {step === 1 && (
         <form className="apply-provider-form" onSubmit={handleNextStep}>
           
@@ -405,7 +390,7 @@ export default function ServiceProviderOnboardingPage() {
             <div className="form-grid-3">
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
                 <label>Business Name*</label>
-                <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={validationErrors.businessName ? "input-error" : ""} />
+                <input type="text" name="businessName" value={businessInfo.businessName} onChange={handleBusinessChange} className={(validationErrors as any).businessName ? "input-error" : ""} />
                 
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginTop: '6px', fontSize: '0.8rem', fontWeight: 'normal', color: '#4b5563', cursor: 'pointer', width: 'fit-content' }}>
                   <input 
@@ -416,7 +401,7 @@ export default function ServiceProviderOnboardingPage() {
                   />
                   This is a specific branch/location
                 </label>
-                {validationErrors.businessName && <small className="error">{validationErrors.businessName}</small>}
+                {(validationErrors as any).businessName && <small className="error">{(validationErrors as any).businessName}</small>}
               </div>
 
               {businessInfo.isBranch && (
@@ -428,21 +413,21 @@ export default function ServiceProviderOnboardingPage() {
                     value={businessInfo.branchName} 
                     onChange={handleBusinessChange} 
                     placeholder="e.g., SM Mall of Asia"
-                    className={validationErrors.branchName ? "input-error" : ""} 
+                    className={(validationErrors as any).branchName ? "input-error" : ""} 
                   />
-                  {validationErrors.branchName && <small className="error">{validationErrors.branchName}</small>}
+                  {(validationErrors as any).branchName && <small className="error">{(validationErrors as any).branchName}</small>}
                 </div>
               )}
 
               <div className="form-group">
                 <label>Email*</label>
-                <input type="email" name="businessEmail" value={businessInfo.businessEmail} onChange={handleBusinessChange} className={validationErrors.businessEmail ? "input-error" : ""} />
-                {validationErrors.businessEmail && <small className="error">{validationErrors.businessEmail}</small>}
+                <input type="email" name="businessEmail" value={businessInfo.businessEmail} onChange={handleBusinessChange} className={(validationErrors as any).businessEmail ? "input-error" : ""} />
+                {(validationErrors as any).businessEmail && <small className="error">{(validationErrors as any).businessEmail}</small>}
               </div>
               
               <div className="form-group">
                 <label>Mobile Number*</label>
-                <div className={`phone-input-wrapper ${validationErrors.businessMobile ? "input-error" : ""}`}>
+                <div className={`phone-input-wrapper ${(validationErrors as any).businessMobile ? "input-error" : ""}`}>
                   <span className="phone-prefix">+63</span>
                   <input 
                     type="tel" 
@@ -454,7 +439,7 @@ export default function ServiceProviderOnboardingPage() {
                     className="phone-input-field"
                   />
                 </div>
-                {validationErrors.businessMobile && <small className="error">{validationErrors.businessMobile}</small>}
+                {(validationErrors as any).businessMobile && <small className="error">{(validationErrors as any).businessMobile}</small>}
               </div>
             </div>
 
@@ -465,13 +450,13 @@ export default function ServiceProviderOnboardingPage() {
               </div>
               <div className="form-group">
                 <label>Social Media URL</label>
-                <input type="url" name="socialMediaUrl" value={businessInfo.socialMediaUrl} onChange={handleBusinessChange} placeholder="https://facebook.com/..." className={validationErrors.socialMediaUrl ? "input-error" : ""} />
-                {validationErrors.socialMediaUrl && <small className="error">{validationErrors.socialMediaUrl}</small>}
+                <input type="url" name="socialMediaUrl" value={businessInfo.socialMediaUrl} onChange={handleBusinessChange} placeholder="https://facebook.com/..." className={(validationErrors as any).socialMediaUrl ? "input-error" : ""} />
+                {(validationErrors as any).socialMediaUrl && <small className="error">{(validationErrors as any).socialMediaUrl}</small>}
               </div>
               <div className="form-group">
                 <label>Google Map Link</label>
-                <input type="url" name="googleMapUrl" value={businessInfo.googleMapUrl} onChange={handleBusinessChange} placeholder="https://maps.google.com/..." className={validationErrors.googleMapUrl ? "input-error" : ""} />
-                {validationErrors.googleMapUrl && <small className="error">{validationErrors.googleMapUrl}</small>}
+                <input type="url" name="googleMapUrl" value={businessInfo.googleMapUrl} onChange={handleBusinessChange} placeholder="https://maps.google.com/..." className={(validationErrors as any).googleMapUrl ? "input-error" : ""} />
+                {(validationErrors as any).googleMapUrl && <small className="error">{(validationErrors as any).googleMapUrl}</small>}
               </div>
             </div>
 
@@ -482,8 +467,8 @@ export default function ServiceProviderOnboardingPage() {
                   {businessInfo.description.length}/{DESCRIPTION_MAX_LENGTH}
                 </span>
               </div>
-              <textarea name="description" value={businessInfo.description} onChange={handleBusinessChange} rows={5} maxLength={DESCRIPTION_MAX_LENGTH} placeholder="Tell us about your business, services, and what makes you unique..." className={`description-textarea ${validationErrors.description ? 'input-error' : ''}`} />
-              {validationErrors.description && <small className="error">{validationErrors.description}</small>}
+              <textarea name="description" value={businessInfo.description} onChange={handleBusinessChange} rows={5} maxLength={DESCRIPTION_MAX_LENGTH} placeholder="Tell us about your business, services, and what makes you unique..." className={`description-textarea ${(validationErrors as any).description ? 'input-error' : ''}`} />
+              {(validationErrors as any).description && <small className="error">{(validationErrors as any).description}</small>}
             </div>
 
             <div className="form-group operating-hours-container">
@@ -534,12 +519,12 @@ export default function ServiceProviderOnboardingPage() {
           <section className="form-section">
             <h2>Business Address</h2>
             <div className="form-grid-3">
-              <div className="form-group"><label>Street / House No.*</label><input type="text" name="houseStreet" value={businessInfo.houseStreet} onChange={handleBusinessChange} className={validationErrors.houseStreet ? "input-error" : ""} />{validationErrors.houseStreet && <small className="error">{validationErrors.houseStreet}</small>}</div>
-              <div className="form-group"><label>Region*</label><input type="text" name="region" value={businessInfo.region} onChange={handleBusinessChange} className={validationErrors.region ? "input-error" : ""} />{validationErrors.region && <small className="error">{validationErrors.region}</small>}</div>
-              <div className="form-group"><label>Province*</label><input type="text" name="province" value={businessInfo.province} onChange={handleBusinessChange} className={validationErrors.province ? "input-error" : ""} />{validationErrors.province && <small className="error">{validationErrors.province}</small>}</div>
-              <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} className={validationErrors.city ? "input-error" : ""} />{validationErrors.city && <small className="error">{validationErrors.city}</small>}</div>
-              <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} className={validationErrors.barangay ? "input-error" : ""} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
-              <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} className={validationErrors.postalCode ? "input-error" : ""} />{validationErrors.postalCode && <small className="error">{validationErrors.postalCode}</small>}</div>
+              <div className="form-group"><label>Street / House No.*</label><input type="text" name="houseStreet" value={businessInfo.houseStreet} onChange={handleBusinessChange} className={(validationErrors as any).houseStreet ? "input-error" : ""} />{(validationErrors as any).houseStreet && <small className="error">{(validationErrors as any).houseStreet}</small>}</div>
+              <div className="form-group"><label>Region*</label><input type="text" name="region" value={businessInfo.region} onChange={handleBusinessChange} className={(validationErrors as any).region ? "input-error" : ""} />{(validationErrors as any).region && <small className="error">{(validationErrors as any).region}</small>}</div>
+              <div className="form-group"><label>Province*</label><input type="text" name="province" value={businessInfo.province} onChange={handleBusinessChange} className={(validationErrors as any).province ? "input-error" : ""} />{(validationErrors as any).province && <small className="error">{(validationErrors as any).province}</small>}</div>
+              <div className="form-group"><label>City / Municipality*</label><input type="text" name="city" value={businessInfo.city} onChange={handleBusinessChange} className={(validationErrors as any).city ? "input-error" : ""} />{(validationErrors as any).city && <small className="error">{(validationErrors as any).city}</small>}</div>
+              <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} className={(validationErrors as any).barangay ? "input-error" : ""} />{(validationErrors as any).barangay && <small className="error">{(validationErrors as any).barangay}</small>}</div>
+              <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} className={(validationErrors as any).postalCode ? "input-error" : ""} />{(validationErrors as any).postalCode && <small className="error">{(validationErrors as any).postalCode}</small>}</div>
               <div className="form-group"><label>Country</label><input type="text" name="country" value={businessInfo.country} disabled className="input-disabled" /></div>
             </div>
           </section>
@@ -573,44 +558,44 @@ export default function ServiceProviderOnboardingPage() {
                 <label>Waiver</label>
                 <label className="file-btn" style={{ pointerEvents: businessInfo.useDefaultWaiver ? 'none' : 'auto', opacity: businessInfo.useDefaultWaiver ? 0.6 : 1, background: businessInfo.useDefaultWaiver ? '#f1f5f9' : '' }}>
                   📁 <span>{businessInfo.useDefaultWaiver ? "Using Platform Waiver" : "Select File (Max 1MB)"}</span>
-                  <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden disabled={businessInfo.useDefaultWaiver} />
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden disabled={businessInfo.useDefaultWaiver} />
                 </label>
                 
                 <div className="file-preview-small" style={{ opacity: businessInfo.useDefaultWaiver ? 0.5 : 1 }}>
-                  {files.waiverFile ? (<span>{files.waiverFile.name} <span onClick={() => !businessInfo.useDefaultWaiver && files.setWaiverFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingWaiverUrl && !businessInfo.useDefaultWaiver ? (<span><a href={files.existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setWaiverFile, files.setExistingWaiverUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
+                  {files.waiverFile ? (<span>{(files.waiverFile as File).name} <span onClick={() => !businessInfo.useDefaultWaiver && files.setWaiverFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingWaiverUrl && !businessInfo.useDefaultWaiver ? (<span><a href={files.existingWaiverUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setWaiverFile, files.setExistingWaiverUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
                 </div>
-                {validationErrors.waiverFile && !businessInfo.useDefaultWaiver && <small className="error">{validationErrors.waiverFile}</small>}
+                {(validationErrors as any).waiverFile && !businessInfo.useDefaultWaiver && <small className="error">{(validationErrors as any).waiverFile}</small>}
               </div>
 
               <div className="form-group">
                 <label>Business Permit*</label>
-                <label className={`file-btn ${validationErrors.businessPermitFile ? "input-error" : ""}`}>📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label>
+                <label className={`file-btn ${(validationErrors as any).businessPermitFile ? "input-error" : ""}`}>📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label>
                 <div className="file-preview-small">
-                  {files.businessPermitFile ? (<span>{files.businessPermitFile.name} <span onClick={() => files.setBusinessPermitFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingPermitUrl ? (<span><a href={files.existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setBusinessPermitFile, files.setExistingPermitUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
+                  {files.businessPermitFile ? (<span>{(files.businessPermitFile as File).name} <span onClick={() => files.setBusinessPermitFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingPermitUrl ? (<span><a href={files.existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setBusinessPermitFile, files.setExistingPermitUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
                 </div>
-                {validationErrors.businessPermitFile && <small className="error">{validationErrors.businessPermitFile}</small>}
+                {(validationErrors as any).businessPermitFile && <small className="error">{(validationErrors as any).businessPermitFile}</small>}
               </div>
             </div>
 
             <div className="form-grid-2">
               <div className="form-group">
                 <label>Facility Images (Max 3)*</label>
-                <label className={`file-btn ${validationErrors.facilityImages ? "input-error" : ""}`}>📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", files.existingFacilityImages.length, 1)} hidden /></label>
+                <label className={`file-btn ${(validationErrors as any).facilityImages ? "input-error" : ""}`}>📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", files.existingFacilityImages.length, 1)} hidden /></label>
                 <div className="file-list">
-                  {files.existingFacilityImages.map(img => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => files.removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}
-                  {files.facilityImages.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setFacilityImages, i)}>✕</button></div>))}
+                  {files.existingFacilityImages.map((img: any) => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => files.removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}
+                  {files.facilityImages.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setFacilityImages, i)}>✕</button></div>))}
                 </div>
-                {validationErrors.facilityImages && <small className="error">{validationErrors.facilityImages}</small>}
+                {(validationErrors as any).facilityImages && <small className="error">{(validationErrors as any).facilityImages}</small>}
               </div>
 
               <div className="form-group">
                 <label>Payment QR (Max 2)*</label>
-                <label className={`file-btn ${validationErrors.paymentChannelFiles ? "input-error" : ""}`}>📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", files.existingPaymentChannels.length, 1)} hidden /></label>
+                <label className={`file-btn ${(validationErrors as any).paymentChannelFiles ? "input-error" : ""}`}>📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", files.existingPaymentChannels.length, 1)} hidden /></label>
                 <div className="file-list">
-                  {files.existingPaymentChannels.map(img => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => files.removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}
-                  {files.paymentChannelFiles.map((f, i) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setPaymentChannelFiles, i)}>✕</button></div>))}
+                  {files.existingPaymentChannels.map((img: any) => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => files.removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}
+                  {files.paymentChannelFiles.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setPaymentChannelFiles, i)}>✕</button></div>))}
                 </div>
-                {validationErrors.paymentChannelFiles && <small className="error">{validationErrors.paymentChannelFiles}</small>}
+                {(validationErrors as any).paymentChannelFiles && <small className="error">{(validationErrors as any).paymentChannelFiles}</small>}
               </div>
             </div>
           </section>
@@ -620,25 +605,25 @@ export default function ServiceProviderOnboardingPage() {
             {employees.map((emp, idx) => (
               <div className="employee-row" key={idx}>
                 <div className="form-grid-3">
-                  <div className="form-group"><label>First Name*</label><input type="text" value={emp.firstName} onChange={(e) => handleEmployeeChange(idx, "firstName", e.target.value)} className={validationErrors[`employee_${idx}_first`] ? "input-error" : ""} />{validationErrors[`employee_${idx}_first`] && <small className="error">{validationErrors[`employee_${idx}_first`]}</small>}</div>
-                  <div className="form-group"><label>Last Name*</label><input type="text" value={emp.lastName} onChange={(e) => handleEmployeeChange(idx, "lastName", e.target.value)} className={validationErrors[`employee_${idx}_last`] ? "input-error" : ""} />{validationErrors[`employee_${idx}_last`] && <small className="error">{validationErrors[`employee_${idx}_last`]}</small>}</div>
+                  <div className="form-group"><label>First Name*</label><input type="text" value={emp.firstName} onChange={(e) => handleEmployeeChange(idx, "firstName", e.target.value)} className={(validationErrors as Record<string, any>)[`employee_${idx}_first`] ? "input-error" : ""} />{(validationErrors as Record<string, any>)[`employee_${idx}_first`] && <small className="error">{(validationErrors as Record<string, any>)[`employee_${idx}_first`]}</small>}</div>
+                  <div className="form-group"><label>Last Name*</label><input type="text" value={emp.lastName} onChange={(e) => handleEmployeeChange(idx, "lastName", e.target.value)} className={(validationErrors as Record<string, any>)[`employee_${idx}_last`] ? "input-error" : ""} />{(validationErrors as Record<string, any>)[`employee_${idx}_last`] && <small className="error">{(validationErrors as Record<string, any>)[`employee_${idx}_last`]}</small>}</div>
                   <div className="form-group">
                     <label>Position*</label>
                     <div className="input-with-btn">
-                      <select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)} className={validationErrors[`employee_${idx}_pos`] ? "input-error" : ""}>
+                      <select value={emp.position} onChange={(e) => handleEmployeeChange(idx, "position", e.target.value)} className={(validationErrors as Record<string, any>)[`employee_${idx}_pos`] ? "input-error" : ""}>
                         <option value="">Select Position</option>
                         {POSITION_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
                       {employees.length > 1 && (<button type="button" onClick={() => removeEmployee(idx)} className="remove-btn" title="Remove Employee">🗑️</button>)}
                     </div>
-                    {validationErrors[`employee_${idx}_pos`] && <small className="error">{validationErrors[`employee_${idx}_pos`]}</small>}
+                    {(validationErrors as Record<string, any>)[`employee_${idx}_pos`] && <small className="error">{(validationErrors as Record<string, any>)[`employee_${idx}_pos`]}</small>}
                   </div>
                 </div>
               </div>
             ))}
             <div className="employee-actions-container">
               <button type="button" className="add-btn" onClick={addEmployee}>+ Add Employee</button>
-              {validationErrors.employees && <small className="error employee-global-error">{validationErrors.employees}</small>}
+              {(validationErrors as any).employees && <small className="error employee-global-error">{(validationErrors as any).employees}</small>}
             </div>
           </section>
 
@@ -648,10 +633,6 @@ export default function ServiceProviderOnboardingPage() {
         </form>
       )}
 
-
-      {/* ========================================== */}
-      {/* STEP 2: SERVICES & PRICING                 */}
-      {/* ========================================== */}
       {step === 2 && (
         <div className="apply-provider-form">
           <section className="form-section" style={{ background: 'transparent', border: 'none', padding: 0 }}>
@@ -664,7 +645,7 @@ export default function ServiceProviderOnboardingPage() {
             </div>
 
             <div className="services-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {services.map((service, si) => (
+              {services.map((service: any, si: number) => (
                 <ServiceCard
                   key={si}
                   service={service}
@@ -707,7 +688,6 @@ export default function ServiceProviderOnboardingPage() {
         </div>
       )}
 
-      {/* --- Confirmation / Review Modal --- */}
       <ConfirmationModal
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
