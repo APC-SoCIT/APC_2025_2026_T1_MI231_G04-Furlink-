@@ -363,7 +363,6 @@ export default function ServiceProviderOnboardingPage() {
       <div className="apply-provider-wrapper" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: '#ecfdf5', padding: '40px', borderRadius: '12px', border: '1px solid #a7f3d0', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
           <h2 style={{ color: '#059669', marginBottom: '16px' }}>You are already an approved Service Provider!</h2>
-          <button onClick={() => router.push(ROUTES.SERVICE_PROVIDER.DASHBOARD)} className="btn-primary" style={{ marginTop: '20px' }}>Go to Dashboard</button>
         </div>
       </div>
     );
