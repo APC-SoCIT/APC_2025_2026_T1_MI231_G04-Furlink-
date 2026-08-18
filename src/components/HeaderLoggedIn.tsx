@@ -417,7 +417,7 @@ export default function HeaderLoggedIn() {
           <div className="drawer-user-card">
             <FaUserCircle className="drawer-user-icon" />
             <div>
-              <p className="drawer-welcome">Welcome back,</p>
+              <p className="drawer-hi">Hi,</p>
               <p className="drawer-username">{fullName || "there"}</p>
             </div>
           </div>
