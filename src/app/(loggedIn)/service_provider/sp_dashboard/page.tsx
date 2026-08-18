@@ -26,11 +26,29 @@ export default function ServiceProviderDashboardPage() {
     fetchBookings();
   }, []);
 
-  // Fetch bookings from Supabase with nested pet and service data
+  // Fetch filtered bookings from Supabase for the logged-in service provider
   const fetchBookings = async () => {
     try {
       setLoading(true);
 
+      // 1. Get the currently logged-in auth user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("No authenticated user session found.");
+
+      // 2. Find the service provider record belonging to this user using profiles_id
+      const { data: providerData, error: providerError } = await supabase
+        .from("sp_general_info")
+        .select("id")
+        .eq("profiles_id", user.id)
+        .single();
+
+      if (providerError || !providerData) {
+        console.warn("Current user is not registered as a service provider.");
+        setBookings([]);
+        return;
+      }
+
+      // 3. Fetch ONLY bookings assigned to this service provider's business ID
       const { data, error } = await supabase
         .from("booking_info")
         .select(`
@@ -40,11 +58,12 @@ export default function ServiceProviderDashboardPage() {
             booking_service_info (*)
           )
         `)
+        .eq("sp_id", providerData.id) // Filters out pet owner bookings, keeping only those sent to this provider
         .order("booking_date", { ascending: false });
 
       if (error) throw error;
       
-      console.log("Fetched bookings with session client:", data);
+      console.log("Fetched filtered provider bookings:", data);
       setBookings(data || []);
     } catch (err: any) {
       console.error("Error fetching bookings:", err?.message);
