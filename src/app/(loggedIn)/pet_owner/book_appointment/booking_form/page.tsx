@@ -133,6 +133,33 @@ function BookingFormContent() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
 
+  // Payment Retry & 1-Hour Cooldown Logic
+  const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = cooldownUntil - now;
+
+      if (diff <= 0) {
+        setCooldownUntil(null);
+        setPaymentAttempts(0);
+        setTimeRemaining('');
+        clearInterval(interval);
+      } else {
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setTimeRemaining(`${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
+
   // Services and Service Weight Options
   const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
   const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
@@ -695,8 +722,13 @@ function BookingFormContent() {
     return { bookingInfoId, userId: user.id };
   };
 
-  // Launch PayMongo Session
+  // Launch PayMongo Session with Retry Threshold
   const handleConfirmBooking = async () => {
+    if (cooldownUntil && Date.now() < cooldownUntil) {
+      alert(`Payment attempts exceeded. Please try again in ${timeRemaining}.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { bookingInfoId } = await createBookingInDatabase();
@@ -715,6 +747,13 @@ function BookingFormContent() {
 
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initialize payment.');
+      }
+
+      const nextAttempts = paymentAttempts + 1;
+      setPaymentAttempts(nextAttempts);
+
+      if (nextAttempts >= 3) {
+        setCooldownUntil(Date.now() + 60 * 60 * 1000);
       }
 
       window.open(result.checkoutUrl, '_blank');
@@ -1287,9 +1326,9 @@ function BookingFormContent() {
               <button
                 className="btn-confirm-booking"
                 onClick={handleConfirmBooking}
-                disabled={isSubmitting}
+                disabled={isSubmitting || cooldownUntil !== null}
               >
-                {isSubmitting ? 'Opening Gateway...' : 'Pay with PayMongo'}
+                {isSubmitting ? 'Opening Gateway...' : cooldownUntil ? 'Payment Locked' : 'Pay with PayMongo'}
               </button>
             </div>
           </div>
@@ -1314,7 +1353,7 @@ function BookingFormContent() {
         </div>
       )}
 
-      {/* 3. PAYMENT FAILED / INCOMPLETE MODAL */}
+      {/* 3. PAYMENT FAILED / INCOMPLETE MODAL WITH RETRY & COOLDOWN */}
       {showFailedModal && !showSuccessModal && (
         <div className="modal-backdrop">
           <div className="success-modal-card">
@@ -1322,19 +1361,27 @@ function BookingFormContent() {
               <FaTimesCircle className="failed-red-cross" />
             </div>
             <h2 className="failed-title">Payment Incomplete or Cancelled</h2>
-            <p className="success-message">
-              Your payment transaction was not completed. You can try paying again or save your booking to pay later from your dashboard.
-            </p>
+            
+            {cooldownUntil ? (
+              <p className="success-message">
+                You have reached the maximum number of payment attempts (3/3). Online payment attempts are temporarily locked. Please try again in <strong>{timeRemaining}</strong> or choose <strong>Pay Later</strong>.
+              </p>
+            ) : (
+              <p className="success-message">
+                Your payment transaction was not completed. You have <strong>{3 - paymentAttempts}</strong> attempt(s) remaining before a 1-hour cooldown.
+              </p>
+            )}
+
             <div className="failed-modal-actions">
               <button
                 className="btn-try-again"
-                disabled={isSavingPayLater}
+                disabled={isSavingPayLater || cooldownUntil !== null}
                 onClick={() => {
                   setShowFailedModal(false);
                   setShowSummaryModal(true);
                 }}
               >
-                Try Again
+                {cooldownUntil ? 'Locked' : 'Try Again'}
               </button>
               <button
                 className="btn-pay-later"

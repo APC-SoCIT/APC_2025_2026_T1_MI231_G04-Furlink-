@@ -831,13 +831,14 @@
   transition: background-color 0.2s ease;
 }
 
-.btn-try-again:hover {
+.btn-try-again:hover:not(:disabled) {
   background-color: #dc2626;
 }
 
 .btn-try-again:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background-color: #94a3b8;
 }
 
 /* Pay Later Specific Button Style */
@@ -858,7 +859,7 @@
   transition: background-color 0.2s ease;
 }
 
-.btn-pay-later:hover {
+.btn-pay-later:hover:not(:disabled) {
   background-color: #475569;
 }
 
