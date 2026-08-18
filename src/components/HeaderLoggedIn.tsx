@@ -299,7 +299,7 @@ export default function HeaderLoggedIn() {
 
       {isPetOwner && (
         <>
-          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
             <FaCalendarAlt /> <span>Manage Bookings</span>
           </button>
           <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
