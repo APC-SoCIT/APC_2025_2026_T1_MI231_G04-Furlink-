@@ -51,6 +51,9 @@ export default function HeaderLoggedIn() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Add the CSS class to change the body background to white when this header is loaded
+    document.body.classList.add("logged-in-page");
+
     const fetchData = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -89,6 +92,11 @@ export default function HeaderLoggedIn() {
     };
 
     fetchData();
+
+    // Cleanup: remove the class if the component unmounts
+    return () => {
+      document.body.classList.remove("logged-in-page");
+    };
   }, [supabase]);
 
   useEffect(() => {
@@ -119,6 +127,7 @@ export default function HeaderLoggedIn() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleLogout = async () => {
+    document.body.classList.remove("logged-in-page");
     await supabase.auth.signOut();
     localStorage.removeItem("token");
     router.push(ROUTES.HOME);

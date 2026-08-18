@@ -50,6 +50,10 @@ a {
 /* ==========================================================================
   HEADER COMPONENT
    ========================================================================== */
+body.logged-in-page {
+  background-color: var(--bg-white);
+}
+
 .site-header {
   padding: 24px 24px 0 24px;
   width: 100%;
@@ -450,7 +454,7 @@ a {
    FOOTER COMPONENT
    ========================================================================== */
 .site-footer {
-  background-color: #f9fafb;
+  background-color: var(--bg-white);
   width: 100%;
   padding: 2rem 24px;
   color: var(--btn-dark-blue);
