@@ -130,7 +130,7 @@ export default function ForgotPasswordPage() {
         .maybeSingle<{ resolved_email: string; is_confirmed: boolean }>();
 
       if (rpcError || !accountData || !accountData.is_confirmed) {
-        setError("Account is unverified or not registered. Please check your credentials.");
+        setError("If an account exists with this email, you will receive a password reset link shortly.");
         setLoading(false);
         return;
       }
