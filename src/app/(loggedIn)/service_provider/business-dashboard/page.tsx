@@ -3,18 +3,23 @@
 import React, { useState } from 'react';
 import { FaFileExcel } from 'react-icons/fa';
 import { DashboardTab } from './type';
-import { formatCurrency, formatTrend, getTrendDirection, formatLargeNumber } from './utils';
+import { formatCurrency, formatTrend, formatLargeNumber } from './utils';
 import Sidebar from './components/Sidebar';
 import BusinessPerformance from './components/BusinessPerformance';
 import SalesPerformance from './components/SalesPerformance';
 import CustomerInsights from './components/CustomerInsights';
+import Footer from '@/components/Footer'; 
 import styles from './business-dashboard.module.css';
 
 export default function BusinessDashboardPage() {
   // Filter & Tab States
   const [activeTab, setActiveTab] = useState<DashboardTab>('business_performance');
-  const [timeFilter, setTimeFilter] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [timeFilter, setTimeFilter] = useState<'weekly' | 'monthly' | 'yearly' | 'custom'>('monthly');
   const [petTypeFilter, setPetTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
+  
+  // Custom Date Range States
+  const [customDateStart, setCustomDateStart] = useState<string>('');
+  const [customDateEnd, setCustomDateEnd] = useState<string>('');
 
   // Get current date for the display header
   const currentDate = new Date();
@@ -24,9 +29,7 @@ export default function BusinessDashboardPage() {
     day: 'numeric'
   });
 
-  // =========================================================
-  // MOCK DATA: Bypassing Supabase for Phase 1 CSS Testing
-  // =========================================================
+  // Mock data for Phase 1 CSS testing
   const mockMetrics = {
     totalRevenue: 28500.00,
     revenueTrend: 12.5,
@@ -57,8 +60,19 @@ export default function BusinessDashboardPage() {
       <div className={styles.mainLayout}>
         <div className={styles.container}>
           
-          {/* Sidebar Navigation */}
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+          {/* Sidebar Navigation & Filters */}
+          <Sidebar 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab}
+            timeFilter={timeFilter}
+            setTimeFilter={setTimeFilter}
+            petTypeFilter={petTypeFilter}
+            setPetTypeFilter={setPetTypeFilter}
+            customDateStart={customDateStart}
+            setCustomDateStart={setCustomDateStart}
+            customDateEnd={customDateEnd}
+            setCustomDateEnd={setCustomDateEnd}
+          />
 
           {/* Main Content Area */}
           <div className={styles.contentArea}>
@@ -79,38 +93,9 @@ export default function BusinessDashboardPage() {
               </button>
             </div>
 
-            {/* Dashboard Body (Filters, KPIs, Charts) */}
+            {/* Dashboard Body (KPIs, Charts) */}
             <div className={styles.dashboardBody}>
               
-              {/* Filter Controls */}
-              <div className={styles.filterSection}>
-                <div className={styles.filterGroup}>
-                  <label className={styles.filterLabel}>Time Period</label>
-                  <select
-                    className={styles.filterSelect}
-                    value={timeFilter}
-                    onChange={(e) => setTimeFilter(e.target.value as 'weekly' | 'monthly' | 'yearly')}
-                  >
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-
-                <div className={styles.filterGroup}>
-                  <label className={styles.filterLabel}>Pet Type</label>
-                  <select
-                    className={styles.filterSelect}
-                    value={petTypeFilter}
-                    onChange={(e) => setPetTypeFilter(e.target.value as 'all' | 'dog' | 'cat')}
-                  >
-                    <option value="all">Both (Dog & Cat)</option>
-                    <option value="dog">Dogs Only</option>
-                    <option value="cat">Cats Only</option>
-                  </select>
-                </div>
-              </div>
-
               {/* Key Metrics Grid */}
               <div className={styles.metricsGrid}>
                 <div className={styles.metricCard}>
@@ -190,6 +175,8 @@ export default function BusinessDashboardPage() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }

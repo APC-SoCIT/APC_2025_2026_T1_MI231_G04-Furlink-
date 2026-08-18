@@ -7,7 +7,7 @@ import { processBusinessPerformanceData } from '@/utils/analyticsCalculations';
 import styles from '../../business-dashboard.module.css';
 
 interface BusinessPerformanceProps {
-  timeFilter: 'weekly' | 'monthly' | 'yearly';
+  timeFilter: 'weekly' | 'monthly' | 'yearly'| 'custom';
   petTypeFilter: 'all' | 'dog' | 'cat';
   bookings: any[];
   pets: any[];

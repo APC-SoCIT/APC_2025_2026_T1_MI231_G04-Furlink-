@@ -7,7 +7,7 @@ import DogBreedsChart from './components/DogBreedsChart';
 import styles from '../../business-dashboard.module.css';
 
 interface CustomerInsightsProps {
-  timeFilter: 'weekly' | 'monthly' | 'yearly';
+  timeFilter: 'weekly' | 'monthly' | 'yearly'|'custom';
   petTypeFilter: 'all' | 'dog' | 'cat';
 }
 

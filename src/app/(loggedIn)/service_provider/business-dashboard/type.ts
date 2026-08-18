@@ -1,6 +1,6 @@
 // Types for Business Dashboard
 export type DashboardTab = 'business_performance' | 'sales' | 'customer_insights';
-
+export type TimeFilter = 'weekly' | 'monthly' | 'yearly' | 'custom';
 export interface MetricCard {
   label: string;
   value: string | number;

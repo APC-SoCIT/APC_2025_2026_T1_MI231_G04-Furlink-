@@ -7,7 +7,7 @@ import ServicePerformanceChart from './components/ServicePerformanceChart';
 import styles from '../../business-dashboard.module.css';
 
 interface SalesPerformanceProps {
-  timeFilter: 'weekly' | 'monthly' | 'yearly';
+  timeFilter: 'weekly' | 'monthly' | 'yearly'|'custom';
   petTypeFilter: 'all' | 'dog' | 'cat';
 }
 
