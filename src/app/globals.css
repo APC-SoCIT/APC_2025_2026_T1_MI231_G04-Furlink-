@@ -578,6 +578,10 @@ body.logged-in-page {
   opacity: 0.7;
 }
 
+.icon-box-btn:hover svg {
+  color: var(--accent-yellow);
+}
+
 /* Plain, borderless icon button - used for the mobile hamburger */
 .icon-btn {
   background: transparent;
