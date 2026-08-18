@@ -12,16 +12,17 @@ import styles from '../../../business-dashboard.module.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-interface BookingsByDayProps {
+interface PeakDaysProps {
   dogData: number[];
   catData: number[];
-  labels: string[];
   petTypeFilter: 'all' | 'dog' | 'cat';
 }
 
-export default function BookingsByDay({ dogData, catData, labels, petTypeFilter }: BookingsByDayProps) {
+export default function PeakDays({ dogData, catData, petTypeFilter }: PeakDaysProps) {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   // Prepare chart data based on pet filter
-  const bookingChartData = useMemo(() => {
+  const peakDaysChartData = useMemo(() => {
     if (petTypeFilter === 'all') {
       return {
         labels,
@@ -31,14 +32,14 @@ export default function BookingsByDay({ dogData, catData, labels, petTypeFilter 
             data: dogData,
             backgroundColor: '#1e3a8a',
             borderRadius: 6,
-            barThickness: 35,
+            barThickness: 30,
           },
           {
             label: 'Cats',
             data: catData,
             backgroundColor: '#facc15',
             borderRadius: 6,
-            barThickness: 35,
+            barThickness: 30,
           },
         ],
       };
@@ -51,7 +52,7 @@ export default function BookingsByDay({ dogData, catData, labels, petTypeFilter 
             data: dogData,
             backgroundColor: '#1e3a8a',
             borderRadius: 6,
-            barThickness: 35,
+            barThickness: 30,
           },
         ],
       };
@@ -64,12 +65,12 @@ export default function BookingsByDay({ dogData, catData, labels, petTypeFilter 
             data: catData,
             backgroundColor: '#facc15',
             borderRadius: 6,
-            barThickness: 35,
+            barThickness: 30,
           },
         ],
       };
     }
-  }, [dogData, catData, labels, petTypeFilter]);
+  }, [dogData, catData, petTypeFilter]);
 
   const chartOptions = {
     responsive: true,
@@ -89,7 +90,7 @@ export default function BookingsByDay({ dogData, catData, labels, petTypeFilter 
       y: {
         beginAtZero: true,
         ticks: {
-          stepSize: 5,
+          stepSize: 1,
           font: { size: 11 },
         },
         grid: {
@@ -109,9 +110,9 @@ export default function BookingsByDay({ dogData, catData, labels, petTypeFilter 
 
   return (
     <div className={styles.chartContainer}>
-      <h3 className={styles.chartTitle}>Bookings by Day</h3>
+      <h3 className={styles.chartTitle}>Peak Days</h3>
       <div className={styles.chart}>
-        <Bar data={bookingChartData} options={chartOptions} />
+        <Bar data={peakDaysChartData} options={chartOptions} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import BookingsByDay from './components/BookingsByDay';
+import BookingsByDay from './components/AverageBookings';
 import PetTypeDistribution from './components/PetTypeDistribution';
 import ServiceBreakdown from './components/ServiceBreakdown';
 import BookedHours from './components/BookedHours';
