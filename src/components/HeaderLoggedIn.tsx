@@ -45,12 +45,15 @@ export default function HeaderLoggedIn() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [homeRoute, setHomeRoute] = useState<string>(ROUTES.HOME);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null | undefined>(undefined);
 
   const desktopNotifRef = useRef<HTMLDivElement>(null);
   const mobileNotifRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    document.body.classList.add("logged-in-page");
+
     const fetchData = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -66,10 +69,23 @@ export default function HeaderLoggedIn() {
 
         if (profileData?.role) {
           const role = profileData.role;
-          if (role === 'pet_owner' || role === 'both_sp_po') {
-            setHomeRoute(ROUTES.PET_OWNER.DASHBOARD); // Evaluates to "/pet_owner/manage_bookings"
-          } else if (role === 'service_provider') {
-            setHomeRoute(ROUTES.SERVICE_PROVIDER.ONBOARDING); // Evaluates to "/service_provider/manage_listing/onboarding"
+          if (role === 'service_provider' || role === 'both_sp_po') {
+            const { data: spInfo } = await supabase
+              .from("sp_general_info")
+              .select("registration_status")
+              .eq("profiles_id", user.id)
+              .maybeSingle();
+
+            const status = spInfo ? spInfo.registration_status : null;
+            setRegistrationStatus(status);
+
+            if (status === 'approved') {
+              setHomeRoute(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+            } else {
+              setHomeRoute(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+            }
+          } else if (role === 'pet_owner') {
+            setHomeRoute(ROUTES.PET_OWNER.DASHBOARD);
           } else if (role === 'admin') {
             setHomeRoute(ROUTES.ADMIN.ADMIN_DASHBOARD);
           }
@@ -89,6 +105,10 @@ export default function HeaderLoggedIn() {
     };
 
     fetchData();
+
+    return () => {
+      document.body.classList.remove("logged-in-page");
+    };
   }, [supabase]);
 
   useEffect(() => {
@@ -109,8 +129,6 @@ export default function HeaderLoggedIn() {
   }, []);
 
   const userRole = profile?.role;
-
-  // 'both_sp_po' is the only dual-role value your schema allows
   const isBoth = userRole === 'both_sp_po';
   const isServiceProvider = userRole === 'service_provider' || isBoth;
   const isPetOwner = userRole === 'pet_owner' || isBoth;
@@ -119,6 +137,7 @@ export default function HeaderLoggedIn() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleLogout = async () => {
+    document.body.classList.remove("logged-in-page");
     await supabase.auth.signOut();
     localStorage.removeItem("token");
     router.push(ROUTES.HOME);
@@ -128,6 +147,69 @@ export default function HeaderLoggedIn() {
     setShowMobileMenu(false);
     setShowMenu(false);
     router.push(path);
+  };
+
+  const handleActionClick = async () => {
+    setShowMobileMenu(false);
+    setShowMenu(false);
+
+    if (userRole === 'pet_owner') {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+          return;
+        }
+
+        const { data: spInfo } = await supabase
+          .from("sp_general_info")
+          .select("registration_status")
+          .eq("profiles_id", user.id)
+          .maybeSingle();
+
+        if (!spInfo) {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        } else {
+          const status = spInfo.registration_status;
+          if (status === 'pending' || status === 'rejected') {
+            router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+          } else {
+            router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking sp status:", err);
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      }
+      return;
+    }
+
+    if (userRole === 'service_provider') {
+      if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else {
+        router.push(ROUTES.AUTH.MANAGE_ACCOUNT);
+      }
+      return;
+    }
+
+    if (isBoth) {
+      const isCurrentlyServiceProvider = 
+        pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
+        pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
+        pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
+        pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
+
+      if (isCurrentlyServiceProvider) {
+        router.push(ROUTES.PET_OWNER.DASHBOARD);
+      } else {
+        if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        } else {
+          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+        }
+      }
+    }
   };
 
   const handleNotifClick = async (notif: Notification) => {
@@ -154,28 +236,52 @@ export default function HeaderLoggedIn() {
 
   const RoleActionButton = () => {
     if (userRole === 'pet_owner') {
+      let buttonText = "Become a Service Provider";
+      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
+        buttonText = "View application status";
+      }
       return (
-        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.SERVICE_PROVIDER.ONBOARDING)}>
-          Become a Service Provider
+        <button className="header-action-btn-outline" onClick={handleActionClick}>
+          {buttonText}
         </button>
       );
     }
+
     if (userRole === 'service_provider') {
+      let buttonText = "Register your business now!";
+      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
+        buttonText = "View application status";
+      } else if (registrationStatus === 'approved') {
+        buttonText = "Become a Pet Owner";
+      }
       return (
-        <button className="header-action-btn-outline" onClick={() => handleNavClick(ROUTES.AUTH.MANAGE_ACCOUNT)}>
-          Become a Pet Owner
+        <button className="header-action-btn-outline" onClick={handleActionClick}>
+          {buttonText}
         </button>
       );
     }
+
     if (isBoth) {
-      const isCurrentlyPetOwner = pathname.includes("/pet_owner");
+      const isCurrentlyServiceProvider = 
+        pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
+        pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
+        pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
+        pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
+
+      let buttonText = "Switch to Business";
+      if (isCurrentlyServiceProvider) {
+        buttonText = "Switch to Pet Owner";
+      } else if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
+        buttonText = registrationStatus ? "View application status" : "Become a service provider";
+      }
 
       return (
-        <button className="header-action-btn" onClick={() => handleNavClick(ROUTES.SHARED.SWITCH_BUSINESS)}>
-          {isCurrentlyPetOwner ? "Switch to Business" : "Switch to Pet Owner"}
+        <button className="header-action-btn" onClick={handleActionClick}>
+          {buttonText}
         </button>
       );
     }
+
     return null;
   };
 
@@ -193,7 +299,7 @@ export default function HeaderLoggedIn() {
 
       {isPetOwner && (
         <>
-          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.DASHBOARD)}>
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
             <FaCalendarAlt /> <span>Manage Bookings</span>
           </button>
           <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
@@ -311,7 +417,7 @@ export default function HeaderLoggedIn() {
           <div className="drawer-user-card">
             <FaUserCircle className="drawer-user-icon" />
             <div>
-              <p className="drawer-welcome">Welcome back,</p>
+              <p className="drawer-hi">Hi,</p>
               <p className="drawer-username">{fullName || "there"}</p>
             </div>
           </div>
