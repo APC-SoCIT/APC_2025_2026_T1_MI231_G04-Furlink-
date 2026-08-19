@@ -6,11 +6,13 @@
   --furlink-blue: #0047AB;
   --error-border: 2px solid #DC2626;
   --thick-border: 2px solid var(--furlink-blue);
-  --accent-yellow: #fcc419;   
+  --accent-yellow: #fcc419;  
+  --background-color: #ffffff; 
 }
 
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--background-color);
 }
 
 /* ==========================================================================
@@ -22,7 +24,7 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: var(--bg-dark-blue);
+  background-color: var(--background-color);
   padding: 20px;
 }
 
@@ -403,7 +405,7 @@ input::-webkit-credentials-auto-fill-button {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: var(--bg-dark-blue);
+  background-color: var(--background-color);
   padding: 20px;
 }
 
