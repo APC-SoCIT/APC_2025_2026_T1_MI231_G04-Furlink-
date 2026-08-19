@@ -24,8 +24,5 @@ export const ROUTES = {
   },
   ADMIN: {
     ADMIN_DASHBOARD: "/admin/dashboard",
-  },
-  SHARED: {
-    SWITCH_BUSINESS: "/switch-business",
   }
 } as const;
