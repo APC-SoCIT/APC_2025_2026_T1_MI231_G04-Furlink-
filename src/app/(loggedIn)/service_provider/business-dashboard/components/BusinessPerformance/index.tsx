@@ -1,13 +1,12 @@
 import React, { useMemo } from 'react';
-import BookingsByDay from './components/AverageBookings';
-import PetTypeDistribution from './components/PetTypeDistribution';
-import ServiceBreakdown from './components/ServiceBreakdown';
+import AverageBookings from './components/AverageBookings';
+import PeakDays from './components/PeakDays';
 import BookedHours from './components/BookedHours';
 import { processBusinessPerformanceData } from '@/utils/analyticsCalculations';
 import styles from '../../business-dashboard.module.css';
 
 interface BusinessPerformanceProps {
-  timeFilter: 'weekly' | 'monthly' | 'yearly'| 'custom';
+  timeFilter: 'weekly' | 'monthly' | 'yearly' | 'custom';
   petTypeFilter: 'all' | 'dog' | 'cat';
   bookings: any[];
   pets: any[];
@@ -27,62 +26,40 @@ export default function BusinessPerformance({
     return processBusinessPerformanceData(bookings, pets, services);
   }, [bookings, pets, services]);
 
-  // Extract totals for performance cards
-  const totalDogs = analytics.petTypeDistribution.values[0];
-  const totalCats = analytics.petTypeDistribution.values[1];
-  const totalPetsCount = totalDogs + totalCats;
-
-  const dogPercentage = totalPetsCount > 0 ? ((totalDogs / totalPetsCount) * 100).toFixed(0) : '0';
-  const catPercentage = totalPetsCount > 0 ? ((totalCats / totalPetsCount) * 100).toFixed(0) : '0';
+  // Dynamically set the title for Average Bookings based on the selected filter
+  const averageBookingsTitle = `Average Bookings (${timeFilter.charAt(0).toUpperCase() + timeFilter.slice(1)})`;
 
   return (
-    <div>
-      {/* Charts Grid - Bookings by Day and Pet Type Distribution */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      
+      {/* Top Chart - Average Bookings (Spans Full Width) */}
+      <AverageBookings 
+        dogData={analytics?.bookingsByDay?.dogValues || []} 
+        catData={analytics?.bookingsByDay?.catValues || []}
+        labels={analytics?.bookingsByDay?.labels || []}
+        petTypeFilter={petTypeFilter}
+        title={averageBookingsTitle}
+      />
+
+      {/* Bottom Charts Grid - Peak Days and Booked Hours (Side by Side) */}
       <div className={styles.chartsSection}>
-        <BookingsByDay 
-          dogData={analytics.bookingsByDay.dogValues} 
-          catData={analytics.bookingsByDay.catValues}
-          labels={analytics.bookingsByDay.labels}
+        
+        {/* Peak Days now uses live calculated data instead of mocks! */}
+        <PeakDays
+          dogData={analytics?.peakDays?.dogValues || []}
+          catData={analytics?.peakDays?.catValues || []}
           petTypeFilter={petTypeFilter}
         />
-
-        <PetTypeDistribution 
-          data={analytics.petTypeDistribution.values} 
-          labels={analytics.petTypeDistribution.labels}
-        />
-      </div>
-
-      {/* Service Breakdown and Booked Hours Grid */}
-      <div className={styles.chartsSection}>
-        <ServiceBreakdown services={analytics.serviceBreakdown} />
 
         <BookedHours 
-          timeLabels={analytics.bookedHours.timeLabels}
-          dogData={analytics.bookedHours.dogValues}
-          catData={analytics.bookedHours.catValues}
+          timeLabels={analytics?.bookedHours?.timeLabels || []}
+          dogData={analytics?.bookedHours?.dogValues || []}
+          catData={analytics?.bookedHours?.catValues || []}
           petTypeFilter={petTypeFilter}
-          busiestHour={analytics.bookedHours.busiestHour}
+          busiestHour={analytics?.bookedHours?.busiestHour || '10:00 AM'}
         />
       </div>
 
-      {/* Pet Type Performance Cards */}
-      <div className={styles.chartContainer}>
-        <h3 className={styles.chartTitle}>Performance by Pet Type</h3>
-        <div className={styles.petBreakdown}>
-          <div className={styles.petItem}>
-            <div className={styles.petType}>🐕</div>
-            <div className={styles.petLabel}>Dogs</div>
-            <div className={styles.petStat}>{totalDogs} bookings</div>
-            <div className={styles.petStat}>{dogPercentage}% of total</div>
-          </div>
-          <div className={styles.petItem}>
-            <div className={styles.petType}>🐱</div>
-            <div className={styles.petLabel}>Cats</div>
-            <div className={styles.petStat}>{totalCats} bookings</div>
-            <div className={styles.petStat}>{catPercentage}% of total</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -17,6 +17,7 @@ interface AverageBookingsProps {
   catData: number[];
   labels: string[];
   petTypeFilter: 'all' | 'dog' | 'cat';
+  title?: string;
 }
 
 export default function AverageBookings({ dogData, catData, labels, petTypeFilter }: AverageBookingsProps) {

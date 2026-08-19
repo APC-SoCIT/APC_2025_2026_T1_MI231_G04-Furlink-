@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Define the shape of our data so TypeScript knows it won't always be empty
+interface DashboardState {
+  bookings: any[];
+  pets: any[];
+  services: any[];
+  operatingHours: any[];
+  generalInfo: any | null;
+}
 
 export function useDashboardData(spId: string) {
+  const supabase = createClientComponentClient();
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState({
+  
+  // Pass the DashboardState interface to useState
+  const [dashboardData, setDashboardData] = useState<DashboardState>({
     bookings: [],
     pets: [],
     services: [],
@@ -35,8 +42,8 @@ export function useDashboardData(spId: string) {
         const bookingIds = bookings?.map((b) => b.id) || [];
 
         // 2. Fetch booking_pet_info using booking_info_id
-        let pets = [];
-        let services = [];
+        let pets: any[] = [];
+        let services: any[] = [];
         
         if (bookingIds.length > 0) {
           const { data: petData, error: petError } = await supabase
@@ -96,7 +103,7 @@ export function useDashboardData(spId: string) {
     }
 
     fetchBusinessData();
-  }, [spId]);
+  }, [spId, supabase]);
 
   return { ...dashboardData, loading };
 }

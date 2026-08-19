@@ -1,5 +1,6 @@
 import React from 'react';
 import { DashboardTab } from '../type';
+import ServiceBreakdown from './ServiceBreakdown';
 import styles from '../business-dashboard.module.css';
 
 interface SidebarProps {
@@ -9,11 +10,11 @@ interface SidebarProps {
   setTimeFilter: (val: 'weekly' | 'monthly' | 'yearly' | 'custom') => void;
   petTypeFilter: 'all' | 'dog' | 'cat';
   setPetTypeFilter: (val: 'all' | 'dog' | 'cat') => void;
-  // New props for Custom Date Range
   customDateStart: string;
   setCustomDateStart: (val: string) => void;
   customDateEnd: string;
   setCustomDateEnd: (val: string) => void;
+  bookedServices: { name: string; bookings: number; percentage: number }[];
 }
 
 export default function Sidebar({
@@ -26,16 +27,15 @@ export default function Sidebar({
   customDateStart,
   setCustomDateStart,
   customDateEnd,
-  setCustomDateEnd
+  setCustomDateEnd,
+  bookedServices
 }: SidebarProps) {
   
-  // Helper to restrict future dates in the picker
   const today = new Date().toISOString().split('T')[0];
 
   return (
     <aside className={styles.sidebar}>
       
-      {/* Navigation Tabs */}
       <div className={styles.sidebarNav}>
         <button
           className={`${styles.sidebarTab} ${activeTab === 'business_performance' ? styles.sidebarTabActive : ''}`}
@@ -57,7 +57,6 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* Timeframe Filter */}
       <div className={styles.sidebarSection}>
         <h3>Timeframe</h3>
         <select
@@ -71,7 +70,6 @@ export default function Sidebar({
           <option value="custom">Custom Range</option>
         </select>
 
-        {/* Custom Date Range Inputs - Renders only when 'custom' is selected */}
         {timeFilter === 'custom' && (
           <div className={styles.customDateRange}>
             <label className={styles.dateLabel}>From:</label>
@@ -96,7 +94,6 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Pet Type Filter */}
       <div className={styles.sidebarSection}>
         <h3>Pet Type</h3>
         <select
@@ -109,6 +106,9 @@ export default function Sidebar({
           <option value="cat">Cats Only</option>
         </select>
       </div>
+
+      {/* Booked Services Doughnut Chart Widget */}
+      <ServiceBreakdown services={bookedServices} />
       
     </aside>
   );

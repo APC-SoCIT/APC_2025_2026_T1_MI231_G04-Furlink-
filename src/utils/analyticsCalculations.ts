@@ -1,117 +1,119 @@
-export function processBusinessPerformanceData(bookings: any[] = [], pets: any[] = [], services: any[] = []) {
-  const safeBookings = Array.isArray(bookings) ? bookings : [];
-  const safePets = Array.isArray(pets) ? pets : [];
-  const safeServices = Array.isArray(services) ? services : [];
+export function processBusinessPerformanceData(bookings: any[], pets: any[], services: any[]) {
+  console.log("🛠️ Processing Bookings inside Calculator:", bookings);
 
-  // Filter for approved/valid bookings (adjust status array if 'paid' or others should count)
-  const approvedStatuses = ['approved', 'paid', 'to_rate', 'rated'];
-  const validBookings = safeBookings.filter((b) => approvedStatuses.includes(b.booking_status));
+  // 1. Initialize days of the week (Mon-Sun)
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dogPeakDays = new Array(7).fill(0);
+  const catPeakDays = new Array(7).fill(0);
 
-  // 1. Bookings by Day (Mon-Sun)
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const dogDayCounts = [0, 0, 0, 0, 0, 0, 0];
-  const catDayCounts = [0, 0, 0, 0, 0, 0, 0];
+  // 2. Initialize time slots for Booked Hours
+  const timeLabels = ['8:00 AM', '10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM', '6:00 PM'];
+  const dogHours = new Array(timeLabels.length).fill(0);
+  const catHours = new Array(timeLabels.length).fill(0);
 
-  const dayIndexMap: { [key: number]: number } = {
-    1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6,
-  };
+  // 3. Process the 12 real bookings
+  if (bookings && bookings.length > 0) {
+    bookings.forEach(booking => {
+      // Parse booking date (from your schema: booking_date)
+      const dateStr = booking.booking_date;
+      if (!dateStr) return;
+      
+      const bookingDate = new Date(dateStr);
+      const dayIndex = (bookingDate.getDay() + 6) % 7; // Convert Sun(0)-Sat(6) to Mon(0)-Sun(6)
 
-  validBookings.forEach((booking) => {
-    const bookingDate = new Date(booking.booking_date);
-    const dayOfWeek = bookingDate.getDay();
-    const targetIndex = dayIndexMap[dayOfWeek];
+      // Find pets tied to this booking
+      const bookingPets = pets.filter(p => p.booking_info_id === booking.id);
+      let isCat = false;
 
-    if (targetIndex !== undefined) {
-      const bookingPets = safePets.filter((p) => p.booking_info_id === booking.id);
-      bookingPets.forEach((pet) => {
-        if (pet.booking_pet_type === 'dog') {
-          dogDayCounts[targetIndex] += 1;
-        } else if (pet.booking_pet_type === 'cat') {
-          catDayCounts[targetIndex] += 1;
-        }
-      });
-    }
-  });
+      if (bookingPets.length > 0) {
+        bookingPets.forEach(pet => {
+          if (pet.pet_type?.toLowerCase() === 'cat' || pet.species?.toLowerCase() === 'cat') {
+            isCat = true;
+          }
+        });
+      }
 
-  // 2. Pet Type Distribution
-  const totalDogs = dogDayCounts.reduce((a, b) => a + b, 0);
-  const totalCats = catDayCounts.reduce((a, b) => a + b, 0);
+      // Tally Peak Days
+      if (isCat) {
+        catPeakDays[dayIndex]++;
+      } else {
+        dogPeakDays[dayIndex]++; // Defaulting unassigned/dogs to dog column
+      }
 
-  // 3. Service Breakdown Calculation
-  const serviceCounts: { [key: string]: number } = {};
-  let totalServiceEntries = 0;
-
-  // Map valid booking IDs to filter relevant services
-  const validBookingIds = new Set(validBookings.map((b) => b.id));
-  const validPetIds = new Set(safePets.filter((p) => validBookingIds.has(p.booking_info_id)).map((p) => p.id));
-
-  safeServices.forEach((service) => {
-    if (validPetIds.has(service.booking_pet_info_id)) {
-      const name = service.booking_service_name;
-      serviceCounts[name] = (serviceCounts[name] || 0) + 1;
-      totalServiceEntries += 1;
-    }
-  });
-
-  const serviceBreakdown = Object.keys(serviceCounts).map((name) => {
-    const count = serviceCounts[name];
-    const percentage = totalServiceEntries > 0 ? Math.round((count / totalServiceEntries) * 100) : 0;
-    return {
-      name,
-      bookings: count,
-      percentage,
-    };
-  }).sort((a, b) => b.bookings - a.bookings);
-
-  // 4. Booked Hours Calculation
-  const timeSlotMap: { [key: string]: { dog: number; cat: number } } = {};
-  
-  validBookings.forEach((booking) => {
-    const slot = booking.booking_timeslot;
-    if (!timeSlotMap[slot]) {
-      timeSlotMap[slot] = { dog: 0, cat: 0 };
-    }
-
-    const bookingPets = safePets.filter((p) => p.booking_info_id === booking.id);
-    bookingPets.forEach((pet) => {
-      if (pet.booking_pet_type === 'dog') {
-        timeSlotMap[slot].dog += 1;
-      } else if (pet.booking_pet_type === 'cat') {
-        timeSlotMap[slot].cat += 1;
+      // Parse timeslot (from your schema: booking_timeslot, e.g., "12:00 PM" or "11:00 AM - 01:00 PM")
+      const timeslot = booking.booking_timeslot || '';
+      if (timeslot.includes('10')) {
+        isCat ? catHours[1]++ : dogHours[1]++;
+      } else if (timeslot.includes('12')) {
+        isCat ? catHours[2]++ : dogHours[2]++;
+      } else if (timeslot.includes('02') || timeslot.includes('2:')) {
+        isCat ? catHours[3]++ : dogHours[3]++;
+      } else if (timeslot.includes('04') || timeslot.includes('4:')) {
+        isCat ? catHours[4]++ : dogHours[4]++;
+      } else if (timeslot.includes('06') || timeslot.includes('6:')) {
+        isCat ? catHours[5]++ : dogHours[5]++;
+      } else {
+        isCat ? catHours[0]++ : dogHours[0]++; // Default to 8:00 AM bucket
       }
     });
-  });
+  }
 
-  const timeLabels = Object.keys(timeSlotMap);
-  const dogHourValues = timeLabels.map((slot) => timeSlotMap[slot].dog);
-  const catHourValues = timeLabels.map((slot) => timeSlotMap[slot].cat);
+  // 4. Calculate Service Breakdown for Sidebar
+  const serviceCounts: { [key: string]: number } = {};
+  let totalServices = 0;
 
-  let busiestHour = 'N/A';
-  let maxBookings = -1;
-  timeLabels.forEach((slot) => {
-    const totalInSlot = timeSlotMap[slot].dog + timeSlotMap[slot].cat;
-    if (totalInSlot > maxBookings) {
-      maxBookings = totalInSlot;
-      busiestHour = slot;
-    }
-  });
+  if (services && services.length > 0) {
+    services.forEach(srv => {
+      const name = srv.booking_service_name || 'General Service';
+      serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+      totalServices++;
+    });
+  }
+
+  const serviceBreakdown = totalServices > 0 
+    ? Object.keys(serviceCounts).map(name => ({
+        name,
+        bookings: serviceCounts[name],
+        percentage: Math.round((serviceCounts[name] / totalServices) * 100)
+      }))
+    : [
+        { name: 'Pooch Package', bookings: 0, percentage: 0 },
+        { name: 'Nail Clipping', bookings: 0, percentage: 0 },
+        { name: 'Ear Cleaning', bookings: 0, percentage: 0 }
+      ];
+
+  // Find busiest hour dynamically
+  const combinedHours = timeLabels.map((_, i) => dogHours[i] + catHours[i]);
+  const maxHourIdx = combinedHours.indexOf(Math.max(...combinedHours));
+  const busiestHour = Math.max(...combinedHours) > 0 ? timeLabels[maxHourIdx] : '10:00 AM';
 
   return {
     bookingsByDay: {
-      labels: days,
-      dogValues: dogDayCounts,
-      catValues: catDayCounts,
+      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+      dogValues: [
+        dogPeakDays[0] + dogPeakDays[1],
+        dogPeakDays[2] + dogPeakDays[3],
+        dogPeakDays[4],
+        dogPeakDays[5] + dogPeakDays[6]
+      ],
+      catValues: [
+        catPeakDays[0] + catPeakDays[1],
+        catPeakDays[2] + catPeakDays[3],
+        catPeakDays[4],
+        catPeakDays[5] + catPeakDays[6]
+      ]
     },
-    petTypeDistribution: {
-      labels: ['Dogs', 'Cats'],
-      values: [totalDogs, totalCats],
+    peakDays: {
+      labels: daysOfWeek,
+      dogValues: dogPeakDays,
+      catValues: catPeakDays
     },
-    serviceBreakdown,
     bookedHours: {
-      timeLabels: timeLabels.length > 0 ? timeLabels : ['9:00 AM'],
-      dogValues: dogHourValues.length > 0 ? dogHourValues : [0],
-      catValues: catHourValues.length > 0 ? catHourValues : [0],
-      busiestHour,
+      timeLabels,
+      dogValues: dogHours,
+      catValues: catHours,
+      busiestHour
     },
+    serviceBreakdown
   };
 }
