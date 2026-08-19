@@ -30,6 +30,9 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "supabase": "^2.109.1",
     "typescript": "^5.0.0"
   }
 }
