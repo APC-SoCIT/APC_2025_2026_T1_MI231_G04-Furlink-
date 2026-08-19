@@ -971,3 +971,76 @@ body.logged-in-page {
   color: #ffffff;
   text-align: justify;
 }
+
+/* ==========================================================================
+   PRIVACY POLICY & TERMS PAGES
+   ========================================================================== */
+.policy-page-wrapper {
+  width: 100%;
+  padding: 60px 24px;
+  background-color: var(--bg-white);
+  color: #0f172a;
+  display: flex;
+  justify-content: center;
+}
+
+.policy-container {
+  max-width: 800px;
+  width: 100%;
+  background-color: #ffffff;
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.policy-container h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--btn-dark-blue);
+  margin-bottom: 8px;
+}
+
+.policy-date {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+.policy-intro {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #334155;
+  margin-bottom: 32px;
+}
+
+.policy-section {
+  margin-bottom: 28px;
+}
+
+.policy-section h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--btn-dark-blue);
+  margin-bottom: 12px;
+}
+
+.policy-section p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.policy-section ul {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin-top: 8px;
+}
+
+.policy-section li {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 8px;
+}
