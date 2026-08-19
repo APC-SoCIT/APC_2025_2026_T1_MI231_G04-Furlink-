@@ -14,9 +14,14 @@ export default function Header() {
   }, []);
 
   const isLoginPage = mounted && pathname === '/auth/login';
+  const isHomePage = mounted && pathname === '/';
 
   return (
-    <header className="site-header">
+    // Dynamically sets the header background to transparent on the home page, and white on other pages
+    <header 
+      className="site-header" 
+      style={{ backgroundColor: isHomePage ? 'transparent' : '#ffffff' }}
+    >
       <div className="header-container">
         <Link href="/" className="logo-container" style={{ display: 'flex', alignItems: 'center' }}>
           <img 
@@ -37,7 +42,7 @@ export default function Header() {
           <span></span>
         </button>
 
-        {/* Navigation Menu Wrapper*/}
+        {/* Navigation Menu Wrapper */}
         <nav className={`nav-menu ${isMenuOpen ? 'active' : ''}`}>
           {(!mounted || pathname !== '/about') && (
             <Link href="/about" className="nav-text-link" onClick={() => setIsMenuOpen(false)}>
@@ -47,7 +52,6 @@ export default function Header() {
           {(!mounted || pathname !== '/auth/signup') && (
             <Link 
               href="/auth/signup" 
-              // Use 'nav-text-link' normally, and only switch to 'nav-btn-link' (blue background) when on the login page
               className={isLoginPage ? "nav-btn-link" : "nav-text-link signup-mobile-text"} 
               onClick={() => setIsMenuOpen(false)}
             >
