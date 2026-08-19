@@ -13,11 +13,19 @@ export default function Header() {
     setMounted(true);
   }, []);
 
+  // Uupdate body background color on route changes
+  useEffect(() => {
+    if (pathname === '/') {
+      document.body.style.backgroundColor = '#0a217a';
+    } else {
+      document.body.style.backgroundColor = '#ffffff';
+    }
+  }, [pathname]);
+
   const isLoginPage = mounted && pathname === '/auth/login';
   const isHomePage = mounted && pathname === '/';
 
   return (
-    // Dynamically sets the header background to transparent on the home page, and white on other pages
     <header 
       className="site-header" 
       style={{ backgroundColor: isHomePage ? 'transparent' : '#ffffff' }}
