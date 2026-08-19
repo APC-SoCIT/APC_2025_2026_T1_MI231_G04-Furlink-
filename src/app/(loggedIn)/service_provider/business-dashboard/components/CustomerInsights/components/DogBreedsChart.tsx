@@ -12,35 +12,47 @@ import styles from '../../../business-dashboard.module.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-interface DogBreedsChartProps {
+interface BreedChartProps {
   labels: string[];
-  values: number[];
+  dogValues: number[];
+  catValues: number[];
 }
 
-export default function DogBreedsChart({ labels, values }: DogBreedsChartProps) {
+export default function DogBreedsChart({ labels, dogValues, catValues }: BreedChartProps) {
   const chartData = useMemo(() => ({
     labels,
     datasets: [
       {
-        label: 'Bookings',
-        data: values,
-        backgroundColor: '#1e3a8a',
+        label: 'Dogs',
+        data: dogValues,
+        backgroundColor: '#1e3a8a', // Blue for dogs
         borderRadius: 6,
-        barThickness: 25,
+        barThickness: 18,
+      },
+      {
+        label: 'Cats',
+        data: catValues,
+        backgroundColor: '#facc15', // Yellow for cats
+        borderRadius: 6,
+        barThickness: 18,
       },
     ],
-  }), [labels, values]);
+  }), [labels, dogValues, catValues]);
 
   const chartOptions = {
     indexAxis: 'y' as const,
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false },
+      legend: { 
+        display: true,
+        position: 'bottom' as const,
+      },
     },
     scales: {
       x: {
         beginAtZero: true,
+        stacked: true, // Stack them cleanly if a label shares space
         ticks: {
           stepSize: 1,
           font: { size: 11 },
@@ -53,13 +65,14 @@ export default function DogBreedsChart({ labels, values }: DogBreedsChartProps) 
         },
       },
       y: {
+        stacked: true,
         grid: { display: false },
         ticks: {
           font: { size: 11 },
         },
         title: {
           display: true,
-          text: 'Dog Breed',
+          text: 'Breed',
           font: { size: 11 },
           color: '#64748b',
         },
@@ -69,7 +82,7 @@ export default function DogBreedsChart({ labels, values }: DogBreedsChartProps) 
 
   return (
     <div className={styles.chartContainer}>
-      <h3 className={styles.chartTitle}>Most Booked Dog Breeds</h3>
+      <h3 className={styles.chartTitle}>Most Booked Breeds</h3>
       <div className={styles.chart}>
         <Bar data={chartData} options={chartOptions} />
       </div>

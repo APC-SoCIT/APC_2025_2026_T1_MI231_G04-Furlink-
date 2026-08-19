@@ -268,11 +268,23 @@ export default function BusinessDashboardPage() {
               )}
 
               {activeTab === 'sales' && (
-                <SalesPerformance timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
+                <SalesPerformance 
+                  timeFilter={timeFilter} 
+                  petTypeFilter={petTypeFilter}
+                  bookings={filteredBookings} 
+                  pets={pets} 
+                  services={services} 
+                />
               )}
 
+              {/* Updated CustomerInsights with database props */}
               {activeTab === 'customer_insights' && (
-                <CustomerInsights timeFilter={timeFilter} petTypeFilter={petTypeFilter} />
+                <CustomerInsights 
+                  timeFilter={timeFilter} 
+                  petTypeFilter={petTypeFilter} 
+                  bookings={filteredBookings} 
+                  pets={pets} 
+                />
               )}
 
             </div>

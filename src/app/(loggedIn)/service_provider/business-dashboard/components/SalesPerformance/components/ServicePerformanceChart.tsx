@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  BarElement,
+  PointElement,
+  LineElement,
   Tooltip,
   Legend
 } from 'chart.js';
@@ -13,7 +14,8 @@ import styles from '../../../business-dashboard.module.css';
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  BarElement,
+  PointElement,
+  LineElement,
   Tooltip,
   Legend
 );
@@ -37,8 +39,15 @@ export default function ServicePerformanceChart({
       {
         label: 'Service Revenue',
         data: serviceRevenue,
-        backgroundColor: colors,
-        borderRadius: 6,
+        borderColor: '#1e3a8a',
+        backgroundColor: 'rgba(30, 58, 138, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: colors, // Keeps your distinct service colors on the data points!
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
       },
     ],
   }), [serviceNames, serviceRevenue, colors]);
@@ -49,7 +58,7 @@ export default function ServicePerformanceChart({
     plugins: {
       legend: {
         display: true,
-        position: 'bottom' as const,
+        position: 'top' as const,
       },
     },
     scales: {
@@ -66,12 +75,14 @@ export default function ServicePerformanceChart({
 
   return (
     <div className={styles.chartContainer}>
-      <h3 className={styles.chartTitle}>Sales Performance by Service</h3>
-      <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
-        {dateRange}
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+        <h3 className={styles.chartTitle} style={{ margin: 0 }}>Sales Performance by Service</h3>
+        <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' }}>
+          {dateRange}
+        </span>
+      </div>
       <div className={styles.chart}>
-        <Bar data={chartData} options={chartOptions} />
+        <Line data={chartData} options={chartOptions} />
       </div>
     </div>
   );

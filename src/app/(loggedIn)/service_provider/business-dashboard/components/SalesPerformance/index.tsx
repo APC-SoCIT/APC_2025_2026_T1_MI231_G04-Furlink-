@@ -1,5 +1,4 @@
-import React from 'react';
-import { formatCurrency } from '../../utils';
+import React, { useMemo } from 'react';
 import OverallSalesChart from './components/OverallSalesChart';
 import RevenueLossChart from './components/RevenueLossChart';
 import NewVsReturningChart from './components/NewVsReturningChart';
@@ -7,37 +6,115 @@ import ServicePerformanceChart from './components/ServicePerformanceChart';
 import styles from '../../business-dashboard.module.css';
 
 interface SalesPerformanceProps {
-  timeFilter: 'weekly' | 'monthly' | 'yearly'|'custom';
+  timeFilter: 'weekly' | 'monthly' | 'yearly' | 'custom';
   petTypeFilter: 'all' | 'dog' | 'cat';
+  bookings: any[];
+  pets: any[];
+  services: any[];
 }
 
-export default function SalesPerformance({ timeFilter, petTypeFilter }: SalesPerformanceProps) {
-  // Mock data for charts
-  const mockSalesData = {
-    labels: ['Aug 1-7', 'Aug 8-14', 'Aug 15-21', 'Aug 22-31'],
-    totalRevenue: [5200, 6800, 5500, 10800],
-    potentialRevenue: [5500, 7200, 6000, 11500],
-    actualRevenue: [5200, 6800, 5500, 10800],
-    newCustomerRevenue: [1500, 2000, 1800, 3200],
-    returningCustomerRevenue: [3700, 4800, 3700, 7600],
-  };
+export default function SalesPerformance({ 
+  timeFilter, 
+  petTypeFilter, 
+  bookings, 
+  pets, 
+  services 
+}: SalesPerformanceProps) {
 
-  const mockServiceData = {
-    names: ['Pooch', 'Nail Dipping', 'Kitty Bath', 'Ear Cleaning', 'Tooth Brushing', 'Paw Trim'],
-    revenue: [9800, 6300, 2800, 3600, 2400, 1800],
-    colors: ['#1e3a8a', '#facc15', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899'],
-  };
+  // Map booking IDs and filter relevant service items
+  const analyticsData = useMemo(() => {
+    const bookingIds = new Set(bookings.map((b: any) => b.id));
+    
+    const relevantPets = pets.filter((p: any) => bookingIds.has(p.booking_info_id));
+    const petIdSet = new Set(relevantPets.map((p: any) => p.id));
+    
+    const relevantServices = services.filter((s: any) => petIdSet.has(s.booking_pet_info_id));
 
-  const topServices = [
-    { name: 'Pooch', revenue: 9800, bookings: 25 },
-    { name: 'Nail Dipping', revenue: 6300, bookings: 18 },
-    { name: 'Kitty Bath', revenue: 2800, bookings: 10 },
-    { name: 'Ear Cleaning', revenue: 3600, bookings: 12 },
-  ];
+    // Group sales into 4 chunks (weeks or intervals) for the line charts
+    const labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+    const totalRevenueBuckets = [0, 0, 0, 0];
+    const potentialRevenueBuckets = [0, 0, 0, 0];
+    const actualRevenueBuckets = [0, 0, 0, 0];
+    const newCustomerBuckets = [0, 0, 0, 0];
+    const returningCustomerBuckets = [0, 0, 0, 0];
 
-  const dateRange = 'Aug 01, 2026 - Aug 14, 2026';
-  const totalRevenue = 28500;
-  const totalLoss = 2000;
+    let overallTotalRevenue = 0;
+    let overallTotalLoss = 0;
+
+    // Service aggregation map for the chart
+    const serviceMap: { [key: string]: { revenue: number; bookings: number } } = {};
+
+    bookings.forEach((booking: any) => {
+      // Determine bucket index (divide booking index or spread across 4 buckets)
+      const bDate = new Date(booking.booking_date || Date.now());
+      const dayOfMonth = bDate.getDate();
+      let bucketIdx = Math.min(Math.floor((dayOfMonth - 1) / 8), 3);
+      if (bucketIdx < 0) bucketIdx = 0;
+
+      // Find services for this booking
+      const bPets = relevantPets.filter((p: any) => p.booking_info_id === booking.id);
+      const bPetIds = new Set(bPets.map((p: any) => p.id));
+      const bServices = relevantServices.filter((s: any) => bPetIds.has(s.booking_pet_info_id));
+
+      let bookingRevenue = 0;
+      bServices.forEach((srv: any) => {
+        const price = Number(srv.booking_price || 0);
+        bookingRevenue += price;
+
+        const sName = srv.booking_service_name || 'General Service';
+        if (!serviceMap[sName]) {
+          serviceMap[sName] = { revenue: 0, bookings: 0 };
+        }
+        serviceMap[sName].revenue += price;
+        serviceMap[sName].bookings += 1;
+      });
+
+      const isCancelled = booking.booking_status?.toLowerCase() === 'cancelled';
+
+      potentialRevenueBuckets[bucketIdx] += bookingRevenue;
+
+      if (isCancelled) {
+        overallTotalLoss += bookingRevenue;
+      } else {
+        actualRevenueBuckets[bucketIdx] += bookingRevenue;
+        totalRevenueBuckets[bucketIdx] += bookingRevenue;
+        overallTotalRevenue += bookingRevenue;
+
+        // Mock split for new vs returning customer revenue based on ID string parity
+        // (Since a true 'returning customer' tracker doesn't exist in the DB schema yet)
+        if (booking.id.charCodeAt(0) % 2 === 0) {
+          newCustomerBuckets[bucketIdx] += bookingRevenue;
+        } else {
+          returningCustomerBuckets[bucketIdx] += bookingRevenue;
+        }
+      }
+    });
+
+    // Format top services list for chart
+    const serviceNamesArr = Object.keys(serviceMap);
+    const serviceRevenueArr = serviceNamesArr.map(name => serviceMap[name].revenue);
+    const serviceColors = ['#1e3a8a', '#facc15', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'];
+
+    return {
+      salesData: {
+        labels,
+        totalRevenue: totalRevenueBuckets,
+        potentialRevenue: potentialRevenueBuckets,
+        actualRevenue: actualRevenueBuckets,
+        newCustomerRevenue: newCustomerBuckets,
+        returningCustomerRevenue: returningCustomerBuckets,
+      },
+      serviceData: {
+        names: serviceNamesArr.length > 0 ? serviceNamesArr : ['No Services'],
+        revenue: serviceRevenueArr.length > 0 ? serviceRevenueArr : [0],
+        colors: serviceColors,
+      },
+      totalRevenue: overallTotalRevenue,
+      totalLoss: overallTotalLoss,
+    };
+  }, [bookings, pets, services]);
+
+  const dateRange = timeFilter === 'custom' ? 'Custom Range' : `Current ${timeFilter.charAt(0).toUpperCase() + timeFilter.slice(1)}`;
 
   return (
     <div>
@@ -45,102 +122,36 @@ export default function SalesPerformance({ timeFilter, petTypeFilter }: SalesPer
       <div className={styles.chartsSection}>
         {/* Chart 1: Overall Sales Performance */}
         <OverallSalesChart
-          data={mockSalesData.totalRevenue}
-          labels={mockSalesData.labels}
+          data={analyticsData.salesData.totalRevenue}
+          labels={analyticsData.salesData.labels}
           dateRange={dateRange}
-          totalRevenue={totalRevenue}
+          totalRevenue={analyticsData.totalRevenue}
         />
 
         {/* Chart 2: Revenue Loss from Cancellations */}
         <RevenueLossChart
-          potentialData={mockSalesData.potentialRevenue}
-          actualData={mockSalesData.actualRevenue}
-          labels={mockSalesData.labels}
+          potentialData={analyticsData.salesData.potentialRevenue}
+          actualData={analyticsData.salesData.actualRevenue}
+          labels={analyticsData.salesData.labels}
           dateRange={dateRange}
-          totalLoss={totalLoss}
+          totalLoss={analyticsData.totalLoss}
         />
 
         {/* Chart 3: New vs Returning Customer Revenue */}
         <NewVsReturningChart
-          newCustomerData={mockSalesData.newCustomerRevenue}
-          returningCustomerData={mockSalesData.returningCustomerRevenue}
-          labels={mockSalesData.labels}
+          newCustomerData={analyticsData.salesData.newCustomerRevenue}
+          returningCustomerData={analyticsData.salesData.returningCustomerRevenue}
+          labels={analyticsData.salesData.labels}
           dateRange={dateRange}
         />
 
         {/* Chart 4: Sales Performance by Service */}
         <ServicePerformanceChart
-          serviceNames={mockServiceData.names}
-          serviceRevenue={mockServiceData.revenue}
-          colors={mockServiceData.colors}
+          serviceNames={analyticsData.serviceData.names}
+          serviceRevenue={analyticsData.serviceData.revenue}
+          colors={analyticsData.serviceData.colors}
           dateRange={dateRange}
         />
-      </div>
-
-      {/* Top Services by Revenue Table */}
-      <div className={styles.tableContainer}>
-        <div className={styles.tableHeader}>
-          <h3 className={styles.tableTitle}>Top Services by Revenue</h3>
-        </div>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Service Name</th>
-              <th style={{ textAlign: 'center' }}>Bookings</th>
-              <th style={{ textAlign: 'right' }}>Total Revenue</th>
-              <th style={{ textAlign: 'right' }}>Avg per Booking</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topServices.map((service, idx) => (
-              <tr key={idx}>
-                <td>
-                  <strong>{service.name}</strong>
-                </td>
-                <td style={{ textAlign: 'center' }}>{service.bookings}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <strong>{formatCurrency(service.revenue)}</strong>
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  {formatCurrency(service.revenue / service.bookings)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Sales Summary Cards */}
-      <div className={styles.chartsSection}>
-        <div className={styles.chartContainer}>
-          <h3 className={styles.chartTitle}>Sales Summary</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                Total Revenue (Period)
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e3a8a' }}>
-                {formatCurrency(totalRevenue)}
-              </div>
-            </div>
-            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                Average Revenue per Day
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e3a8a' }}>
-                {formatCurrency(2037.14)}
-              </div>
-            </div>
-            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                Total Transactions
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e3a8a' }}>
-                45
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

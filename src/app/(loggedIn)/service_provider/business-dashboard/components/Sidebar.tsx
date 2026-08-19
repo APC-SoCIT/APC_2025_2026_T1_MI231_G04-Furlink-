@@ -107,8 +107,10 @@ export default function Sidebar({
         </select>
       </div>
 
-      {/* Booked Services Doughnut Chart Widget */}
-      <ServiceBreakdown services={bookedServices} />
+      {/* Booked Services Doughnut Chart Widget - Conditionally rendered only on Business Performance */}
+      {activeTab === 'business_performance' && (
+        <ServiceBreakdown services={bookedServices} />
+      )}
       
     </aside>
   );
