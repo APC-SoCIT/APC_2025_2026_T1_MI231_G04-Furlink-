@@ -84,6 +84,13 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
     .eq("sp_id", spId)
     .eq("service_status", "active");
 
+  // 5. Fetch Active Bookings for Current User
+  const { data: userBookings } = await supabase
+    .from("booking_info")
+    .select("id, booking_date, booking_timeslot, booking_status")
+    .eq("profiles_id", session.user.id)
+    .not("booking_status", "in", '("cancelled","rejected")');
+
   // Format full street address
   const fullAddress = [
     spInfo.business_street,
@@ -232,6 +239,7 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
             <BookingWidget
               spId={spId}
               operatingHours={operatingHours || []}
+              existingBookings={userBookings || []}
             />
           </aside>
         </div>

@@ -342,6 +342,7 @@
   border-radius: 6px;
   cursor: pointer;
   color: #334155;
+  position: relative;
 }
 
 .calendar-dates-grid span.selected {
@@ -352,6 +353,44 @@
 
 .calendar-dates-grid span.muted {
   cursor: default;
+}
+
+.calendar-dates-grid span.has-booking {
+  background-color: #fef3c7;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.calendar-dates-grid span.disabled-date {
+  color: #cbd5e1;
+  cursor: not-allowed;
+  background-color: transparent;
+}
+
+.calendar-dates-grid span:hover:not(.disabled-date):not(.muted) {
+  background-color: #e2e8f0;
+}
+
+/* Same-Day Booking Warning Box */
+.same-day-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 18px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.same-day-warning .warning-icon {
+  color: #d97706;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* Terms Checkbox */
@@ -379,17 +418,6 @@
   font-size: 14px;
   font-weight: 700;
   cursor: not-allowed;
-}
-
-/* Disabled calendar dates */
-.calendar-dates-grid span.disabled-date {
-  color: #cbd5e1;
-  cursor: not-allowed;
-  background-color: transparent;
-}
-
-.calendar-dates-grid span:hover:not(.disabled-date):not(.muted) {
-  background-color: #e2e8f0;
 }
 
 /* Active Complete Booking Button */

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 
 export type OperatingHour = {
   id: string;
@@ -14,14 +14,26 @@ export type OperatingHour = {
   slot_capacity: number;
 };
 
+export type ExistingBooking = {
+  id: string;
+  booking_date: string;
+  booking_timeslot: string;
+  booking_status: string;
+};
+
 type BookingWidgetProps = {
   spId: string;
   operatingHours: OperatingHour[];
+  existingBookings?: ExistingBooking[];
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function BookingWidget({ spId, operatingHours }: BookingWidgetProps) {
+export default function BookingWidget({ 
+  spId, 
+  operatingHours, 
+  existingBookings = [] 
+}: BookingWidgetProps) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1));
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 5));
@@ -64,6 +76,18 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
   }, [currentOperatingHour]);
 
   const maxCapacity = currentOperatingHour ? currentOperatingHour.slot_capacity : 1;
+
+  // Check if user already has a booking on the selected date
+  const sameDayBooking = useMemo(() => {
+    if (!selectedDate) return null;
+    
+    const yyyy = selectedDate.getFullYear();
+    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    return existingBookings.find((b) => b.booking_date === dateStr) || null;
+  }, [selectedDate, existingBookings]);
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -109,7 +133,11 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
   const handleCompleteBooking = () => {
     if (!isBookingValid || !selectedDate) return;
 
-    const formattedDate = selectedDate.toISOString().split('T')[0];
+    const yyyy = selectedDate.getFullYear();
+    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(selectedDate.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+
     const query = new URLSearchParams({
       sp_id: spId,
       date: formattedDate,
@@ -160,12 +188,29 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
                 selectedDate.getMonth() === month &&
                 selectedDate.getFullYear() === year;
 
+              const yyyy = thisDate.getFullYear();
+              const mm = String(thisDate.getMonth() + 1).padStart(2, '0');
+              const dd = String(thisDate.getDate()).padStart(2, '0');
+              const dStr = `${yyyy}-${mm}-${dd}`;
+
+              const hasExisting = existingBookings.some((b) => b.booking_date === dStr);
+
               return (
                 <span
                   key={dayNum}
                   onClick={() => isOpen && handleDateSelect(dayNum)}
-                  className={`${isSelected ? 'selected' : ''} ${!isOpen ? 'disabled-date' : ''}`}
-                  title={isOpen ? `${dayName}: Open` : `${dayName}: Closed`}
+                  className={`
+                    ${isSelected ? 'selected' : ''} 
+                    ${!isOpen ? 'disabled-date' : ''} 
+                    ${hasExisting && !isSelected ? 'has-booking' : ''}
+                  `}
+                  title={
+                    hasExisting 
+                      ? 'You already have a booking on this date' 
+                      : isOpen 
+                        ? `${dayName}: Open` 
+                        : `${dayName}: Closed`
+                  }
                 >
                   {dayNum}
                 </span>
@@ -174,6 +219,16 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
           </div>
         </div>
       </div>
+
+      {/* Same-Day Booking Warning Notice */}
+      {sameDayBooking && (
+        <div className="same-day-warning">
+          <FaExclamationTriangle className="warning-icon" />
+          <div>
+            <strong>Existing Booking Found:</strong> You already have an appointment on this day at <strong>{sameDayBooking.booking_timeslot}</strong> ({sameDayBooking.booking_status.replace(/_/g, ' ')}).
+          </div>
+        </div>
+      )}
 
       <div className="form-group">
         <label className="field-label">SELECT TIME SLOT</label>
@@ -192,7 +247,7 @@ export default function BookingWidget({ spId, operatingHours }: BookingWidgetPro
               <option value="" disabled>-- Select a Time Slot --</option>
               {generatedSlots.map((slot) => (
                 <option key={slot} value={slot}>
-                  {slot}
+                  {slot} {sameDayBooking && sameDayBooking.booking_timeslot === slot ? '(Your Existing Slot)' : ''}
                 </option>
               ))}
             </>
