@@ -125,9 +125,9 @@ export default function BusinessDashboardPage() {
       averageBookingValue: averageBookingValue,
       avgTrend: 0,
       cancellationsCount: cancellationsCount,
-      cancelTrend: -2.1,
-      listingViews: 1250, // Kept mocked since visitor logs don't exist in the database schema yet
-      viewsTrend: 22.5,
+      cancelTrend:0,
+      listingViews: 0, // Kept mocked since visitor logs don't exist in the database schema yet
+      viewsTrend: 0,
     };
   }, [filteredBookings, pets, services]);
 
