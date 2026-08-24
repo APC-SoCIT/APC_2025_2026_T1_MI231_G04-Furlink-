@@ -292,11 +292,13 @@ export default function HeaderLoggedIn() {
 
   const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => (
     <>
-      <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
-        <FaUser /> <span>Manage Account</span>
-      </button>
+      {pathname !== ROUTES.AUTH.MANAGE_ACCOUNT && (
+        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
+          <FaUser /> <span>Manage Account</span>
+        </button>
+      )}
 
-      {isServiceProvider && (
+      {isServiceProvider && pathname !== ROUTES.SERVICE_PROVIDER.MANAGE_LISTING && (
         <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING)}>
           <FaStore /> <span>Manage Listing</span>
         </button>
@@ -304,12 +306,16 @@ export default function HeaderLoggedIn() {
 
       {isPetOwner && (
         <>
-          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
-            <FaCalendarAlt /> <span>Manage Bookings</span>
-          </button>
-          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
-            <FaPaw /> <span>Manage Pet</span>
-          </button>
+          {pathname !== ROUTES.PET_OWNER.MANAGE_BOOKING && (
+            <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
+              <FaCalendarAlt /> <span>Manage Bookings</span>
+            </button>
+          )}
+          {pathname !== ROUTES.PET_OWNER.MANAGE_PET && (
+            <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
+              <FaPaw /> <span>Manage Pet</span>
+            </button>
+          )}
         </>
       )}
     </>
