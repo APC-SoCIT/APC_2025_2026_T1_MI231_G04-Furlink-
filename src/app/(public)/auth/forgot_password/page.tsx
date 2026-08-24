@@ -125,17 +125,12 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      // Single lookup against auth.users only — resolves email (whether the
-      // person typed an email or a username) and whether it's confirmed,
-      // with no custom table or column involved.
       const { data: accountData, error: rpcError } = await supabase
         .rpc("resolve_account_for_password_reset", { identifier: targetIdentifier })
         .maybeSingle<{ resolved_email: string; is_confirmed: boolean }>();
 
       if (rpcError || !accountData || !accountData.is_confirmed) {
-        // Same generic message whether the account doesn't exist or exists
-        // but was never verified — avoids revealing which case it is.
-        setError("Account is unverified or not registered. Please check your credentials.");
+        setError("If an account exists with this email, you will receive a password reset link shortly.");
         setLoading(false);
         return;
       }
@@ -251,14 +246,47 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      // Role comes straight from user_metadata set at signup — no profiles
-      // table lookup needed, consistent with relying only on Supabase Auth.
       const { data: { user } } = await supabase.auth.getUser();
-      const role = user?.user_metadata?.role || 'pet_owner';
+      if (!user) {
+        setError("Session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch role from profiles table (matching login logic)
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
+      const mustChangePassword = user.user_metadata?.must_change_password;
+
+      let registrationStatus = null;
+      if (role === 'service_provider' || role === 'both_sp_po') {
+        const { data: spInfo } = await supabase
+          .from("sp_general_info")
+          .select("registration_status")
+          .eq("profiles_id", user.id)
+          .maybeSingle();
+        
+        registrationStatus = spInfo?.registration_status;
+      }
 
       router.refresh();
-      if (role === 'service_provider') {
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+
+      if (role === 'admin' && mustChangePassword) {
+        router.push("/auth/admin_first_login");
+        return;
+      }
+
+      if (role === 'service_provider' || role === 'both_sp_po') {
+        if (registrationStatus === 'approved') {
+          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+        } else {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        }
       } else if (role === 'admin') {
         router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
       } else {
@@ -362,7 +390,7 @@ export default function ForgotPasswordPage() {
             <div className="password-container">
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="New Password (6-16 chars)"
+                placeholder="New Password"
                 value={passwords.newPassword}
                 onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
                 maxLength={16}

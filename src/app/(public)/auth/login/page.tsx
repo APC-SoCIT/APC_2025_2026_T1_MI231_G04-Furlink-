@@ -219,6 +219,17 @@ export default function LoginPage() {
       const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
       const mustChangePassword = user.user_metadata?.must_change_password;
 
+      let registrationStatus = null;
+      if (role === 'service_provider' || role === 'both_sp_po') {
+        const { data: spInfo } = await supabase
+          .from("sp_general_info")
+          .select("registration_status")
+          .eq("profiles_id", user.id)
+          .maybeSingle();
+        
+        registrationStatus = spInfo?.registration_status;
+      }
+
       router.refresh();
 
       // Check if role is admin and if it's their first login (must_change_password is true)
@@ -228,7 +239,11 @@ export default function LoginPage() {
       }
 
       if (role === 'service_provider') {
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        if (registrationStatus === 'approved') {
+          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+        } else {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        }
       } else if (role === 'admin') {
         router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
       } else {
@@ -277,6 +292,17 @@ export default function LoginPage() {
       const role = userProfile?.role || data.user.user_metadata?.role || 'pet_owner';
       const mustChangePassword = data.user.user_metadata?.must_change_password;
 
+      let registrationStatus = null;
+      if (role === 'service_provider' || role === 'both_sp_po') {
+        const { data: spInfo } = await supabase
+          .from("sp_general_info")
+          .select("registration_status")
+          .eq("profiles_id", data.user.id)
+          .maybeSingle();
+        
+        registrationStatus = spInfo?.registration_status;
+      }
+
       router.refresh();
 
       if (role === 'admin' && mustChangePassword) {
@@ -285,7 +311,11 @@ export default function LoginPage() {
       }
 
       if (role === 'service_provider') {
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        if (registrationStatus === 'approved') {
+          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+        } else {
+          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+        }
       } else if (role === 'admin') {
         router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
       } else {
@@ -414,7 +444,7 @@ export default function LoginPage() {
             <input 
                 type={showPassword ? "text" : "password"} 
                 className={touched.password && errors.password ? "input-error" : ""}
-                placeholder="Password (max 16 chars)" 
+                placeholder="Password" 
                 value={formData.password}
                 onChange={handlePasswordChange}
                 onBlur={handleBlur}

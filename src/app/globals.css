@@ -50,6 +50,10 @@ a {
 /* ==========================================================================
   HEADER COMPONENT
    ========================================================================== */
+body.logged-in-page {
+  background-color: var(--bg-white);
+}
+
 .site-header {
   padding: 24px 24px 0 24px;
   width: 100%;
@@ -65,7 +69,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   position: relative; 
 }
 
@@ -450,7 +454,7 @@ a {
    FOOTER COMPONENT
    ========================================================================== */
 .site-footer {
-  background-color: #f9fafb;
+  background-color: var(--bg-white);
   width: 100%;
   padding: 2rem 24px;
   color: var(--btn-dark-blue);
@@ -527,8 +531,11 @@ a {
   transition: background-color 0.2s;
 }
 
-.header-action-btn:hover {
-  background-color: #071966;
+.header-action-btn:hover,
+.header-action-btn-outline:hover,
+.profile-dropdown-item:hover {
+  background-color: var(--btn-dark-blue);
+  color: var(--accent-yellow);
 }
 
 /* Outlined pill - shown to single-role users, inviting them to add the other role */
@@ -554,7 +561,7 @@ a {
 .icon-box-btn {
   position: relative;
   background: transparent;
-  border: 1.5px solid var(--btn-dark-blue);
+  border: none;
   border-radius: 10px;
   width: 40px;
   height: 40px;
@@ -569,6 +576,10 @@ a {
 
 .icon-box-btn:hover {
   opacity: 0.7;
+}
+
+.icon-box-btn:hover svg {
+  color: var(--accent-yellow);
 }
 
 /* Plain, borderless icon button - used for the mobile hamburger */
@@ -817,7 +828,6 @@ a {
   width: 280px;
   max-width: 85vw;
   background-color: var(--bg-white);
-  color: #0f172a;
   transform: translateX(-100%);
   transition: transform 0.3s ease;
   z-index: 140;
@@ -870,7 +880,7 @@ a {
   color: var(--btn-dark-blue);
 }
 
-.drawer-welcome {
+.drawer-hi {
   font-size: 12px;
   color: #64748b;
 }
@@ -878,7 +888,7 @@ a {
 .drawer-username {
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--btn-dark-blue);
 }
 
 .drawer-section .header-action-btn,
@@ -895,8 +905,17 @@ a {
 }
 
 .drawer-links .profile-dropdown-item {
-  color: #0f172a;
+  color: var(--btn-dark-blue);
   padding: 12px 4px;
+}
+
+.drawer-links .profile-dropdown-item:hover {
+  color: var(--accent-yellow);
+}
+
+.drawer-links .profile-dropdown-item:hover span,
+.drawer-links .profile-dropdown-item:hover svg {
+  color: var(--accent-yellow);
 }
 
 .drawer-footer {
@@ -927,6 +946,7 @@ a {
   align-items: center;
   padding: 4rem 2rem;
   min-height: calc(100vh - 120px);
+  background-color: var(--bg-white);
 }
 
 .about-content {
@@ -951,4 +971,77 @@ a {
   line-height: 1.8;
   color: #ffffff;
   text-align: justify;
+}
+
+/* ==========================================================================
+   PRIVACY POLICY & TERMS PAGES
+   ========================================================================== */
+.policy-page-wrapper {
+  width: 100%;
+  padding: 60px 24px;
+  background-color: var(--bg-white);
+  color: #0f172a;
+  display: flex;
+  justify-content: center;
+}
+
+.policy-container {
+  max-width: 800px;
+  width: 100%;
+  background-color: #ffffff;
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.policy-container h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--btn-dark-blue);
+  margin-bottom: 8px;
+}
+
+.policy-date {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+.policy-intro {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #334155;
+  margin-bottom: 32px;
+}
+
+.policy-section {
+  margin-bottom: 28px;
+}
+
+.policy-section h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--btn-dark-blue);
+  margin-bottom: 12px;
+}
+
+.policy-section p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.policy-section ul {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin-top: 8px;
+}
+
+.policy-section li {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 8px;
 }

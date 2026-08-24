@@ -414,7 +414,7 @@ export default function AdminSignupPage() {
 
         <div className="form-row">
           <div className="input-group">
-            <label className="field-guide-label">Mobile Number (PH)</label>
+            <label className="field-guide-label">Mobile Number</label>
             <div className={`phone-input-container ${errors.mobile ? "input-error" : ""}`}>
               <span className="phone-prefix">+63</span>
               <div className="phone-divider"></div>
@@ -431,7 +431,7 @@ export default function AdminSignupPage() {
             {touched.mobile && errors.mobile && <span className="error-text">{errors.mobile}</span>}
           </div>
           <div className="input-group">
-            <label className="field-guide-label">Date of Birth (mm/dd/yyyy)</label>
+            <label className="field-guide-label">Date of Birth</label>
             <div className="date-input-container">
               <input
                 type="date"
@@ -454,7 +454,7 @@ export default function AdminSignupPage() {
         <div className="form-row" style={{ marginTop: "10px" }}>
           <div className="input-group">
             <div className="password-container">
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password (max 16 chars)" value={formData.password} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
+              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -464,7 +464,7 @@ export default function AdminSignupPage() {
 
           <div className="input-group">
             <div className="password-container">
-              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password (max 16 chars)" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
+              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}>
                 {showPasswordConfirm ? <FaEyeSlash /> : <FaEye />}
               </button>

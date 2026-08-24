@@ -82,7 +82,7 @@ export default function AdminPasswordChangePage() {
             <input
               type={showPassword ? "text" : "password"}
               name="newPassword"
-              placeholder="New Password (6-16 chars)"
+              placeholder="New Password"
               value={formData.newPassword}
               onChange={handleChange}
               maxLength={16}
