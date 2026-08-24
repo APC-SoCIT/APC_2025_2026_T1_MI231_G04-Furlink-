@@ -32,10 +32,17 @@ export function useDashboardData(spId: string) {
       setLoading(true);
 
       try {
-        // 1. Fetch booking_info for this service provider
+        // 1. Fetch booking_info for this service provider, joining the profiles table directly
         const { data: bookings, error: bookingError } = await supabase
           .from('booking_info')
-          .select('*')
+          .select(`
+            *,
+            profiles (
+              username,
+              first_name,
+              last_name
+            )
+          `)
           .eq('sp_id', spId);
 
         if (bookingError) throw bookingError;

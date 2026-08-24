@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { FaFileExcel } from 'react-icons/fa'; // (You can optionally change this to FaFilePdf if you import it!)
+import { FaFileExcel } from 'react-icons/fa'; 
 import { DashboardTab } from './type';
 import { formatCurrency, formatTrend, formatLargeNumber } from './utils';
 import Sidebar from './components/Sidebar';
@@ -12,43 +12,35 @@ import CustomerInsights from './components/CustomerInsights';
 import Footer from '@/components/Footer'; 
 import styles from './business-dashboard.module.css';
 
-// Import your custom hook and analytics utility
 import { useDashboardData } from '@/hooks/useDashboardData';
-import { processBusinessPerformanceData } from '@/utils/analyticsCalculations';
 
-// Import PDF Renderer and your specific report templates
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { BusinessReportPDF } from './components/pdf-reports/BusinessReportPDF';
 import { CustomerInsightPDF } from './components/pdf-reports/CustomerInsightPDF';
 import { SalesReportPDF } from './components/pdf-reports/SalesReportPDF'; 
 
-// Import the new Preview Modal
 import ReportPreviewModal from './components/ReportPreviewModal';
 
 export default function BusinessDashboardPage() {
   const supabase = createClientComponentClient();
 
-  // Filter & Tab States
   const [activeTab, setActiveTab] = useState<DashboardTab>('business_performance');
   const [timeFilter, setTimeFilter] = useState<'weekly' | 'monthly' | 'yearly' | 'custom'>('monthly');
   const [petTypeFilter, setPetTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
   
-  // Custom Date Range States
   const [customDateStart, setCustomDateStart] = useState<string>('');
   const [customDateEnd, setCustomDateEnd] = useState<string>('');
 
-  // Resolved Service Provider ID state
   const [spId, setSpId] = useState<string | null>(null);
-
-  // Client-side rendering & Modal states
+  const [profileViewCount, setProfileViewCount] = useState<number>(0); // State for Listing Visitors
   const [isClient, setIsClient] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false); // Controls the preview modal visibility
+  const [isModalOpen, setIsModalOpen] = useState(false); 
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Resolve the logged-in user's sp_id on mount
+  // Resolve the logged-in user's sp_id and business_profile_view_count on mount
   useEffect(() => {
     async function resolveProviderId() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -56,23 +48,23 @@ export default function BusinessDashboardPage() {
 
       const { data: providerData } = await supabase
         .from('sp_general_info')
-        .select('id')
+        .select('id, business_profile_view_count')
         .eq('profiles_id', user.id)
         .maybeSingle();
 
       if (providerData?.id) {
         setSpId(providerData.id);
+        setProfileViewCount(providerData.business_profile_view_count || 0);
       }
     }
 
     resolveProviderId();
   }, [supabase]);
 
-  // Consume your custom dashboard hook using the resolved spId
   const { bookings, pets, services, loading } = useDashboardData(spId || '');
 
-  // Filter bookings dynamically based on the selected timeframe sidebar filter
-  const filteredBookings = useMemo(() => {
+  // 1. Strict Business Status & Date Filter
+  const baseFilteredBookings = useMemo(() => {
     if (!bookings || bookings.length === 0) return [];
 
     let startDate = new Date();
@@ -87,8 +79,12 @@ export default function BusinessDashboardPage() {
     }
 
     return bookings.filter((b: any) => {
+      const validStatuses = ['paid', 'to_rate', 'rated', 'cancelled'];
+      if (!validStatuses.includes(b.booking_status?.toLowerCase())) {
+        return false;
+      }
+
       const bDate = new Date(b.booking_date);
-      
       if (timeFilter !== 'custom') {
         return bDate >= startDate;
       } else {
@@ -99,45 +95,91 @@ export default function BusinessDashboardPage() {
     });
   }, [bookings, timeFilter, customDateStart, customDateEnd]);
 
-  // Process real data for the Sidebar Doughnut Chart
-  const sidebarAnalytics = useMemo(() => {
-    return processBusinessPerformanceData(filteredBookings, pets, services);
-  }, [filteredBookings, pets, services]);
+  // 2. Pet Type Filter
+  const { filteredBookings, filteredPets, filteredServices } = useMemo(() => {
+    let currentPets = pets || [];
+    
+    if (petTypeFilter !== 'all') {
+      currentPets = currentPets.filter((p: any) => p.booking_pet_type?.toLowerCase() === petTypeFilter);
+    }
 
-  // Calculate Real KPI Metrics from Supabase Data
+    const validPetIds = new Set(currentPets.map((p: any) => p.id));
+    const currentServices = (services || []).filter((s: any) => validPetIds.has(s.booking_pet_info_id));
+
+    let currentBookings = baseFilteredBookings || [];
+    if (petTypeFilter !== 'all') {
+      const validBookingIds = new Set(currentPets.map((p: any) => p.booking_info_id));
+      currentBookings = currentBookings.filter((b: any) => validBookingIds.has(b.id));
+    }
+
+    return { 
+      filteredBookings: currentBookings, 
+      filteredPets: currentPets, 
+      filteredServices: currentServices 
+    };
+  }, [baseFilteredBookings, pets, services, petTypeFilter]);
+
+  // Calculate Real KPI Metrics & Service Breakdown from fully filtered data
   const dynamicMetrics = useMemo(() => {
-    const totalBookingsCount = filteredBookings.length;
-    const bookingIds = new Set(filteredBookings.map((b: any) => b.id));
+    const completedBookings = filteredBookings.filter((b: any) => 
+      ['to_rate', 'rated'].includes(b.booking_status?.toLowerCase())
+    );
 
-    const filteredPetIds = new Set(
-      pets
-        .filter((p: any) => bookingIds.has(p.booking_info_id))
+    const revenueBookings = filteredBookings.filter((b: any) => 
+      ['paid', 'to_rate', 'rated'].includes(b.booking_status?.toLowerCase())
+    );
+
+    const cancelledBookings = filteredBookings.filter((b: any) => 
+      b.booking_status?.toLowerCase() === 'cancelled'
+    );
+
+    const revenueBookingIds = new Set(revenueBookings.map((b: any) => b.id));
+
+    const revenuePetIds = new Set(
+      filteredPets
+        .filter((p: any) => revenueBookingIds.has(p.booking_info_id))
         .map((p: any) => p.id)
     );
 
-    const filteredServices = services.filter((s: any) => filteredPetIds.has(s.booking_pet_info_id));
-    const grossRevenue = filteredServices.reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
-    const averageBookingValue = totalBookingsCount > 0 ? grossRevenue / totalBookingsCount : 0;
+    const revenueGeneratingServices = filteredServices.filter((s: any) => revenuePetIds.has(s.booking_pet_info_id));
+    const grossRevenue = revenueGeneratingServices.reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
+    
+    const serviceCounts: Record<string, number> = {};
+    let totalValidServices = 0;
+    
+    revenueGeneratingServices.forEach((s: any) => {
+      const name = s.booking_service_name;
+      if (name) {
+        serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+        totalValidServices++;
+      }
+    });
 
-    const cancellationsCount = filteredBookings.filter((b: any) => 
-      b.booking_status?.toLowerCase() === 'cancelled' || b.booking_status?.toLowerCase() === 'rejected'
-    ).length;
+    const realServiceBreakdown = Object.entries(serviceCounts)
+      .map(([name, count]) => ({
+        name,
+        bookings: count,
+        percentage: totalValidServices > 0 ? Math.round((count / totalValidServices) * 100) : 0
+      }))
+      .sort((a, b) => b.bookings - a.bookings);
+
+    const averageBookingValue = revenueBookings.length > 0 ? grossRevenue / revenueBookings.length : 0;
 
     return {
       totalRevenue: grossRevenue,
       revenueTrend: 12.5, 
-      totalBookings: totalBookingsCount,
+      totalBookings: completedBookings.length, 
       bookingsTrend: 8.3,
       averageBookingValue: averageBookingValue,
       avgTrend: 0,
-      cancellationsCount: cancellationsCount,
-      cancelTrend:0,
-      listingViews: 0, 
+      cancellationsCount: cancelledBookings.length,
+      cancelTrend: 0,
+      listingViews: profileViewCount, // Pulled directly from database column!
       viewsTrend: 0,
+      realServiceBreakdown 
     };
-  }, [filteredBookings, pets, services]);
+  }, [filteredBookings, filteredPets, filteredServices, profileViewCount]);
 
-  // Get current date for the display header
   const currentDate = new Date();
   const dateDisplay = currentDate.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -145,12 +187,10 @@ export default function BusinessDashboardPage() {
     day: 'numeric'
   });
 
-  // Format the date label for the PDF metadata & Modal based on your filters
   const reportPeriodLabel = timeFilter === 'custom' && customDateStart 
     ? `${customDateStart} to ${customDateEnd || 'Present'}` 
     : timeFilter;
 
-  // Determine which PDF to render based on activeTab
   const getPDFConfig = () => {
     switch (activeTab) {
       case 'sales':
@@ -194,7 +234,6 @@ export default function BusinessDashboardPage() {
       <div className={styles.mainLayout}>
         <div className={styles.container}>
           
-          {/* Sidebar Navigation & Filters */}
           <Sidebar 
             activeTab={activeTab} 
             setActiveTab={setActiveTab}
@@ -206,13 +245,10 @@ export default function BusinessDashboardPage() {
             setCustomDateStart={setCustomDateStart}
             customDateEnd={customDateEnd}
             setCustomDateEnd={setCustomDateEnd}
-            bookedServices={sidebarAnalytics.serviceBreakdown}
+            bookedServices={dynamicMetrics.realServiceBreakdown} 
           />
 
-          {/* Main Content Area */}
           <div className={styles.contentArea}>
-            
-            {/* Header with Date and ADAPTIVE Report Modal Trigger */}
             <div className={styles.header}>
               <div className={styles.headerLeft}>
                 <h1 className={styles.title}>
@@ -223,7 +259,6 @@ export default function BusinessDashboardPage() {
                 <p className={styles.dateDisplay}>As of {dateDisplay}</p>
               </div>
 
-              {/* Triggers the Preview Modal instead of downloading immediately */}
               {isClient ? (
                 <button 
                   className={styles.reportButton} 
@@ -240,10 +275,7 @@ export default function BusinessDashboardPage() {
               )}
             </div>
 
-            {/* Dashboard Body (KPIs, Charts) */}
             <div className={styles.dashboardBody}>
-              
-              {/* Key Metrics Grid */}
               <div className={styles.metricsGrid}>
                 <div className={styles.metricCard}>
                   <div className={styles.metricLabel}>Gross Revenue</div>
@@ -299,24 +331,23 @@ export default function BusinessDashboardPage() {
                 </div>
               </div>
 
-              {/* Tab Content Rendering */}
               {activeTab === 'business_performance' && (
                 <BusinessPerformance 
                   timeFilter={timeFilter} 
                   petTypeFilter={petTypeFilter} 
                   bookings={filteredBookings} 
-                  pets={pets} 
-                  services={services} 
+                  pets={filteredPets} 
+                  services={filteredServices} 
                 />
               )}
 
               {activeTab === 'sales' && (
                 <SalesPerformance 
                   timeFilter={timeFilter} 
-                  petTypeFilter={petTypeFilter}
+                  petTypeFilter={petTypeFilter} 
                   bookings={filteredBookings} 
-                  pets={pets} 
-                  services={services} 
+                  pets={filteredPets} 
+                  services={filteredServices} 
                 />
               )}
 
@@ -325,7 +356,7 @@ export default function BusinessDashboardPage() {
                   timeFilter={timeFilter} 
                   petTypeFilter={petTypeFilter} 
                   bookings={filteredBookings} 
-                  pets={pets} 
+                  pets={filteredPets} 
                 />
               )}
 
@@ -336,7 +367,6 @@ export default function BusinessDashboardPage() {
 
       <Footer />
 
-      {/* Report Preview Modal rendered cleanly outside the main flow */}
       <ReportPreviewModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -351,7 +381,6 @@ export default function BusinessDashboardPage() {
           cancellations: dynamicMetrics.cancellationsCount,
           visitors: dynamicMetrics.listingViews,
           avgCustomer: dynamicMetrics.averageBookingValue
-
         }}
       />
     </div>
