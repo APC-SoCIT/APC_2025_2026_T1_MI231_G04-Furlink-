@@ -85,6 +85,8 @@ export default function BookingDetailsModal({
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+          
+          {/* Action: For Pending Bookings */}
           {selectedBooking.booking_status === 'pending_sp_response' && (
             <>
               {showRejectInput && (
@@ -142,6 +144,19 @@ export default function BookingDetailsModal({
               )}
             </>
           )}
+
+          {/* Action: For Upcoming (Paid) Bookings */}
+          {selectedBooking.booking_status === 'paid' && (
+            <button
+              onClick={() => handleUpdateStatus(selectedBooking.id, 'to_rate')}
+              style={{ padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
+              onMouseOver={(e) => (e.currentTarget.style.background = '#059669')}
+              onMouseOut={(e) => (e.currentTarget.style.background = '#10b981')}
+            >
+              Mark as Completed
+            </button>
+          )}
+
           <button
             onClick={() => {
               setSelectedBooking(null);

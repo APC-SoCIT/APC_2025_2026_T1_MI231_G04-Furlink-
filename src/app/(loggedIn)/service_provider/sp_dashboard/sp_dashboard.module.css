@@ -94,7 +94,7 @@
   background: white;
   border-radius: 1rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  overflow: hidden;
+  overflow-x: auto; /* Enables smooth horizontal swipe on small screens */
   border: 1px solid #f1f5f9;
 }
 .tableHeaderBar {
@@ -108,6 +108,7 @@
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  min-width: 650px; /* Ensures columns don't squish too tightly on mobile */
 }
 .table th {
   background: white;
@@ -173,4 +174,56 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* --- MOBILE & TABLET RESPONSIVE BREAKPOINTS --- */
+
+@media (max-width: 1024px) {
+  .tabsGrid {
+    grid-template-columns: repeat(3, 1fr); /* 3 items per row on tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+    margin: 1rem;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .revenueCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .revenueAmount {
+    font-size: 2rem;
+  }
+
+  .actionButtons {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .actionButtons > * {
+    flex: 1;
+  }
+
+  .actionBtn {
+    padding: 1rem;
+    font-size: 0.85rem;
+  }
+
+  .tabsGrid {
+    grid-template-columns: repeat(2, 1fr); /* 2 items per row on mobile phones */
+  }
+
+  .tabCount {
+    font-size: 2rem;
+  }
 }
