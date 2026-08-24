@@ -236,10 +236,10 @@ export default function HeaderLoggedIn() {
 
   const RoleActionButton = () => {
     if (userRole === 'pet_owner') {
-      let buttonText = "Become a Service Provider";
       if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        buttonText = "View application status";
+        return null;
       }
+      let buttonText = "Become a Service Provider";
       return (
         <button className="header-action-btn-outline" onClick={handleActionClick}>
           {buttonText}
@@ -248,10 +248,11 @@ export default function HeaderLoggedIn() {
     }
 
     if (userRole === 'service_provider') {
-      let buttonText = "Register your business now!";
       if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        buttonText = "View application status";
-      } else if (registrationStatus === 'approved') {
+        return null;
+      }
+      let buttonText = "Register Now!";
+      if (registrationStatus === 'approved') {
         buttonText = "Become a Pet Owner";
       }
       return (
@@ -262,6 +263,10 @@ export default function HeaderLoggedIn() {
     }
 
     if (isBoth) {
+      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
+        return null;
+      }
+
       const isCurrentlyServiceProvider = 
         pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
         pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
@@ -271,8 +276,8 @@ export default function HeaderLoggedIn() {
       let buttonText = "Switch to Business";
       if (isCurrentlyServiceProvider) {
         buttonText = "Switch to Pet Owner";
-      } else if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
-        buttonText = registrationStatus ? "View application status" : "Become a service provider";
+      } else if (registrationStatus === null) {
+        buttonText = "Become a service provider";
       }
 
       return (
