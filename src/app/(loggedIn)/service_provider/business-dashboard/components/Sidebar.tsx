@@ -1,4 +1,6 @@
 import React from 'react';
+import Link from 'next/link'; // Import Link for Next.js navigation
+import { FaArrowLeft } from 'react-icons/fa'; // Import the back arrow icon
 import { DashboardTab } from '../type';
 import ServiceBreakdown from './ServiceBreakdown';
 import styles from '../business-dashboard.module.css';
@@ -36,6 +38,25 @@ export default function Sidebar({
   return (
     <aside className={styles.sidebar}>
       
+      {/* Back Button to SP Dashboard */}
+      <div style={{ paddingBottom: '1.5rem' }}>
+        <Link href="/service_provider/sp_dashboard" style={{ textDecoration: 'none' }}>
+          <button style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            background: 'none', 
+            border: 'none', 
+            cursor: 'pointer', 
+            fontWeight: 'bold', 
+            color: '#1e3a8a',
+            padding: 0
+          }}>
+            <FaArrowLeft size={16} /> Back to Dashboard
+          </button>
+        </Link>
+      </div>
+
       <div className={styles.sidebarNav}>
         <button
           className={`${styles.sidebarTab} ${activeTab === 'business_performance' ? styles.sidebarTabActive : ''}`}

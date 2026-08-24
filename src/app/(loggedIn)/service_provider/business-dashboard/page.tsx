@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { FaFileExcel } from 'react-icons/fa';
+import { FaFileExcel } from 'react-icons/fa'; // (You can optionally change this to FaFilePdf if you import it!)
 import { DashboardTab } from './type';
 import { formatCurrency, formatTrend, formatLargeNumber } from './utils';
 import Sidebar from './components/Sidebar';
@@ -15,6 +15,15 @@ import styles from './business-dashboard.module.css';
 // Import your custom hook and analytics utility
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { processBusinessPerformanceData } from '@/utils/analyticsCalculations';
+
+// Import PDF Renderer and your specific report templates
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { BusinessReportPDF } from './components/pdf-reports/BusinessReportPDF';
+import { CustomerInsightPDF } from './components/pdf-reports/CustomerInsightPDF';
+import { SalesReportPDF } from './components/pdf-reports/SalesReportPDF'; 
+
+// Import the new Preview Modal
+import ReportPreviewModal from './components/ReportPreviewModal';
 
 export default function BusinessDashboardPage() {
   const supabase = createClientComponentClient();
@@ -31,7 +40,15 @@ export default function BusinessDashboardPage() {
   // Resolved Service Provider ID state
   const [spId, setSpId] = useState<string | null>(null);
 
-  // 1. Resolve the logged-in user's sp_id on mount
+  // Client-side rendering & Modal states
+  const [isClient, setIsClient] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false); // Controls the preview modal visibility
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Resolve the logged-in user's sp_id on mount
   useEffect(() => {
     async function resolveProviderId() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -51,10 +68,10 @@ export default function BusinessDashboardPage() {
     resolveProviderId();
   }, [supabase]);
 
-  // 2. Consume your custom dashboard hook using the resolved spId
+  // Consume your custom dashboard hook using the resolved spId
   const { bookings, pets, services, loading } = useDashboardData(spId || '');
 
-  // 3. Filter bookings dynamically based on the selected timeframe sidebar filter
+  // Filter bookings dynamically based on the selected timeframe sidebar filter
   const filteredBookings = useMemo(() => {
     if (!bookings || bookings.length === 0) return [];
 
@@ -70,63 +87,52 @@ export default function BusinessDashboardPage() {
     }
 
     return bookings.filter((b: any) => {
-      // Safely parse the database date
       const bDate = new Date(b.booking_date);
       
       if (timeFilter !== 'custom') {
         return bDate >= startDate;
       } else {
         const start = customDateStart ? new Date(customDateStart) : new Date(0);
-        // Default to today if no end date is selected
         const end = customDateEnd ? new Date(customDateEnd) : new Date(); 
         return bDate >= start && bDate <= end;
       }
     });
   }, [bookings, timeFilter, customDateStart, customDateEnd]);
 
-  // 4. Process real data for the Sidebar Doughnut Chart
+  // Process real data for the Sidebar Doughnut Chart
   const sidebarAnalytics = useMemo(() => {
     return processBusinessPerformanceData(filteredBookings, pets, services);
   }, [filteredBookings, pets, services]);
 
-  // 5. Calculate Real KPI Metrics from Supabase Data
+  // Calculate Real KPI Metrics from Supabase Data
   const dynamicMetrics = useMemo(() => {
-    // Total bookings based on current timeframe filter
     const totalBookingsCount = filteredBookings.length;
-
-    // Get all booking IDs currently in view
     const bookingIds = new Set(filteredBookings.map((b: any) => b.id));
 
-    // Find all pets related to these filtered bookings
     const filteredPetIds = new Set(
       pets
         .filter((p: any) => bookingIds.has(p.booking_info_id))
         .map((p: any) => p.id)
     );
 
-    // Find all services related to those filtered pets and sum their booking_price
     const filteredServices = services.filter((s: any) => filteredPetIds.has(s.booking_pet_info_id));
-    
     const grossRevenue = filteredServices.reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
-
-    // Calculate Average per booking/customer safely
     const averageBookingValue = totalBookingsCount > 0 ? grossRevenue / totalBookingsCount : 0;
 
-    // Count cancellations (assuming status field is 'cancelled', adjust if your status value differs)
     const cancellationsCount = filteredBookings.filter((b: any) => 
-      b.booking_status?.toLowerCase() === 'cancelled'
+      b.booking_status?.toLowerCase() === 'cancelled' || b.booking_status?.toLowerCase() === 'rejected'
     ).length;
 
     return {
       totalRevenue: grossRevenue,
-      revenueTrend: 12.5, // Trend calculation can remain mocked or estimated if historical comparison data isn't pulled yet
+      revenueTrend: 12.5, 
       totalBookings: totalBookingsCount,
       bookingsTrend: 8.3,
       averageBookingValue: averageBookingValue,
       avgTrend: 0,
       cancellationsCount: cancellationsCount,
       cancelTrend:0,
-      listingViews: 0, // Kept mocked since visitor logs don't exist in the database schema yet
+      listingViews: 0, 
       viewsTrend: 0,
     };
   }, [filteredBookings, pets, services]);
@@ -139,6 +145,38 @@ export default function BusinessDashboardPage() {
     day: 'numeric'
   });
 
+  // Format the date label for the PDF metadata & Modal based on your filters
+  const reportPeriodLabel = timeFilter === 'custom' && customDateStart 
+    ? `${customDateStart} to ${customDateEnd || 'Present'}` 
+    : timeFilter;
+
+  // Determine which PDF to render based on activeTab
+  const getPDFConfig = () => {
+    switch (activeTab) {
+      case 'sales':
+        return {
+          document: <SalesReportPDF bookings={filteredBookings} totalRevenue={dynamicMetrics.totalRevenue} month={reportPeriodLabel} petTypeFilter={petTypeFilter} />,
+          fileName: `Sales_Report_${currentDate.toISOString().split('T')[0]}.pdf`,
+          label: "Generate Sales Report"
+        };
+      case 'customer_insights':
+        return {
+          document: <CustomerInsightPDF bookings={filteredBookings} month={reportPeriodLabel} petTypeFilter={petTypeFilter} />,
+          fileName: `Customer_Insight_Report_${currentDate.toISOString().split('T')[0]}.pdf`,
+          label: "Generate Customer Insight Report"
+        };
+      case 'business_performance':
+      default:
+        return {
+          document: <BusinessReportPDF bookings={filteredBookings} totalRevenue={dynamicMetrics.totalRevenue} month={reportPeriodLabel} petTypeFilter={petTypeFilter} />,
+          fileName: `Business_Report_${currentDate.toISOString().split('T')[0]}.pdf`,
+          label: "Generate Business Report"
+        };
+    }
+  };
+
+  const currentPdfConfig = getPDFConfig();
+
   const renderTrendIcon = (value: number) => {
     if (value > 0) return '📈';
     if (value < 0) return '📉';
@@ -150,13 +188,6 @@ export default function BusinessDashboardPage() {
     if (value < 0) return styles.trendDown;
     return styles.trendNeutral;
   };
-
-  // --- DEBUGGING LOGS ---
-  console.log("1. Resolved Provider ID (spId):", spId);
-  console.log("2. Raw Data from Hook (bookings):", bookings);
-  console.log("3. Filtered Data for Charts (filteredBookings):", filteredBookings);
-  console.log("4. Dynamic Metrics Calculated:", dynamicMetrics);
-  // ----------------------
 
   return (
     <div className={styles.pageWrapper}>
@@ -181,7 +212,7 @@ export default function BusinessDashboardPage() {
           {/* Main Content Area */}
           <div className={styles.contentArea}>
             
-            {/* Header with Date and Report Button */}
+            {/* Header with Date and ADAPTIVE Report Modal Trigger */}
             <div className={styles.header}>
               <div className={styles.headerLeft}>
                 <h1 className={styles.title}>
@@ -191,10 +222,22 @@ export default function BusinessDashboardPage() {
                 </h1>
                 <p className={styles.dateDisplay}>As of {dateDisplay}</p>
               </div>
-              <button className={styles.reportButton} title="Generate Sales Report (coming soon)">
-                <FaFileExcel size={16} />
-                Generate Sales Report
-              </button>
+
+              {/* Triggers the Preview Modal instead of downloading immediately */}
+              {isClient ? (
+                <button 
+                  className={styles.reportButton} 
+                  title={currentPdfConfig.label}
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  <FaFileExcel size={16} />
+                  {currentPdfConfig.label}
+                </button>
+              ) : (
+                <button className={styles.reportButton} disabled>
+                  <FaFileExcel size={16} /> Loading Generator...
+                </button>
+              )}
             </div>
 
             {/* Dashboard Body (KPIs, Charts) */}
@@ -277,7 +320,6 @@ export default function BusinessDashboardPage() {
                 />
               )}
 
-              {/* Updated CustomerInsights with database props */}
               {activeTab === 'customer_insights' && (
                 <CustomerInsights 
                   timeFilter={timeFilter} 
@@ -293,6 +335,25 @@ export default function BusinessDashboardPage() {
       </div>
 
       <Footer />
+
+      {/* Report Preview Modal rendered cleanly outside the main flow */}
+      <ReportPreviewModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={currentPdfConfig.label.replace('Generate ', '')}
+        pdfDocument={currentPdfConfig.document}
+        fileName={currentPdfConfig.fileName}
+        reportPeriod={reportPeriodLabel}
+        petTypeFilter={petTypeFilter === 'all' ? 'All Pets (Dog & Cat)' : petTypeFilter}
+        metrics={{
+          revenue: dynamicMetrics.totalRevenue,
+          bookings: dynamicMetrics.totalBookings,
+          cancellations: dynamicMetrics.cancellationsCount,
+          visitors: dynamicMetrics.listingViews,
+          avgCustomer: dynamicMetrics.averageBookingValue
+
+        }}
+      />
     </div>
   );
 }
