@@ -69,7 +69,7 @@ export default function ManageBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
 
-  // Mapped to exact values allowed by booking_info_booking_status_check
+  // Mapped to exact status strings allowed by database constraints
   const getStatusesForTab = (tab: BookingTab): string[] => {
     switch (tab) {
       case 'awaiting_approval':
@@ -81,16 +81,16 @@ export default function ManageBookingsPage() {
       case 'decline_cancelled':
         return ['rejected', 'cancelled'];
       case 'refund':
-        return ['to_refund', 'refunded']; // Extensible for future refund flags
+        return ['to_refund', 'refunded'];
       case 'completed':
-        return ['to_rate', 'rated'];
+        return ['to_rate', 'rated', 'completed'];
       default:
         return [];
     }
   };
 
   useEffect(() => {
-    const fetchUserBookings = async () => {
+    const processAutoTransitionsAndFetch = async () => {
       setLoading(true);
       try {
         const {
@@ -102,6 +102,70 @@ export default function ManageBookingsPage() {
           return;
         }
 
+        const now = new Date();
+        const nowTime = now.getTime();
+        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+        // Fetch active candidates for potential auto-transition
+        const { data: candidates } = await supabase
+          .from('booking_info')
+          .select('id, booking_date, booking_timeslot, booking_status')
+          .eq('profiles_id', user.id)
+          .in('booking_status', ['pending_sp_response', 'to pay']);
+
+        if (candidates && candidates.length > 0) {
+          for (const b of candidates) {
+            const [year, month, day] = b.booking_date.split('-').map(Number);
+            let hours = 9;
+            let minutes = 0;
+
+            if (b.booking_timeslot) {
+              const parts = b.booking_timeslot.split(' ');
+              if (parts.length === 2) {
+                const [hStr, mStr] = parts[0].split(':');
+                hours = parseInt(hStr, 10);
+                minutes = parseInt(mStr, 10) || 0;
+                if (parts[1].toUpperCase() === 'PM' && hours < 12) hours += 12;
+                if (parts[1].toUpperCase() === 'AM' && hours === 12) hours = 0;
+              }
+            }
+
+            const bookingDateTime = new Date(year, month - 1, day, hours, minutes);
+            const bookingTimeMs = bookingDateTime.getTime();
+
+            // Rule 1: Awaiting approval within 24h of appointment -> Move to 'to_refund'
+            if (
+              b.booking_status === 'pending_sp_response' &&
+              bookingTimeMs - nowTime <= TWENTY_FOUR_HOURS_MS
+            ) {
+              await supabase
+                .from('booking_info')
+                .update({
+                  booking_status: 'to_refund',
+                  booking_rejection_reason:
+                    'System Auto-Refund: Provider did not approve within 24 hours of scheduled appointment',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', b.id);
+            }
+
+            // Rule 2: Unpaid 'to pay' past scheduled booking date -> Move to 'cancelled'
+            const todayDateStr = now.toISOString().split('T')[0];
+            if (b.booking_status === 'to pay' && b.booking_date < todayDateStr) {
+              await supabase
+                .from('booking_info')
+                .update({
+                  booking_status: 'cancelled',
+                  booking_rejection_reason:
+                    'System Auto-Cancelled: Payment deadline passed before scheduled booking date',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', b.id);
+            }
+          }
+        }
+
+        // Fetch bookings corresponding to active tab
         const targetStatuses = getStatusesForTab(activeTab);
 
         const { data, error } = await supabase
@@ -149,7 +213,7 @@ export default function ManageBookingsPage() {
       }
     };
 
-    fetchUserBookings();
+    processAutoTransitionsAndFetch();
   }, [activeTab, supabase]);
 
   const formatDateDisplay = (dateStr: string) => {
@@ -168,10 +232,7 @@ export default function ManageBookingsPage() {
 
   const formatTimeDisplay = (timeStr: string) => {
     if (!timeStr) return '';
-
-    if (timeStr.includes('AM') || timeStr.includes('PM')) {
-      return timeStr;
-    }
+    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
 
     const parts = timeStr.split(':');
     if (parts.length >= 2) {
@@ -186,6 +247,7 @@ export default function ManageBookingsPage() {
   };
 
   const formatStatusLabel = (status: string) => {
+    if (status === 'to_refund') return 'TO REFUND';
     return status.replace(/_/g, ' ').toUpperCase();
   };
 
@@ -205,7 +267,7 @@ export default function ManageBookingsPage() {
   return (
     <div className="manage-bookings-container">
       <main className="manage-bookings-main">
-        {/* Page Title & Controls Header */}
+        {/* Header Section */}
         <div className="manage-bookings-header">
           <div>
             <h1 className="bookings-title">My Appointments</h1>
@@ -221,15 +283,13 @@ export default function ManageBookingsPage() {
           </div>
         </div>
 
-        {/* 6 Category Tab Selection Grid */}
+        {/* 6 Category Tabs Grid */}
         <div className="booking-tabs-grid six-categories">
           <button
             className={`tab-card ${activeTab === 'awaiting_approval' ? 'active' : ''}`}
             onClick={() => setActiveTab('awaiting_approval')}
           >
-            <div className="tab-icon-circle">
-              <FaClock />
-            </div>
+            <div className="tab-icon-circle"><FaClock /></div>
             <span className="tab-label">Awaiting Approval</span>
           </button>
 
@@ -237,9 +297,7 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'to_pay' ? 'active' : ''}`}
             onClick={() => setActiveTab('to_pay')}
           >
-            <div className="tab-icon-circle">
-              <FaCreditCard />
-            </div>
+            <div className="tab-icon-circle"><FaCreditCard /></div>
             <span className="tab-label">To Pay</span>
           </button>
 
@@ -247,19 +305,15 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'upcoming' ? 'active' : ''}`}
             onClick={() => setActiveTab('upcoming')}
           >
-            <div className="tab-icon-circle">
-              <FaCut />
-            </div>
-            <span className="tab-label">Up coming</span>
+            <div className="tab-icon-circle"><FaCut /></div>
+            <span className="tab-label">Upcoming</span>
           </button>
 
           <button
             className={`tab-card ${activeTab === 'decline_cancelled' ? 'active' : ''}`}
             onClick={() => setActiveTab('decline_cancelled')}
           >
-            <div className="tab-icon-circle">
-              <FaTimesCircle />
-            </div>
+            <div className="tab-icon-circle"><FaTimesCircle /></div>
             <span className="tab-label">Decline/Cancelled</span>
           </button>
 
@@ -267,9 +321,7 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'refund' ? 'active' : ''}`}
             onClick={() => setActiveTab('refund')}
           >
-            <div className="tab-icon-circle">
-              <FaUndo />
-            </div>
+            <div className="tab-icon-circle"><FaUndo /></div>
             <span className="tab-label">Refund</span>
           </button>
 
@@ -277,9 +329,7 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'completed' ? 'active' : ''}`}
             onClick={() => setActiveTab('completed')}
           >
-            <div className="tab-icon-circle">
-              <FaCheckCircle />
-            </div>
+            <div className="tab-icon-circle"><FaCheckCircle /></div>
             <span className="tab-label">Completed</span>
           </button>
         </div>
@@ -309,7 +359,6 @@ export default function ManageBookingsPage() {
             <div className="table-body-rows">
               {bookings.map((item) => {
                 const petsCount = item.booking_pet_info?.length || 0;
-
                 const allServiceNames = Array.from(
                   new Set(
                     item.booking_pet_info?.flatMap(
@@ -332,9 +381,7 @@ export default function ManageBookingsPage() {
                     </div>
 
                     <div className="col-cell col-service">
-                      {allServiceNames.length > 0
-                        ? allServiceNames.join(', ')
-                        : 'Grooming Service'}
+                      {allServiceNames.length > 0 ? allServiceNames.join(', ') : 'Grooming Service'}
                     </div>
 
                     <div className="col-cell col-status">
@@ -363,7 +410,7 @@ export default function ManageBookingsPage() {
         </div>
       </main>
 
-      {/* BOOKING DETAILS SUMMARY MODAL */}
+      {/* Booking Details Modal */}
       {showDetailsModal && selectedBooking && (
         <div className="modal-backdrop">
           <div className="summary-modal-card">
@@ -372,10 +419,7 @@ export default function ManageBookingsPage() {
                 <FaFileAlt className="header-doc-icon" />
                 <h2>Booking Details</h2>
               </div>
-              <button
-                className="modal-close-x"
-                onClick={() => setShowDetailsModal(false)}
-              >
+              <button className="modal-close-x" onClick={() => setShowDetailsModal(false)}>
                 <FaTimes />
               </button>
             </div>
@@ -394,7 +438,7 @@ export default function ManageBookingsPage() {
 
               {selectedBooking.booking_rejection_reason && (
                 <div className="rejection-reason-box">
-                  <strong>Rejection/Cancellation Reason:</strong> {selectedBooking.booking_rejection_reason}
+                  <strong>Cancellation/Refund Reason:</strong> {selectedBooking.booking_rejection_reason}
                 </div>
               )}
 
@@ -456,15 +500,10 @@ export default function ManageBookingsPage() {
                         : 'None specified'}
                     </div>
 
-                    <div
-                      className={`summary-consent-badge ${
-                        pet.booking_emergency_consent ? 'approved' : 'declined'
-                      }`}
-                    >
+                    <div className={`summary-consent-badge ${pet.booking_emergency_consent ? 'approved' : 'declined'}`}>
                       <FaExclamationCircle />
                       <span>
-                        Emergency Transport Consent:{' '}
-                        {pet.booking_emergency_consent ? 'APPROVED' : 'DECLINED'}
+                        Emergency Transport Consent: {pet.booking_emergency_consent ? 'APPROVED' : 'DECLINED'}
                       </span>
                     </div>
                   </div>
@@ -484,16 +523,10 @@ export default function ManageBookingsPage() {
             </div>
 
             <div className="summary-modal-footer">
-              <button
-                className="btn-reschedule-booking"
-                onClick={handleReschedulePlaceholder}
-              >
+              <button className="btn-reschedule-booking" onClick={handleReschedulePlaceholder}>
                 Reschedule
               </button>
-              <button
-                className="btn-close-modal"
-                onClick={() => setShowDetailsModal(false)}
-              >
+              <button className="btn-close-modal" onClick={() => setShowDetailsModal(false)}>
                 Close
               </button>
             </div>
