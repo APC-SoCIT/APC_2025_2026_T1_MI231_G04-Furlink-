@@ -1,0 +1,229 @@
+.container {
+  max-width: 1200px;
+  margin: 2rem auto; /* Pushes the dashboard away from the header */
+  padding: 2rem;    /* Gives internal content more breathing room */
+  font-family: sans-serif;
+  color: #1e3a8a;
+  background-color: #f8fafc;
+  min-height: calc(100vh - 100px);
+  border-radius: 1.5rem; /* Matches the rounded aesthetic of your header */
+}
+
+/* Header & Revenue Card */
+.headerRow {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.revenueCard {
+  flex: 1;
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid #f1f5f9;
+}
+.revenueAmount {
+  font-size: 2.5rem;
+  font-weight: 900;
+}
+.actionButtons {
+  display: flex;
+  gap: 1rem;
+  align-items: center; /* Ensures buttons align properly on the vertical axis */
+}
+.actionBtn {
+  background: #1e3a8a;
+  color: white;
+  border: none;
+  border-radius: 1rem;
+  padding: 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* Centers content vertically inside the button */
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: bold;
+  box-sizing: border-box; /* Prevents padding from breaking layout dimensions */
+}
+.actionBtn:hover {
+  background: #1d4ed8;
+}
+
+/* Status Cards Grid */
+.tabsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr); /* Fits all 6 tabs nicely */
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.tabCard {
+  background: white;
+  padding: 1.5rem 1rem;
+  border-radius: 1rem;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.tabCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+.tabCardActive {
+  background: #fffdf0;
+  border-color: #facc15;
+}
+.tabCount {
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin-top: 0.5rem;
+  color: #1e3a8a;
+}
+.cancelledCount {
+  color: #ef4444;
+}
+
+/* Table Section */
+.tableContainer {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow-x: auto; /* Enables smooth horizontal swipe on small screens */
+  border: 1px solid #f1f5f9;
+}
+.tableHeaderBar {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 650px; /* Ensures columns don't squish too tightly on mobile */
+}
+.table th {
+  background: white;
+  padding: 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #1e3a8a;
+  border-bottom: 1px solid #e2e8f0;
+}
+.table td {
+  padding: 1.5rem;
+  border-bottom: 1px solid #f8fafc;
+}
+.table tr:hover {
+  background: #f8fafc;
+}
+.statusBadge {
+  padding: 0.35rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  background: #eff6ff;
+  color: #1e3a8a;
+  border: 1px solid #dbeafe;
+  display: inline-block;
+}
+.viewBtn {
+  padding: 0.5rem 1rem;
+  border: 2px solid #1e3a8a;
+  color: #1e3a8a;
+  background: transparent;
+  font-weight: bold;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.2s, color 0.2s;
+}
+.viewBtn:hover {
+  background: #1e3a8a;
+  color: white;
+}
+
+/* Modal Styling */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 58, 138, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+.modalContent {
+  background: white;
+  border-radius: 1.5rem;
+  max-width: 600px;
+  width: 100%;
+  padding: 2rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* --- MOBILE & TABLET RESPONSIVE BREAKPOINTS --- */
+
+@media (max-width: 1024px) {
+  .tabsGrid {
+    grid-template-columns: repeat(3, 1fr); /* 3 items per row on tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+    margin: 1rem;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .revenueCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .revenueAmount {
+    font-size: 2rem;
+  }
+
+  .actionButtons {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .actionButtons > * {
+    flex: 1;
+  }
+
+  .actionBtn {
+    padding: 1rem;
+    font-size: 0.85rem;
+  }
+
+  .tabsGrid {
+    grid-template-columns: repeat(2, 1fr); /* 2 items per row on mobile phones */
+  }
+
+  .tabCount {
+    font-size: 2rem;
+  }
+}

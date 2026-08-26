@@ -1,0 +1,252 @@
+/* =========================================
+   SERVICES & PRICING SECTION STYLES
+   ========================================= */
+
+.services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  margin-top: 20px;
+}
+
+.service-form-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 4px 6px -1px rgba(14, 38, 121, 0.05);
+}
+
+.service-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.service-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #0E2679;
+  color: #fff;
+}
+
+.icon-btn-remove {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.icon-btn-remove:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+
+/* Two-column layout inside each service card */
+.service-form-body {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 40px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.form-field label, .pricing-section > label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0E2679;
+}
+
+.form-field input,
+.form-field textarea,
+.pricing-cell input,
+.pricing-cell select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.90rem;
+  background-color: #fff;
+  color: #0E2679;
+  font-family: inherit;
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.pricing-cell input:focus,
+.pricing-cell select:focus {
+  outline: none;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+/* Pricing Table Grid */
+.pricing-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pricing-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.pricing-header, .pricing-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.pricing-header {
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #0E2679;
+  letter-spacing: 0.05em;
+}
+
+.pricing-row {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.pricing-row:last-child {
+  border-bottom: none;
+}
+
+.input-disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af !important;
+  cursor: not-allowed;
+}
+
+.btn-remove-pricing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #fee2e2;
+  color: #ef4444;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-remove-pricing:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+.btn-add-pricing {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #fff;
+  color: #0E2679;
+  border: 1px dashed #0E2679;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-add-pricing:hover {
+  background-color: #fffbeb;
+  border-color: #fbbf24;
+  border-style: solid;
+}
+
+/* Responsive collapse for smaller screens */
+@media (max-width: 1024px) {
+  .service-form-body {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================================
+   UPDATED TYPOGRAPHY & FIELD STYLING
+   ========================================= */
+
+/* Force strong bolding on headers and labels */
+.form-field label, 
+.pricing-section > label,
+.page-title,
+h2 {
+  font-weight: 700 !important;
+}
+
+.pricing-header {
+  font-weight: 800 !important;
+}
+
+/* Input error states (Turns borders and error text red) */
+.input-error,
+input.input-error,
+textarea.input-error,
+select.input-error {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+}
+
+/* Philippine Mobile Number Input Wrapper Styling */
+.phone-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #fff;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.phone-input-wrapper:focus-within {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+.phone-prefix {
+  padding: 10px 12px;
+  background-color: #f8fafc;
+  color: #0E2679;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-right: 1px solid #d1d5db;
+}
+
+.phone-input-field {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 10px 12px !important;
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #0E2679;
+}
