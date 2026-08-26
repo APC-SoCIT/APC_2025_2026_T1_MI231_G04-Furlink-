@@ -172,14 +172,24 @@ function BookingFormContent() {
 
   // Automatically detect redirect status from PayMongo
   useEffect(() => {
-    if (statusParam === 'success') {
-      setShowSuccessModal(true);
-      setShowSummaryModal(false);
-    } else if (statusParam === 'failed' || statusParam === 'cancelled') {
-      setShowFailedModal(true);
-      setShowSummaryModal(false);
-    }
-  }, [statusParam]);
+    const handlePaymentSuccess = async () => {
+      if (statusParam === 'success') {
+        if (activeBookingId) {
+          await supabase
+            .from('booking_info')
+            .update({ booking_status: 'pending_sp_response' })
+            .eq('id', activeBookingId);
+        }
+        setShowSuccessModal(true);
+        setShowSummaryModal(false);
+      } else if (statusParam === 'failed' || statusParam === 'cancelled') {
+        setShowFailedModal(true);
+        setShowSummaryModal(false);
+      }
+    };
+
+    handlePaymentSuccess();
+  }, [statusParam, activeBookingId, supabase]);
 
   const formattedDateDisplay = useMemo(() => {
     try {
@@ -827,7 +837,7 @@ function BookingFormContent() {
 
           <div className="summary-right">
             <button className="proceed-btn" onClick={() => setShowSummaryModal(true)}>
-              Proceed to Summary &rarr;
+              Proceed to Summary
             </button>
           </div>
         </div>
@@ -1346,8 +1356,8 @@ function BookingFormContent() {
             <p className="success-message">
               Your payment has been successfully processed and your booking request is submitted. Please wait for the provider to confirm your slot.
             </p>
-            <button className="btn-return-home" onClick={handleReturnHome}>
-              Return to Home
+            <button className="btn-return-home" onClick={() => router.push('/pet_owner/manage_bookings')}>
+              Go to Manage Bookings
             </button>
           </div>
         </div>
