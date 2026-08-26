@@ -299,32 +299,6 @@
 }
 
 /* =========================================================
-   RESPONSIVE ADJUSTMENTS
-   ========================================================= */
-
-@media (max-width: 1200px) {
-  .metricsGrid { grid-template-columns: repeat(3, 1fr); }
-  .sidebar { width: 170px; }
-}
-
-@media (max-width: 1024px) {
-  .chartsSection { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 768px) {
-  .container { flex-direction: column; }
-  .sidebar { 
-    width: 100%; 
-    height: auto; 
-    flex-direction: row; 
-    overflow-x: auto; 
-    max-height: none; 
-  }
-  .sidebarNav { flex-direction: row; }
-  .metricsGrid { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* =========================================================
    CUSTOM DATE RANGE STYLES
    ========================================================= */
 
@@ -537,4 +511,87 @@
   color: #475569;
   font-size: 0.85rem;
   line-height: 1.4;
+}
+
+/* =========================================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================================= */
+
+@media (max-width: 1200px) {
+  .metricsGrid { grid-template-columns: repeat(3, 1fr); }
+  .sidebar { width: 170px; }
+}
+
+@media (max-width: 1024px) {
+  .chartsSection { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  /* Allow outer scrolling on mobile instead of forcing height to 100vh */
+  .pageWrapper {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible; 
+  }
+
+  .mainLayout {
+    max-height: none; /* Release viewport lock */
+    overflow: visible;
+  }
+
+  /* Stack sidebar on top of content */
+  .container { 
+    flex-direction: column; 
+    height: auto;
+    gap: 1rem;
+  }
+
+  /* Allow the sidebar to sit cleanly above content without scrolling inside itself */
+  .sidebar { 
+    position: static; /* Remove sticky behavior on mobile */
+    width: 100%; 
+    height: auto; 
+    flex-direction: column; 
+    overflow: visible; 
+    max-height: none; 
+    padding: 12px;
+  }
+
+  .sidebarNav { 
+    flex-direction: row; 
+    flex-wrap: wrap; /* Wrap tabs to the next line if needed */
+    justify-content: center;
+  }
+
+  .sidebarTab {
+    flex: 1 1 calc(33.33% - 0.5rem); /* Allows 3 tabs per row */
+  }
+
+  /* 2 metrics per row */
+  .metricsGrid { 
+    grid-template-columns: repeat(2, 1fr); 
+  }
+
+  /* Handle header wrapping (Title + Date vs Report button) */
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .reportButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 1 metric per row for very small screens */
+  .metricsGrid { 
+    grid-template-columns: 1fr; 
+  }
+  
+  .sidebarTab {
+    flex: 1 1 100%; /* Force tabs into a single column list */
+  }
 }

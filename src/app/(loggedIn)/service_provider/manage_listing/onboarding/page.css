@@ -21,6 +21,7 @@
   background-color: #fff;
   min-height: 85vh;
   font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
 }
 
 h1.page-title {
@@ -129,7 +130,7 @@ h1.page-title {
   justify-content: flex-start;
   gap: 1.5rem;
   margin-top: 1rem;
-  flex-wrap: nowrap;
+  flex-wrap: wrap; /* Allows wrapping on smaller screens */
 }
 
 .input-unit {
@@ -377,6 +378,7 @@ h1.page-title {
   font-size: 0.85rem;
   font-weight: 500;
   border: 1px solid #fbbf24;
+  word-break: break-all;
 }
 
 .file-item button, .file-preview-small span span {
@@ -409,12 +411,15 @@ h1.page-title {
 .input-with-btn input { flex: 1; }
 
 .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
   text-align: center;
-  margin-top: 50px;
+  margin-top: 40px;
 }
 
 .btn-primary {
-  padding: 16px 50px;
+  padding: 16px 40px;
   background-color: #0E2679;
   color: white;
   border: none;
@@ -425,6 +430,7 @@ h1.page-title {
   font-family: 'Poppins', sans-serif;
   box-shadow: 0 4px 15px rgba(14, 38, 121, 0.3);
   transition: all 0.2s;
+  width: auto;
 }
 
 .btn-primary:hover {
@@ -445,11 +451,13 @@ h1.page-title {
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(2px);
   animation: fadeIn 0.2s ease;
+  padding: 15px;
+  box-sizing: border-box;
 }
 
 .modal-container {
   background: white;
-  width: 90%;
+  width: 100%;
   max-width: 850px; 
   max-height: 90vh;
   border-radius: 12px;
@@ -581,20 +589,89 @@ h1.page-title {
   from { opacity: 0; } to { opacity: 1; }
 }
 
-@media (max-width: 768px) {
-  .form-grid-3, .form-grid-2, .info-box { grid-template-columns: 1fr; }
-  .time-inputs { flex-wrap: wrap; }
-  .review-grid { grid-template-columns: 1fr; }
-}
 .employee-actions-container {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Adds breathing room between the button and the error */
+  gap: 8px;
   margin-top: 15px; 
 }
 
 .employee-global-error {
-  display: block; /* Forces the error text onto its own line */
+  display: block; 
   text-align: left;
   font-size: 0.85rem;
+}
+
+/* =========================================================
+   8. MOBILE RESPONSIVE MEDIA BREAKPOINTS
+   ========================================================= */
+@media (max-width: 768px) {
+  .apply-provider-wrapper {
+    margin: 10px auto;
+    padding: 20px 12px;
+  }
+
+  h1.page-title {
+    font-size: 1.6rem;
+    margin-bottom: 20px;
+  }
+
+  .form-section {
+    padding: 20px 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+  }
+
+  /* Collapse multi-column grids down to single stack columns */
+  .form-grid-3, 
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    margin-bottom: 10px;
+  }
+
+  /* Compact spacing for time config rows on mobile */
+  .time-config-row-single {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .time-inputs {
+    flex-wrap: wrap;
+  }
+
+  /* Expand action buttons to full-width or wrap nicely on phones */
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 12px;
+    margin-top: 30px;
+  }
+
+  .btn-primary, 
+  .btn-cancel {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1rem;
+    text-align: center;
+  }
+
+  /* Review Modal Responsiveness */
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-container {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+
+  .modal-footer button {
+    width: 100%;
+  }
 }
