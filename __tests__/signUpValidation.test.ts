@@ -18,7 +18,7 @@ describe("signUpValidation Unit Tests (Regular User Sign-Up)", () => {
     expect(Object.keys(errors).length).toBe(0);
   });
 
-  test("USR-SGN_TC02 & USR-SGN_TC12: Missing required fields or unchecked terms trigger errors", () => {
+  test("USR-SGN_TC02 & USR-SGN_TC12: Missing required fields/unchecked terms trigger errors", () => {
     const incompleteData = { ...validBaseData, mobile: "", roleChoice: "" };
     const errors = validateSignup(incompleteData, false);
 
