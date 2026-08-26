@@ -26,6 +26,7 @@
   width: 98%;
   margin: 0 auto;
   display: flex;
+  align-items: flex-start; /* Prevents items from stretching to match height */
   gap: 0.5rem;
   height: 100%;
 }
@@ -34,7 +35,7 @@
    SIDEBAR & FILTERS
    ========================================================= */
 
-/* Sidebar locked to prevent outer scrolling */
+/* Sidebar adjusted to wrap its content and avoid infinite vertical stretching */
 .sidebar {
   width: 200px;
   flex-shrink: 0;
@@ -42,12 +43,14 @@
   flex-direction: column;
   gap: 0.4rem;
   overflow-y: auto;
+  height: fit-content; /* Only extends when necessary based on content */
   max-height: 100%;
   background: white;
   border-radius: 8px;
   border: 1px solid #eef2f6;
   padding: 8px;
-  position: relative;
+  position: sticky;
+  top: 10px;
   z-index: 100;
 }
 
@@ -320,6 +323,7 @@
   .sidebarNav { flex-direction: row; }
   .metricsGrid { grid-template-columns: repeat(2, 1fr); }
 }
+
 /* =========================================================
    CUSTOM DATE RANGE STYLES
    ========================================================= */
@@ -352,6 +356,11 @@
 .dateInput:focus {
   border-color: #1e3a8a;
 }
+
+/* =========================================================
+   MODAL STYLES
+   ========================================================= */
+
 .modalOverlay {
   position: fixed;
   top: 0;
@@ -446,12 +455,14 @@
 
 .previewGrid {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .previewCard {
-  flex: 1;
+  flex: 1 1 calc(33% - 1rem);
+  min-width: 140px;
   background-color: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -496,22 +507,6 @@
 
 .downloadPdfBtn:hover {
   background-color: #1d4ed8;
-}
-/* Update previewGrid to wrap */
-.previewGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.previewCard {
-  flex: 1 1 calc(33% - 1rem);
-  min-width: 140px;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem;
 }
 
 /* New Analysis Box Styles */

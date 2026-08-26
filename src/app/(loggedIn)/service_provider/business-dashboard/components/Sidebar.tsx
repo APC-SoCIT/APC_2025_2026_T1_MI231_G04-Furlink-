@@ -3,6 +3,7 @@ import Link from 'next/link'; // Import Link for Next.js navigation
 import { FaArrowLeft } from 'react-icons/fa'; // Import the back arrow icon
 import { DashboardTab } from '../type';
 import ServiceBreakdown from './ServiceBreakdown';
+import ReviewsSidebarWidget from './ReviewsSidebarWidget'; // Import the new reviews widget
 import styles from '../business-dashboard.module.css';
 
 interface SidebarProps {
@@ -131,6 +132,11 @@ export default function Sidebar({
       {/* Booked Services Doughnut Chart Widget - Conditionally rendered only on Business Performance */}
       {activeTab === 'business_performance' && (
         <ServiceBreakdown services={bookedServices} />
+      )}
+
+      {/* Customer Reviews Widget - Conditionally rendered only on Customer Insights */}
+      {activeTab === 'customer_insights' && (
+        <ReviewsSidebarWidget />
       )}
       
     </aside>
