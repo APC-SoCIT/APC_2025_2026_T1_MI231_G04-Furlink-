@@ -35,8 +35,24 @@ export default function BookingWidget({
   existingBookings = [] 
 }: BookingWidgetProps) {
   const router = useRouter();
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1));
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 5));
+
+  // Current live timestamp references
+  const today = useMemo(() => new Date(), []);
+  const nowTime = today.getTime();
+  const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+  // Set default view to current month/year
+  const [currentDate, setCurrentDate] = useState<Date>(
+    new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+
+  // Calculate default selected date: First available date >= 24 hours ahead
+  const defaultSelectedDate = useMemo(() => {
+    const minBookingTime = new Date(nowTime + TWENTY_FOUR_HOURS_MS);
+    return new Date(minBookingTime.getFullYear(), minBookingTime.getMonth(), minBookingTime.getDate());
+  }, [nowTime]);
+
+  const [selectedDate, setSelectedDate] = useState<Date | null>(defaultSelectedDate);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [numPets, setNumPets] = useState<number>(1);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
@@ -50,8 +66,9 @@ export default function BookingWidget({
   const selectedDayName = selectedDate ? DAYS_OF_WEEK[selectedDate.getDay()] : null;
   const currentOperatingHour = selectedDayName ? hoursByDay.get(selectedDayName) : null;
 
+  // Filter slots to ensure individual time slots on the cutoff day also adhere to >= 24 hours in advance
   const generatedSlots = useMemo(() => {
-    if (!currentOperatingHour) return [];
+    if (!currentOperatingHour || !selectedDate) return [];
 
     const slots: string[] = [];
     const [openH, openM] = currentOperatingHour.opening_time.split(':').map(Number);
@@ -64,16 +81,29 @@ export default function BookingWidget({
     while (currentMin + interval <= closingMin) {
       const h = Math.floor(currentMin / 60);
       const m = currentMin % 60;
-      const period = h >= 12 ? 'PM' : 'AM';
-      const formattedH = h % 12 === 0 ? 12 : h % 12;
-      const formattedM = m < 10 ? `0${m}` : m;
 
-      slots.push(`${formattedH}:${formattedM} ${period}`);
+      // Construct concrete Date instance for this specific timeslot
+      const slotDateTime = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        h,
+        m
+      );
+
+      // Only include slot if it is at least 24 hours into the future
+      if (slotDateTime.getTime() - nowTime >= TWENTY_FOUR_HOURS_MS) {
+        const period = h >= 12 ? 'PM' : 'AM';
+        const formattedH = h % 12 === 0 ? 12 : h % 12;
+        const formattedM = m < 10 ? `0${m}` : m;
+        slots.push(`${formattedH}:${formattedM} ${period}`);
+      }
+
       currentMin += interval;
     }
 
     return slots;
-  }, [currentOperatingHour]);
+  }, [currentOperatingHour, selectedDate, nowTime]);
 
   const maxCapacity = currentOperatingHour ? currentOperatingHour.slot_capacity : 1;
 
@@ -89,7 +119,13 @@ export default function BookingWidget({
     return existingBookings.find((b) => b.booking_date === dateStr) || null;
   }, [selectedDate, existingBookings]);
 
+  // Check if user is on current or past month to restrict previous button
+  const isMinMonth =
+    currentDate.getFullYear() < today.getFullYear() ||
+    (currentDate.getFullYear() === today.getFullYear() && currentDate.getMonth() <= today.getMonth());
+
   const handlePrevMonth = () => {
+    if (isMinMonth) return;
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
 
@@ -104,7 +140,8 @@ export default function BookingWidget({
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const handleDateSelect = (dayNum: number) => {
+  const handleDateSelect = (dayNum: number, isAllowed: boolean) => {
+    if (!isAllowed) return;
     const newDate = new Date(year, month, dayNum);
     setSelectedDate(newDate);
     setSelectedTimeSlot('');
@@ -156,7 +193,12 @@ export default function BookingWidget({
         <label className="field-label">SELECT DATE</label>
         <div className="calendar-box">
           <div className="calendar-header">
-            <button type="button" onClick={handlePrevMonth} className="cal-nav-btn">
+            <button 
+              type="button" 
+              onClick={handlePrevMonth} 
+              className={`cal-nav-btn ${isMinMonth ? 'disabled' : ''}`}
+              disabled={isMinMonth}
+            >
               <FaChevronLeft />
             </button>
             <span className="cal-month-title">
@@ -182,6 +224,13 @@ export default function BookingWidget({
               const dayName = DAYS_OF_WEEK[thisDate.getDay()];
               const isOpen = hoursByDay.has(dayName);
 
+              // End of the target day (23:59:59) to check if the day is past or within 24 hours
+              const endOfThisDate = new Date(year, month, dayNum, 23, 59, 59).getTime();
+              const isPastOrWithin24Hours = endOfThisDate < (nowTime + TWENTY_FOUR_HOURS_MS);
+
+              // Date is selectable only if it is open and at least 24 hours in the future
+              const isSelectable = isOpen && !isPastOrWithin24Hours;
+
               const isSelected =
                 selectedDate &&
                 selectedDate.getDate() === dayNum &&
@@ -195,22 +244,26 @@ export default function BookingWidget({
 
               const hasExisting = existingBookings.some((b) => b.booking_date === dStr);
 
+              // Generate appropriate tooltip message
+              let tooltipMessage = `${dayName}: Open`;
+              if (isPastOrWithin24Hours) {
+                tooltipMessage = 'Bookings require at least 24 hours advance notice';
+              } else if (!isOpen) {
+                tooltipMessage = `${dayName}: Closed`;
+              } else if (hasExisting) {
+                tooltipMessage = 'You already have a booking on this date';
+              }
+
               return (
                 <span
                   key={dayNum}
-                  onClick={() => isOpen && handleDateSelect(dayNum)}
+                  onClick={() => handleDateSelect(dayNum, isSelectable)}
                   className={`
                     ${isSelected ? 'selected' : ''} 
-                    ${!isOpen ? 'disabled-date' : ''} 
-                    ${hasExisting && !isSelected ? 'has-booking' : ''}
+                    ${!isSelectable ? 'disabled-date' : ''} 
+                    ${hasExisting && !isSelected && isSelectable ? 'has-booking' : ''}
                   `}
-                  title={
-                    hasExisting 
-                      ? 'You already have a booking on this date' 
-                      : isOpen 
-                        ? `${dayName}: Open` 
-                        : `${dayName}: Closed`
-                  }
+                  title={tooltipMessage}
                 >
                   {dayNum}
                 </span>
@@ -241,7 +294,7 @@ export default function BookingWidget({
           {!currentOperatingHour ? (
             <option value="">Closed on selected date</option>
           ) : generatedSlots.length === 0 ? (
-            <option value="">No slots available</option>
+            <option value="">No slots available (min. 24h advance required)</option>
           ) : (
             <>
               <option value="" disabled>-- Select a Time Slot --</option>
