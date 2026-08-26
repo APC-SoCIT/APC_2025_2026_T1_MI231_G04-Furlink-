@@ -596,6 +596,22 @@
   opacity: 0.9;
 }
 
+.btn-primary-action {
+  background-color: #1e3a8a;
+  border: none;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn-primary-action:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 1024px) {
   .booking-tabs-grid.six-categories {
     grid-template-columns: repeat(3, 1fr);

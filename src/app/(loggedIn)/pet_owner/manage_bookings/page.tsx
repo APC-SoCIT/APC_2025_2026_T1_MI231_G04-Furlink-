@@ -264,6 +264,14 @@ export default function ManageBookingsPage() {
     alert('Reschedule request functionality will be implemented soon.');
   };
 
+  const handlePayNow = (bookingId: string) => {
+    alert(`Redirecting to payment for booking ID: ${bookingId}`);
+  };
+
+  const handleRequestRefund = (bookingId: string) => {
+    alert(`Initiating refund request for booking ID: ${bookingId}`);
+  };
+
   return (
     <div className="manage-bookings-container">
       <main className="manage-bookings-main">
@@ -523,9 +531,35 @@ export default function ManageBookingsPage() {
             </div>
 
             <div className="summary-modal-footer">
-              <button className="btn-reschedule-booking" onClick={handleReschedulePlaceholder}>
-                Reschedule
-              </button>
+              {activeTab === 'to_pay' && (
+                <button
+                  className="btn-primary-action"
+                  onClick={() => handlePayNow(selectedBooking.id)}
+                >
+                  Pay Now
+                </button>
+              )}
+
+              {activeTab === 'refund' && (
+                <button
+                  className="btn-primary-action"
+                  onClick={() => handleRequestRefund(selectedBooking.id)}
+                >
+                  Request refund
+                </button>
+              )}
+
+              {activeTab !== 'to_pay' &&
+                activeTab !== 'decline_cancelled' &&
+                activeTab !== 'refund' && (
+                  <button
+                    className="btn-reschedule-booking"
+                    onClick={handleReschedulePlaceholder}
+                  >
+                    Reschedule
+                  </button>
+                )}
+
               <button className="btn-close-modal" onClick={() => setShowDetailsModal(false)}>
                 Close
               </button>
