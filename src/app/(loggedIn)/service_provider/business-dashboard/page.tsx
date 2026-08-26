@@ -165,6 +165,24 @@ export default function BusinessDashboardPage() {
 
     const averageBookingValue = revenueBookings.length > 0 ? grossRevenue / revenueBookings.length : 0;
 
+    // Calculate peak time slot from filtered bookings using booking_timeslot
+    const timeCounts: Record<string, number> = {};
+    filteredBookings.forEach((b: any) => {
+      const timeslot = b.booking_timeslot || '';
+      if (timeslot) {
+        timeCounts[timeslot] = (timeCounts[timeslot] || 0) + 1;
+      }
+    });
+
+    let peakActivityTime = 'No data';
+    let maxBookings = 0;
+    Object.entries(timeCounts).forEach(([time, count]) => {
+      if (count > maxBookings) {
+        maxBookings = count;
+        peakActivityTime = time;
+      }
+    });
+
     return {
       totalRevenue: grossRevenue,
       revenueTrend: 12.5, 
@@ -176,7 +194,8 @@ export default function BusinessDashboardPage() {
       cancelTrend: 0,
       listingViews: profileViewCount, // Pulled directly from database column!
       viewsTrend: 0,
-      realServiceBreakdown 
+      realServiceBreakdown,
+      peakActivity: peakActivityTime 
     };
   }, [filteredBookings, filteredPets, filteredServices, profileViewCount]);
 
@@ -201,14 +220,32 @@ export default function BusinessDashboardPage() {
         };
       case 'customer_insights':
         return {
-          document: <CustomerInsightPDF bookings={filteredBookings} month={reportPeriodLabel} petTypeFilter={petTypeFilter} />,
+          document: (
+            <CustomerInsightPDF 
+              bookings={filteredBookings} 
+              pets={filteredPets} 
+              month={reportPeriodLabel} 
+              petTypeFilter={petTypeFilter} 
+              totalRevenue={dynamicMetrics.totalRevenue}
+            />
+          ),
           fileName: `Customer_Insight_Report_${currentDate.toISOString().split('T')[0]}.pdf`,
           label: "Generate Customer Insight Report"
         };
       case 'business_performance':
       default:
         return {
-          document: <BusinessReportPDF bookings={filteredBookings} totalRevenue={dynamicMetrics.totalRevenue} month={reportPeriodLabel} petTypeFilter={petTypeFilter} />,
+          document: (
+            <BusinessReportPDF 
+              bookings={filteredBookings} 
+              pets={filteredPets} 
+              services={filteredServices} 
+              totalRevenue={dynamicMetrics.totalRevenue} 
+              month={reportPeriodLabel} 
+              petTypeFilter={petTypeFilter} 
+              peakActivity={dynamicMetrics.peakActivity}
+            />
+          ),
           fileName: `Business_Report_${currentDate.toISOString().split('T')[0]}.pdf`,
           label: "Generate Business Report"
         };
@@ -382,6 +419,10 @@ export default function BusinessDashboardPage() {
           visitors: dynamicMetrics.listingViews,
           avgCustomer: dynamicMetrics.averageBookingValue
         }}
+        bookingsData={filteredBookings}
+        petsData={filteredPets}
+        servicesData={filteredServices}
+        peakActivity={dynamicMetrics.peakActivity}
       />
     </div>
   );
