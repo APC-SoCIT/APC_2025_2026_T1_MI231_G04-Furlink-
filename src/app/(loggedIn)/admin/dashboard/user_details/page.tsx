@@ -24,6 +24,7 @@ function UserDetailsContent() {
     user, businessEmail, bookings, loading, bookingsLoading, error,
     warnings, warningsLoading, sendingWarning,
     currentSuspension, suspensionLoading, suspending, liftingSuspension, autoSuspended,
+    suspensionHistory, suspensionHistoryLoading,
     actionError, actionSuccess, autoSuspendNotice, setAutoSuspendNotice,
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   } = useUserDetails(userId);
@@ -35,7 +36,8 @@ function UserDetailsContent() {
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  
+  const [showSuspensionHistoryModal, setShowSuspensionHistoryModal] = useState(false);
+
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
   const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
 
@@ -104,7 +106,10 @@ function UserDetailsContent() {
               liftingSuspension={liftingSuspension}
               onSuspendClick={() => setShowSuspendConfirm(true)}
               onLiftSuspensionClick={() => setShowLiftConfirm(true)}
-              onViewHistoryClick={() => setShowHistoryModal(true)} 
+              onViewHistoryClick={() => setShowHistoryModal(true)}
+              suspensionHistory={suspensionHistory}
+              suspensionHistoryLoading={suspensionHistoryLoading}
+              onViewSuspensionHistoryClick={() => setShowSuspensionHistoryModal(true)}
             />
           </div>
 
@@ -143,6 +148,10 @@ function UserDetailsContent() {
         warningsLoading={warningsLoading}
         showHistoryModal={showHistoryModal}
         setShowHistoryModal={setShowHistoryModal}
+        suspensionHistory={suspensionHistory}
+        suspensionHistoryLoading={suspensionHistoryLoading}
+        showSuspensionHistoryModal={showSuspensionHistoryModal}
+        setShowSuspensionHistoryModal={setShowSuspensionHistoryModal}
       />
     </div>
   );

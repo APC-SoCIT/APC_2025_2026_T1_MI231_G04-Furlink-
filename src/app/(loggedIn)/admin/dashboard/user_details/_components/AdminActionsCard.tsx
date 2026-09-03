@@ -1,6 +1,6 @@
 "use client";
 
-import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory } from "react-icons/fa";
+import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory, FaChevronDown } from "react-icons/fa";
 import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
 import styles from "../page.module.css";
 
@@ -20,13 +20,24 @@ interface Props {
   onSuspendClick: () => void;
   onLiftSuspensionClick: () => void;
   onViewHistoryClick: () => void;
+  suspensionHistory: SuspensionRow[];
+  suspensionHistoryLoading: boolean;
+  onViewSuspensionHistoryClick: () => void;
 }
 
 export const AdminActionsCard = ({
   warnings, warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
   onSendWarningClick, isSuspended, currentSuspension, suspensionLoading, suspending, liftingSuspension,
-  onSuspendClick, onLiftSuspensionClick, onViewHistoryClick, 
+  onSuspendClick, onLiftSuspensionClick, onViewHistoryClick,
+  suspensionHistory, suspensionHistoryLoading, onViewSuspensionHistoryClick
 }: Props) => {
+
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+    });
+  };
 
   return (
     <section className={styles["admin-actions-card"]}>
@@ -70,10 +81,10 @@ export const AdminActionsCard = ({
 
       <hr className={styles["admin-divider"]} />
 
-      {/* View History */}
+      {/* View Warning History */}
       <button className={styles["btn-view-history"]} onClick={onViewHistoryClick}>
         <FaHistory /> 
-        View History ({warningsLoading ? "…" : warnings.length})
+        View Warning History ({warningsLoading ? "…" : warnings.length})
       </button>
 
       <hr className={styles["admin-divider"]} />
@@ -83,7 +94,7 @@ export const AdminActionsCard = ({
         <span className={styles["admin-block-label"]}>Account Suspension</span>
         <p className={styles["admin-block-desc"]}>
           {isSuspended && currentSuspension
-            ? `Suspended until ${new Date(currentSuspension.suspended_until).toLocaleDateString()}.`
+            ? `Suspended until ${formatDateTime(currentSuspension.suspended_until)}.`
             : `Temporarily disable this user's access for ${SUSPENSION_DAYS} days. This also happens automatically once the user reaches ${WARNING_THRESHOLD} active warnings.`}
         </p>
         {isSuspended ? (
@@ -97,6 +108,14 @@ export const AdminActionsCard = ({
             {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
           </button>
         )}
+
+      <hr className={styles["admin-divider"]} />
+
+        {/* View Suspension History */}
+        <button className={styles["btn-view-history"]} onClick={onViewSuspensionHistoryClick}>
+          <FaHistory />
+          View Suspension History ({suspensionHistoryLoading ? "…" : suspensionHistory.length})
+        </button>
       </div>
     </section>
   );

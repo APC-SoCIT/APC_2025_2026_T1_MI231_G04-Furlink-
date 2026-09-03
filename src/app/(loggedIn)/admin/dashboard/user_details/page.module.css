@@ -762,6 +762,11 @@
   margin: 8px 0;
 }
 
+.warning-status-lifted {
+  background: #d1fae5;
+  color: #047857;
+}
+
 /* Lift suspension button */
 .btn-lift-suspend {
   display: flex;

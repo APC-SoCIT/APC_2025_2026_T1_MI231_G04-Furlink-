@@ -1,7 +1,7 @@
 "use client";
 
 import { FaTimes } from "react-icons/fa";
-import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
+import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD, SuspensionRow } from "../_types";
 import styles from "../page.module.css";
 import { WarningRow } from "../_types";
 
@@ -39,6 +39,11 @@ interface Props {
   warningsLoading: boolean;
   showHistoryModal: boolean;
   setShowHistoryModal: (val: boolean) => void;
+
+  suspensionHistory: SuspensionRow[];
+  suspensionHistoryLoading: boolean;
+  showSuspensionHistoryModal: boolean;
+  setShowSuspensionHistoryModal: (val: boolean) => void;
 }
 
 export const AdminModals = ({
@@ -63,7 +68,11 @@ export const AdminModals = ({
   warnings,
   warningsLoading,
   showHistoryModal,
-  setShowHistoryModal
+  setShowHistoryModal,
+  suspensionHistory,
+  suspensionHistoryLoading,
+  showSuspensionHistoryModal,
+  setShowSuspensionHistoryModal
 }: Props) => {
   return (
     <>
@@ -174,9 +183,57 @@ export const AdminModals = ({
                       <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${w.status}`] || ""}`}>
                         {w.status}
                       </span>
-                      <span className={styles["warning-history-date"]}>{formatDateTime(w.created_at)}</span>
+                      <span className={styles["warning-history-date"]}>
+                        {formatDateTime(w.created_at)}
+                        {w.issued_by_admin && ` · by ${w.issued_by_admin.first_name} ${w.issued_by_admin.last_name}`}
+                      </span>
                     </div>
                     <p className={styles["warning-history-message"]}>{w.warning_message}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUSPENSION HISTORY MODAL */}
+      {showSuspensionHistoryModal && (
+        <div className={styles["modal-overlay"]} onClick={() => setShowSuspensionHistoryModal(false)}>
+          <div className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Suspension History</h3>
+              <button className={styles["btn-close-modal"]} onClick={() => setShowSuspensionHistoryModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <div className={styles["warning-history-list"]}>
+              {suspensionHistoryLoading ? (
+                <p className={styles["warning-history-empty"]}>Loading...</p>
+              ) : suspensionHistory.length === 0 ? (
+                <p className={styles["warning-history-empty"]}>No suspensions on record.</p>
+              ) : (
+                suspensionHistory.map((s) => (
+                  <div key={s.id} className={styles["warning-history-item"]}>
+                    <div className={styles["warning-history-top"]}>
+                      <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${s.status}`] || ""}`}>
+                        {s.status}
+                      </span>
+                      <span className={styles["warning-history-date"]}>
+                        {formatDateTime(s.suspended_at)}
+                        {s.suspended_by_admin && ` · by ${s.suspended_by_admin.first_name} ${s.suspended_by_admin.last_name}`}
+                      </span>
+                    </div>
+                    <p className={styles["warning-history-message"]}>{s.reason}</p>
+                    <p className={styles["warning-history-date"]}>
+                      Until {formatDateTime(s.suspended_until)}
+                      {s.status === "lifted" && s.lifted_at && (
+                        <>
+                          {" "}— lifted {formatDateTime(s.lifted_at)}
+                          {s.lifted_by_admin && ` by ${s.lifted_by_admin.first_name} ${s.lifted_by_admin.last_name}`}
+                        </>
+                      )}
+                    </p>
                   </div>
                 ))
               )}
