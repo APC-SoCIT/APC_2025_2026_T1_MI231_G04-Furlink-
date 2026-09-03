@@ -27,6 +27,11 @@ export default function LoginPage() {
   const [resendLoading, setResendLoading] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
 
+  // Deactivation / Reactivation states
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [reactivateUserId, setReactivateUserId] = useState<string | null>(null);
+  const [reactivating, setReactivating] = useState(false);
+
   const supabase = createClientComponentClient();
   const router = useRouter();
 
@@ -154,6 +159,54 @@ export default function LoginPage() {
     setLoading(false);
   };
 
+  const proceedWithRouting = async (userId: string) => {
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setErrors({ form: "Authentication session missing. Please log in again." });
+      setLoading(false);
+      return;
+    }
+
+    const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
+    const mustChangePassword = user.user_metadata?.must_change_password;
+
+    let registrationStatus = null;
+    if (role === 'service_provider' || role === 'both_sp_po') {
+      const { data: spInfo } = await supabase
+        .from("sp_general_info")
+        .select("registration_status")
+        .eq("profiles_id", userId)
+        .maybeSingle();
+      
+      registrationStatus = spInfo?.registration_status;
+    }
+
+    router.refresh();
+
+    if (role === 'admin' && mustChangePassword) {
+      router.push("/auth/admin_first_login");
+      return;
+    }
+
+    if (role === 'service_provider') {
+      if (registrationStatus === 'approved') {
+        router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
+      } else {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      }
+    } else if (role === 'admin') {
+      router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
+    } else {
+      router.push(ROUTES.PET_OWNER.DASHBOARD);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ identifier: true, password: true });
@@ -210,49 +263,53 @@ export default function LoginPage() {
         return;
       }
 
+      // Check account status from profiles table
       const { data: userProfile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, status")
         .eq("id", user.id)
         .maybeSingle();
 
-      const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
-      const mustChangePassword = user.user_metadata?.must_change_password;
-
-      let registrationStatus = null;
-      if (role === 'service_provider' || role === 'both_sp_po') {
-        const { data: spInfo } = await supabase
-          .from("sp_general_info")
-          .select("registration_status")
-          .eq("profiles_id", user.id)
-          .maybeSingle();
-        
-        registrationStatus = spInfo?.registration_status;
-      }
-
-      router.refresh();
-
-      // Check if role is admin and if it's their first login (must_change_password is true)
-      if (role === 'admin' && mustChangePassword) {
-        router.push("/auth/admin_first_login");
+      if (userProfile?.status === "deactivated") {
+        setReactivateUserId(user.id);
+        setShowReactivateModal(true);
+        setLoading(false);
         return;
       }
 
-      if (role === 'service_provider') {
-        if (registrationStatus === 'approved') {
-          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
-        } else {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        }
-      } else if (role === 'admin') {
-        router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
-      } else {
-        router.push(ROUTES.PET_OWNER.DASHBOARD);
-      }
+      await proceedWithRouting(user.id);
     } catch (err) {
       setErrors({ form: "Something went wrong. Please try again." });
       setLoading(false);
     }
+  };
+
+  const handleConfirmReactivate = async () => {
+    if (!reactivateUserId) return;
+    setReactivating(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ status: "active" })
+        .eq("id", reactivateUserId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setShowReactivateModal(false);
+      await proceedWithRouting(reactivateUserId);
+    } catch (err: any) {
+      setErrors({ form: err.message || "Failed to reactivate account." });
+      setReactivating(false);
+    }
+  };
+
+  const handleCancelReactivate = async () => {
+    await supabase.auth.signOut();
+    setShowReactivateModal(false);
+    setReactivateUserId(null);
+    setLoading(false);
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -285,42 +342,19 @@ export default function LoginPage() {
 
       const { data: userProfile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, status")
         .eq("id", data.user.id)
         .maybeSingle();
         
-      const role = userProfile?.role || data.user.user_metadata?.role || 'pet_owner';
-      const mustChangePassword = data.user.user_metadata?.must_change_password;
-
-      let registrationStatus = null;
-      if (role === 'service_provider' || role === 'both_sp_po') {
-        const { data: spInfo } = await supabase
-          .from("sp_general_info")
-          .select("registration_status")
-          .eq("profiles_id", data.user.id)
-          .maybeSingle();
-        
-        registrationStatus = spInfo?.registration_status;
-      }
-
-      router.refresh();
-
-      if (role === 'admin' && mustChangePassword) {
-        router.push("/auth/admin_first_login");
+      if (userProfile?.status === "deactivated") {
+        setReactivateUserId(data.user.id);
+        setShowReactivateModal(true);
+        setVerificationLoading(false);
+        setPendingVerification(false);
         return;
       }
 
-      if (role === 'service_provider') {
-        if (registrationStatus === 'approved') {
-          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
-        } else {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        }
-      } else if (role === 'admin') {
-        router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
-      } else {
-        router.push(ROUTES.PET_OWNER.DASHBOARD);
-      }
+      await proceedWithRouting(data.user.id);
     } catch {
       setOtpError("Failed to verify code. Please check your connection and try again.");
     } finally {
@@ -481,6 +515,35 @@ export default function LoginPage() {
           </Link>
         </p>
       </form>
+
+      {/* Account Reactivation Confirmation Modal */}
+      {showReactivateModal && (
+        <div className="confirmation-overlay">
+          <div className="confirmation-dialog" style={{ maxWidth: "420px", textAlign: "left" }}>
+            <h3 style={{ color: "#0a217a", marginBottom: "15px" }}>Reactivate Account</h3>
+            <p style={{ fontSize: "14px", lineHeight: "1.5", color: "#444", marginBottom: "20px" }}>
+              Your account is currently deactivated. Are you sure you want to reactivate your account and log back in?
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                className="save-btn"
+                style={{ backgroundColor: "#0a217a" }}
+                onClick={handleConfirmReactivate}
+                disabled={reactivating}
+              >
+                {reactivating ? "Reactivating..." : "Yes, reactivate"}
+              </button>
+              <button 
+                className="cancel-btn" 
+                onClick={handleCancelReactivate}
+                disabled={reactivating}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
