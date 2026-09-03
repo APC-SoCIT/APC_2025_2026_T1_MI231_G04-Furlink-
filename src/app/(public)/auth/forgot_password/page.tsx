@@ -137,6 +137,25 @@ export default function ForgotPasswordPage() {
 
       const currentEmail = accountData.resolved_email;
 
+      // Check account status in profiles table to restrict suspended / deactivated users
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("status")
+        .eq("email", currentEmail)
+        .maybeSingle();
+
+      if (userProfile?.status === "suspended") {
+        setError("Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details.");
+        setLoading(false);
+        return;
+      }
+
+      if (userProfile?.status === "deactivated") {
+        setError("Your account is currently deactivated. Please log in directly to reactivate your account.");
+        setLoading(false);
+        return;
+      }
+
       const rateCheck = checkRateLimit(currentEmail, true);
       if (!rateCheck.allowed) {
         setError(rateCheck.message ?? null);
@@ -256,9 +275,16 @@ export default function ForgotPasswordPage() {
       // Fetch role from profiles table (matching login logic)
       const { data: userProfile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, status")
         .eq("id", user.id)
         .maybeSingle();
+
+      if (userProfile?.status === "suspended") {
+        await supabase.auth.signOut();
+        setError("Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details.");
+        setLoading(false);
+        return;
+      }
 
       const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
       const mustChangePassword = user.user_metadata?.must_change_password;
