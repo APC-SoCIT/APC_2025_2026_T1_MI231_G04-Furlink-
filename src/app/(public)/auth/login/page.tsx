@@ -270,6 +270,15 @@ export default function LoginPage() {
         .eq("id", user.id)
         .maybeSingle();
 
+      if (userProfile?.status === "suspended") {
+        await supabase.auth.signOut();
+        setErrors({ 
+          form: "Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details." 
+        });
+        setLoading(false);
+        return;
+      }
+
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(user.id);
         setShowReactivateModal(true);
@@ -346,6 +355,16 @@ export default function LoginPage() {
         .eq("id", data.user.id)
         .maybeSingle();
         
+      if (userProfile?.status === "suspended") {
+        await supabase.auth.signOut();
+        setErrors({ 
+          form: "Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details." 
+        });
+        setVerificationLoading(false);
+        setPendingVerification(false);
+        return;
+      }
+
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(data.user.id);
         setShowReactivateModal(true);
@@ -413,7 +432,7 @@ export default function LoginPage() {
 
           {otpError && <p className="form-error-banner">{otpError}</p>}
 
-          <div className="input-group" style={{ marginBottom: "20px" }}>
+          <div className="input-group">
             <input
               type="text"
               placeholder="Enter 6-digit OTP"
@@ -519,15 +538,14 @@ export default function LoginPage() {
       {/* Account Reactivation Confirmation Modal */}
       {showReactivateModal && (
         <div className="confirmation-overlay">
-          <div className="confirmation-dialog" style={{ maxWidth: "420px", textAlign: "left" }}>
-            <h3 style={{ color: "#0a217a", marginBottom: "15px" }}>Reactivate Account</h3>
-            <p style={{ fontSize: "14px", lineHeight: "1.5", color: "#444", marginBottom: "20px" }}>
+          <div className="confirmation-dialog">
+            <h3>Reactivate Account</h3>
+            <p>
               Your account is currently deactivated. Are you sure you want to reactivate your account and log back in?
             </p>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <div className="confirmation-btn-group">
               <button
                 className="save-btn"
-                style={{ backgroundColor: "#0a217a" }}
                 onClick={handleConfirmReactivate}
                 disabled={reactivating}
               >

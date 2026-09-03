@@ -562,5 +562,87 @@ input::-webkit-credentials-auto-fill-button {
 }
 
 /* ==========================================================================
+   ACCOUNT STATUS MODAL & WARNING STYLES (Reactivation / Suspension)
+   ========================================================================== */
+
+.auth-form-error {
+  background-color: #fce8e6;
+  color: #c5221f;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 15px;
+  line-height: 1.4;
+}
+
+.confirmation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.confirmation-dialog {
+  background-color: #fefdf6;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 420px;
+  width: 90%;
+  text-align: left;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.confirmation-dialog h3 {
+  color: #0a217a;
+  margin-bottom: 15px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.confirmation-dialog p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #444444;
+  margin-bottom: 20px;
+}
+
+.confirmation-dialog .save-btn {
+  background-color: #0a217a;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+.confirmation-dialog .save-btn:hover {
+  background-color: #071655;
+}
+
+.confirmation-dialog .cancel-btn {
+  background-color: #e0ded6;
+  color: #333333;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+.confirmation-dialog .cancel-btn:hover {
+  background-color: #d0cec6;
+}
+
+/* ==========================================================================
    FORGOT PASSWORD STYLES
    ========================================================================== */
