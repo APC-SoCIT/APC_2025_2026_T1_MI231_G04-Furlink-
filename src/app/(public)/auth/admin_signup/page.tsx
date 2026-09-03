@@ -54,7 +54,13 @@ export default function AdminSignupPage() {
 
   const getMaxDob = () => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 13);
+    d.setFullYear(d.getFullYear() - 18); // Must be at least 18 years old
+    return d.toISOString().split("T")[0];
+  };
+
+  const getMinDob = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 65); // Must be 65 years old or younger
     return d.toISOString().split("T")[0];
   };
 
@@ -437,6 +443,7 @@ export default function AdminSignupPage() {
                 type="date"
                 name="dob"
                 lang="en-US"
+                min={getMinDob()}
                 max={getMaxDob()}
                 value={formData.dob}
                 onChange={handleChange}

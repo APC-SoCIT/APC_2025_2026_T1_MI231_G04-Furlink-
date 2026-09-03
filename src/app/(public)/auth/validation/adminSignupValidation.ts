@@ -20,7 +20,7 @@ export const validateAdminSignup = (formData: any, agreedToTerms: boolean) => {
   if (!formData.email) errors.email = "Email is required.";
   else if (!emailRegex.test(formData.email)) errors.email = "Email is invalid.";
 
-  // Date of Birth (13+ years old)
+  // Date of Birth (18 to 65 years old restriction)
   if (!formData.dob) {
     errors.dob = "Date of Birth is required.";
   } else {
@@ -30,7 +30,12 @@ export const validateAdminSignup = (formData: any, agreedToTerms: boolean) => {
     const monthDiff = today.getMonth() - dobDate.getMonth();
     const dayDiff = today.getDate() - dobDate.getDate();
     if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age--;
-    if (age < 13) errors.dob = "Must be at least 13 years old.";
+
+    if (age < 18) {
+      errors.dob = "Must be at least 18 years old.";
+    } else if (age > 65) {
+      errors.dob = "Must be 65 years old or younger.";
+    }
   }
 
   // Password
