@@ -187,6 +187,8 @@ export default function ManageAccountPage() {
         .eq("id", user.id)
         .single();
 
+      const userRole = profile?.role || user.user_metadata?.role || "pet_owner";
+
       setFormData({
         firstName: profile?.first_name || user.user_metadata?.first_name || "",
         lastName: profile?.last_name || user.user_metadata?.last_name || "",
@@ -194,8 +196,13 @@ export default function ManageAccountPage() {
         email: profile?.email || user.email || "",
         mobileNumber: profile?.mobile_number || "",
         dob: profile?.date_of_birth || "",
-        role: profile?.role || user.user_metadata?.role || "pet_owner",
+        role: userRole,
       });
+
+      // If user is admin, lock activeTab strictly to profile
+      if (userRole === "admin") {
+        setActiveTab("profile");
+      }
     } catch {
       setGeneralError("Failed to load account information.");
     } finally {
@@ -351,6 +358,9 @@ export default function ManageAccountPage() {
 
   // Run validation checks when switching to the Deactivate Tab
   const handleTabSwitch = async (tab: "profile" | "warnings" | "deactivate") => {
+    // Prevent admins from navigating to restricted tabs
+    if (formData.role === "admin" && tab !== "profile") return;
+
     setActiveTab(tab);
     setDeactivationBlockerMessage(null);
     setBlockerActionType(null);
@@ -430,7 +440,6 @@ export default function ManageAccountPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Update the profile status to 'deactivated' in the database table
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ status: "deactivated" })
@@ -440,7 +449,6 @@ export default function ManageAccountPage() {
         throw updateError;
       }
 
-      // Sign out the user session
       await supabase.auth.signOut();
       router.push("/auth/login?deactivated=true");
     } catch (err: any) {
@@ -471,19 +479,24 @@ export default function ManageAccountPage() {
                 <FaUser style={{ color: "#0a217a" }} /> Profile Information
               </button>
 
-              <button
-                onClick={() => handleTabSwitch("warnings")}
-                className={`manage-account-nav-btn ${activeTab === "warnings" ? "active-warnings" : ""}`}
-              >
-                <FaExclamationTriangle style={{ color: "#f0ad4e" }} /> Warning History
-              </button>
+              {/* Show Warning History and Deactivate tabs only if the user is NOT an admin */}
+              {formData.role !== "admin" && (
+                <>
+                  <button
+                    onClick={() => handleTabSwitch("warnings")}
+                    className={`manage-account-nav-btn ${activeTab === "warnings" ? "active-warnings" : ""}`}
+                  >
+                    <FaExclamationTriangle style={{ color: "#f0ad4e" }} /> Warning History
+                  </button>
 
-              <button
-                onClick={() => handleTabSwitch("deactivate")}
-                className={`manage-account-nav-btn ${activeTab === "deactivate" ? "active-deactivate" : ""}`}
-              >
-                <FaUserSlash style={{ color: "#d9534f" }} /> Deactivate Account
-              </button>
+                  <button
+                    onClick={() => handleTabSwitch("deactivate")}
+                    className={`manage-account-nav-btn ${activeTab === "deactivate" ? "active-deactivate" : ""}`}
+                  >
+                    <FaUserSlash style={{ color: "#d9534f" }} /> Deactivate Account
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -669,8 +682,8 @@ export default function ManageAccountPage() {
               </div>
             )}
 
-            {/* TAB 2: WARNING HISTORY */}
-            {activeTab === "warnings" && (
+            {/* TAB 2: WARNING HISTORY (Non-admin only) */}
+            {activeTab === "warnings" && formData.role !== "admin" && (
               <div>
                 <h3>Warning History</h3>
                 <div style={{ padding: "40px 10px", textAlign: "center", color: "#666" }}>
@@ -682,8 +695,8 @@ export default function ManageAccountPage() {
               </div>
             )}
 
-            {/* TAB 3: DEACTIVATE ACCOUNT */}
-            {activeTab === "deactivate" && (
+            {/* TAB 3: DEACTIVATE ACCOUNT (Non-admin only) */}
+            {activeTab === "deactivate" && formData.role !== "admin" && (
               <div>
                 <h3>Deactivate Account</h3>
 
