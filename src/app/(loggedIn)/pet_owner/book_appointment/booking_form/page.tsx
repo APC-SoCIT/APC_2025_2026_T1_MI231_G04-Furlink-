@@ -188,7 +188,6 @@ function BookingFormContent() {
         setShowSuccessModal(false);
         setShowSummaryModal(false);
       } else {
-        // Keeps failure modal explicitly hidden on initial/normal page renders
         setShowFailedModal(false);
       }
     };
@@ -606,36 +605,36 @@ function BookingFormContent() {
     return publicData.publicUrl;
   };
 
-  // Process Booking Database Records
+  // Process Booking Database Records (REFACTORED FOR MULTI-PET SUPPORT)
   const createBookingInDatabase = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       throw new Error('User authentication failed. Please log in again.');
     }
 
-    if (activeBookingId) {
-      return { bookingInfoId: activeBookingId, userId: user.id };
+    let currentBookingId = activeBookingId;
+
+    if (!currentBookingId) {
+      const { data: bookingData, error: bookingErr } = await supabase
+        .from('booking_info')
+        .insert({
+          profiles_id: user.id,
+          sp_id: spId,
+          booking_date: dateStr,
+          booking_timeslot: timeSlot,
+          booking_status: 'pending_sp_response',
+          booking_total_amount: grandTotal,
+        })
+        .select()
+        .single();
+
+      if (bookingErr || !bookingData) {
+        throw new Error(bookingErr?.message || 'Failed to create booking.');
+      }
+
+      currentBookingId = bookingData.id;
+      setActiveBookingId(currentBookingId);
     }
-
-    const { data: bookingData, error: bookingErr } = await supabase
-      .from('booking_info')
-      .insert({
-        profiles_id: user.id,
-        sp_id: spId,
-        booking_date: dateStr,
-        booking_timeslot: timeSlot,
-        booking_status: 'pending_sp_response',
-        booking_total_amount: grandTotal,
-      })
-      .select()
-      .single();
-
-    if (bookingErr || !bookingData) {
-      throw new Error(bookingErr?.message || 'Failed to create booking.');
-    }
-
-    const bookingInfoId = bookingData.id;
-    setActiveBookingId(bookingInfoId);
 
     for (const pet of petForms) {
       let finalVaccineUrl = pet.vaccineUrl || '';
@@ -689,7 +688,7 @@ function BookingFormContent() {
       const { data: petInfoData, error: petInfoErr } = await supabase
         .from('booking_pet_info')
         .insert({
-          booking_info_id: bookingInfoId,
+          booking_info_id: currentBookingId,
           registered_pet_id: regPetId,
           booking_pet_name: pet.petName,
           booking_pet_type: pet.petType.toLowerCase(),
@@ -711,22 +710,23 @@ function BookingFormContent() {
         throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
       }
 
-      const bookingPetInfoId = petInfoData.id;
-
-      for (const svcItem of pet.selectedServices) {
-        if (!svcItem.matchedOptionId) continue;
-
-        const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
-
-        const { error: svcInsertErr } = await supabase
-          .from('booking_service_info')
-          .insert({
-            booking_pet_info_id: bookingPetInfoId,
+      const servicesToInsert = pet.selectedServices
+        .filter((svcItem) => svcItem.matchedOptionId)
+        .map((svcItem) => {
+          const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
+          return {
+            booking_pet_info_id: petInfoData.id,
             booking_services_id: svcItem.matchedOptionId,
             booking_service_name: matchedSvcObj ? matchedSvcObj.service_name : 'Service',
             booking_service_type: matchedSvcObj?.service_type || 'individual_service',
             booking_price: svcItem.price,
-          });
+          };
+        });
+
+      if (servicesToInsert.length > 0) {
+        const { error: svcInsertErr } = await supabase
+          .from('booking_service_info')
+          .insert(servicesToInsert);
 
         if (svcInsertErr) {
           throw new Error(svcInsertErr.message);
@@ -734,12 +734,11 @@ function BookingFormContent() {
       }
     }
 
-    return { bookingInfoId, userId: user.id };
+    return { bookingInfoId: currentBookingId, userId: user.id };
   };
 
   // Launch PayMongo Session with Retry Threshold
   const handleConfirmBooking = async () => {
-    // Validate total amount before executing database insertions or checkout operations
     if (grandTotal <= 0) {
       alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s) before proceeding.');
       return;
@@ -751,7 +750,7 @@ function BookingFormContent() {
     }
 
     setIsSubmitting(true);
-    setShowFailedModal(false); // Explicitly hide failed modal state
+    setShowFailedModal(false);
 
     try {
       const { bookingInfoId } = await createBookingInDatabase();
@@ -793,7 +792,6 @@ function BookingFormContent() {
 
   // Handle Pay Later action
   const handlePayLater = async () => {
-    // Validate total amount before enabling pay-later persistence
     if (grandTotal <= 0) {
       alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s).');
       return;
