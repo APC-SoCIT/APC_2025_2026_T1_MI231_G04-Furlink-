@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FaEdit, FaEye, FaEyeSlash, FaAt } from "react-icons/fa";
+import { useRouter } from "next/navigation";
+import { FaEdit, FaEye, FaEyeSlash, FaAt, FaUser, FaExclamationTriangle, FaUserSlash } from "react-icons/fa";
 import { validateManageAccountField } from "./validation/manageAccountValidation";
 import Footer from "@/components/Footer";
 import "./manage_account.css";
@@ -110,6 +111,9 @@ function StraightEditableField({
 }
 
 export default function ManageAccountPage() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"profile" | "warnings" | "deactivate">("profile");
+
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -142,6 +146,11 @@ export default function ManageAccountPage() {
 
   const [pendingFieldUpdate, setPendingFieldUpdate] = useState<{ field: string; value: any } | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
+
+  // Deactivation states
+  const [deactivationBlockerMessage, setDeactivationBlockerMessage] = useState<string | null>(null);
+  const [blockerActionType, setBlockerActionType] = useState<"MANAGE_BOOKING" | "SUMMARY_DASHBOARD" | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   const supabase = createClientComponentClient();
 
@@ -340,203 +349,404 @@ export default function ManageAccountPage() {
     }
   };
 
-  if (loading && !formData.email) {
+  // Run validation checks when switching to the Deactivate Tab
+  const handleTabSwitch = async (tab: "profile" | "warnings" | "deactivate") => {
+    setActiveTab(tab);
+    setDeactivationBlockerMessage(null);
+    setBlockerActionType(null);
+
+    if (tab === "deactivate") {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const role = formData.role;
+
+        // Check Service Provider blockers
+        if (role === "service_provider" || role === "both_sp_po") {
+          const { data: spRecord } = await supabase
+            .from("sp_general_info")
+            .select("id")
+            .eq("profiles_id", user.id)
+            .maybeSingle();
+
+          if (spRecord) {
+            const { data: spBookings } = await supabase
+              .from("booking_info")
+              .select("booking_status")
+              .eq("sp_id", spRecord.id)
+              .in("booking_status", ["pending_sp_response", "to pay", "approved"]);
+
+            if (spBookings && spBookings.length > 0) {
+              setDeactivationBlockerMessage(
+                "You still have new requests received, payments to verify, or upcoming booking requests. You are required to respond to or cancel these booking requests before you can deactivate your account."
+              );
+              setBlockerActionType("SUMMARY_DASHBOARD");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Check Pet Owner blockers
+        if (role === "pet_owner" || role === "both_po_sp" || role === "both_sp_po") {
+          const { data: poBookings } = await supabase
+            .from("booking_info")
+            .select("booking_status")
+            .eq("profiles_id", user.id)
+            .in("booking_status", [
+              "pending_sp_response",
+              "to pay",
+              "approved",
+              "cancelled",
+              "to_refund"
+            ]);
+
+          const activeBlockers = poBookings?.filter(b => 
+            ["pending_sp_response", "to pay", "approved", "cancelled", "to_refund"].includes(b.booking_status || "")
+          );
+
+          if (activeBlockers && activeBlockers.length > 0) {
+            setDeactivationBlockerMessage(
+              "You still have an upcoming or unfinished booking request which needs to be finished or must be cancelled by you before you can smoothly deactivate."
+            );
+            setBlockerActionType("MANAGE_BOOKING");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleConfirmDeactivate = async () => {
+    setIsDeactivating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update the profile status to 'deactivated' in the database table
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ status: "deactivated" })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Sign out the user session
+      await supabase.auth.signOut();
+      router.push("/auth/login?deactivated=true");
+    } catch (err: any) {
+      setGeneralError(err.message || "Failed to deactivate account.");
+      setIsDeactivating(false);
+    }
+  };
+
+  if (loading && !formData.email && activeTab === "profile") {
     return <div className="manage-account-wrapper"><p>Loading account details...</p></div>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <div className="manage-account-wrapper" style={{ flex: 1 }}>
-        <div className="manage-account-card">
-          <h1>MANAGE ACCOUNT INFORMATION</h1>
+    <div className="manage-account-page-layout">
+      <div className="manage-account-container">
+        
+        {/* Split Layout Container */}
+        <div className="manage-account-split-grid">
+          
+          {/* LEFT COLUMN: Sidebar Navigation */}
+          <div className="manage-account-sidebar">
+            <h2>Account settings</h2>
+            <div className="manage-account-nav-list">
+              <button
+                onClick={() => handleTabSwitch("profile")}
+                className={`manage-account-nav-btn ${activeTab === "profile" ? "active-profile" : ""}`}
+              >
+                <FaUser style={{ color: "#0a217a" }} /> Profile Information
+              </button>
 
-          {successMessage && <div className="success-banner">{successMessage}</div>}
-          {generalError && <div className="form-error-banner">{generalError}</div>}
+              <button
+                onClick={() => handleTabSwitch("warnings")}
+                className={`manage-account-nav-btn ${activeTab === "warnings" ? "active-warnings" : ""}`}
+              >
+                <FaExclamationTriangle style={{ color: "#f0ad4e" }} /> Warning History
+              </button>
 
-          <div className="straight-layout-container">
-            <StraightEditableField
-              label="First Name"
-              value={formData.firstName}
-              isEditing={editingField === "firstName"}
-              tempValue={tempValue}
-              onTempChange={setTempValue}
-              onStartEdit={() => handleStartEdit("firstName")}
-              onSave={() => handlePreConfirmUpdate("firstName")}
-              onCancel={handleCancelEdit}
-              fieldError={editingField === "firstName" ? fieldError : null}
-            />
-
-            <StraightEditableField
-              label="Last Name"
-              value={formData.lastName}
-              isEditing={editingField === "lastName"}
-              tempValue={tempValue}
-              onTempChange={setTempValue}
-              onStartEdit={() => handleStartEdit("lastName")}
-              onSave={() => handlePreConfirmUpdate("lastName")}
-              onCancel={handleCancelEdit}
-              fieldError={editingField === "lastName" ? fieldError : null}
-            />
-
-            <StraightEditableField
-              label="Username"
-              value={formData.username}
-              isEditing={editingField === "username"}
-              tempValue={tempValue}
-              onTempChange={setTempValue}
-              onStartEdit={() => handleStartEdit("username")}
-              onSave={() => handlePreConfirmUpdate("username")}
-              onCancel={handleCancelEdit}
-              prefix={<FaAt style={{ fontSize: "14px", color: "#3b429f" }} />}
-              fieldError={editingField === "username" ? fieldError : null}
-              inputProps={{ placeholder: "username" }}
-            />
-
-            <div className="account-field-group">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <label style={{ margin: 0 }}>Password</label>
-                {editingField !== "password" && (
-                  <button
-                    className="edit-icon-btn icon-tooltip"
-                    onClick={() => handleStartEdit("password")}
-                    data-tooltip="Edit Password"
-                    aria-label="Edit Password"
-                  >
-                    <FaEdit />
-                  </button>
-                )}
-              </div>
-              <div className="field-row">
-                {editingField === "password" ? (
-                  <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div className="password-container">
-                      <input
-                        type={showCurrentPassword ? "text" : "password"}
-                        placeholder="Current Password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        maxLength={12}
-                      />
-                      <button
-                        type="button"
-                        className="toggle-password"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        aria-label={showCurrentPassword ? "Hide password" : "Show password"}
-                      >
-                        {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
-                      </button>
-                    </div>
-                    {currentPasswordError && <p className="field-inline-error">{currentPasswordError}</p>}
-
-                    <div className="password-container">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="New Password"
-                        value={tempPassword}
-                        onChange={(e) => setTempPassword(e.target.value)}
-                        maxLength={12}
-                      />
-                      <button
-                        type="button"
-                        className="toggle-password"
-                        onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <FaEyeSlash /> : <FaEye />}
-                      </button>
-                    </div>
-                    {newPasswordError && <p className="field-inline-error">{newPasswordError}</p>}
-
-                    <div className="password-container">
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm New Password"
-                        value={tempConfirmPassword}
-                        onChange={(e) => setTempConfirmPassword(e.target.value)}
-                        maxLength={12}
-                      />
-                      <button
-                        type="button"
-                        className="toggle-password"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                      >
-                        {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                      </button>
-                    </div>
-                    {confirmPasswordError && <p className="field-inline-error">{confirmPasswordError}</p>}
-
-                    <div className="mini-btn-group" style={{ marginTop: "5px" }}>
-                      <button className="mini-save-btn" onClick={() => handlePreConfirmUpdate("password")}>Save</button>
-                      <button className="mini-cancel-btn" onClick={handleCancelEdit}>Cancel</button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <StraightEditableField
-              label="Mobile Number"
-              value={formData.mobileNumber}
-              displayValue={formData.mobileNumber || "Not set"}
-              isEditing={editingField === "mobileNumber"}
-              tempValue={tempValue}
-              onTempChange={setTempValue}
-              onStartEdit={() => handleStartEdit("mobileNumber")}
-              onSave={() => handlePreConfirmUpdate("mobileNumber")}
-              onCancel={handleCancelEdit}
-              prefix="+63"
-              fieldError={editingField === "mobileNumber" ? fieldError : null}
-              inputProps={{ maxLength: 10, inputMode: "numeric", placeholder: "9XXXXXXXXX" }}
-            />
-
-            <StraightEditableField
-              label="Date of Birth"
-              type="date"
-              value={formData.dob}
-              displayValue={formatDateDisplay(formData.dob)}
-              isEditing={editingField === "dob"}
-              tempValue={tempValue}
-              onTempChange={setTempValue}
-              onStartEdit={() => handleStartEdit("dob")}
-              onSave={() => handlePreConfirmUpdate("dob")}
-              onCancel={handleCancelEdit}
-              fieldError={editingField === "dob" ? fieldError : null}
-              inputProps={{ max: getMaxDobDate() }}
-            />
-
-            <div className="account-field-group">
-              <label>Role/s</label>
-              <div className="field-row">
-                <span className="field-value">{formatRole(formData.role)}</span>
-              </div>
-            </div>
-
-            <div className="account-field-group">
-              <label>Email Address</label>
-              <div className="field-row">
-                <span className="field-value">{formData.email}</span>
-              </div>
+              <button
+                onClick={() => handleTabSwitch("deactivate")}
+                className={`manage-account-nav-btn ${activeTab === "deactivate" ? "active-deactivate" : ""}`}
+              >
+                <FaUserSlash style={{ color: "#d9534f" }} /> Deactivate Account
+              </button>
             </div>
           </div>
 
-          {showConfirmation && (
-            <div className="confirmation-overlay">
-              <div className="confirmation-dialog">
-                <h3>Confirm Changes</h3>
-                <p>Are you sure you want to update this information?</p>
-                <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-                  <button className="save-btn" onClick={executeUpdate}>
-                    Yes, Update
-                  </button>
-                  <button className="cancel-btn" onClick={() => setShowConfirmation(false)}>
-                    Cancel
-                  </button>
+          {/* Vertical Separator Line */}
+          <div className="manage-account-divider"></div>
+
+          {/* RIGHT COLUMN: Active Tab Content */}
+          <div className="manage-account-content-pane">
+            
+            {successMessage && <div className="success-banner">{successMessage}</div>}
+            {generalError && <div className="form-error-banner">{generalError}</div>}
+
+            {/* TAB 1: PROFILE */}
+            {activeTab === "profile" && (
+              <div>
+                <h3>Profile Information</h3>
+                <div className="straight-layout-container">
+                  <StraightEditableField
+                    label="First Name"
+                    value={formData.firstName}
+                    isEditing={editingField === "firstName"}
+                    tempValue={tempValue}
+                    onTempChange={setTempValue}
+                    onStartEdit={() => handleStartEdit("firstName")}
+                    onSave={() => handlePreConfirmUpdate("firstName")}
+                    onCancel={handleCancelEdit}
+                    fieldError={editingField === "firstName" ? fieldError : null}
+                  />
+
+                  <StraightEditableField
+                    label="Last Name"
+                    value={formData.lastName}
+                    isEditing={editingField === "lastName"}
+                    tempValue={tempValue}
+                    onTempChange={setTempValue}
+                    onStartEdit={() => handleStartEdit("lastName")}
+                    onSave={() => handlePreConfirmUpdate("lastName")}
+                    onCancel={handleCancelEdit}
+                    fieldError={editingField === "lastName" ? fieldError : null}
+                  />
+
+                  <StraightEditableField
+                    label="Username"
+                    value={formData.username}
+                    isEditing={editingField === "username"}
+                    tempValue={tempValue}
+                    onTempChange={setTempValue}
+                    onStartEdit={() => handleStartEdit("username")}
+                    onSave={() => handlePreConfirmUpdate("username")}
+                    onCancel={handleCancelEdit}
+                    prefix={<FaAt style={{ fontSize: "14px", color: "#0a217a" }} />}
+                    fieldError={editingField === "username" ? fieldError : null}
+                    inputProps={{ placeholder: "username" }}
+                  />
+
+                  <div className="account-field-group">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <label style={{ margin: 0 }}>Password</label>
+                      {editingField !== "password" && (
+                        <button
+                          className="edit-icon-btn icon-tooltip"
+                          onClick={() => handleStartEdit("password")}
+                          data-tooltip="Edit Password"
+                          aria-label="Edit Password"
+                        >
+                          <FaEdit />
+                        </button>
+                      )}
+                    </div>
+                    <div className="field-row">
+                      {editingField === "password" ? (
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <div className="password-container">
+                            <input
+                              type={showCurrentPassword ? "text" : "password"}
+                              placeholder="Current Password"
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                              maxLength={12}
+                            />
+                            <button
+                              type="button"
+                              className="toggle-password"
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                            >
+                              {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                          </div>
+                          {currentPasswordError && <p className="field-inline-error">{currentPasswordError}</p>}
+
+                          <div className="password-container">
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="New Password"
+                              value={tempPassword}
+                              onChange={(e) => setTempPassword(e.target.value)}
+                              maxLength={12}
+                            />
+                            <button
+                              type="button"
+                              className="toggle-password"
+                              onClick={() => setShowPassword(!showPassword)}
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                          </div>
+                          {newPasswordError && <p className="field-inline-error">{newPasswordError}</p>}
+
+                          <div className="password-container">
+                            <input
+                              type={showConfirmPassword ? "text" : "password"}
+                              placeholder="Confirm New Password"
+                              value={tempConfirmPassword}
+                              onChange={(e) => setTempConfirmPassword(e.target.value)}
+                              maxLength={12}
+                            />
+                            <button
+                              type="button"
+                              className="toggle-password"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                            >
+                              {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                          </div>
+                          {confirmPasswordError && <p className="field-inline-error">{confirmPasswordError}</p>}
+
+                          <div className="mini-btn-group" style={{ marginTop: "5px" }}>
+                            <button className="mini-save-btn" onClick={() => handlePreConfirmUpdate("password")}>Save</button>
+                            <button className="mini-cancel-btn" onClick={handleCancelEdit}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <StraightEditableField
+                    label="Mobile Number"
+                    value={formData.mobileNumber}
+                    displayValue={formData.mobileNumber || "Not set"}
+                    isEditing={editingField === "mobileNumber"}
+                    tempValue={tempValue}
+                    onTempChange={setTempValue}
+                    onStartEdit={() => handleStartEdit("mobileNumber")}
+                    onSave={() => handlePreConfirmUpdate("mobileNumber")}
+                    onCancel={handleCancelEdit}
+                    prefix="+63"
+                    fieldError={editingField === "mobileNumber" ? fieldError : null}
+                    inputProps={{ maxLength: 10, inputMode: "numeric", placeholder: "9XXXXXXXXX" }}
+                  />
+
+                  <StraightEditableField
+                    label="Date of Birth"
+                    type="date"
+                    value={formData.dob}
+                    displayValue={formatDateDisplay(formData.dob)}
+                    isEditing={editingField === "dob"}
+                    tempValue={tempValue}
+                    onTempChange={setTempValue}
+                    onStartEdit={() => handleStartEdit("dob")}
+                    onSave={() => handlePreConfirmUpdate("dob")}
+                    onCancel={handleCancelEdit}
+                    fieldError={editingField === "dob" ? fieldError : null}
+                    inputProps={{ max: getMaxDobDate() }}
+                  />
+
+                  <div className="account-field-group">
+                    <label>Role/s</label>
+                    <div className="field-row">
+                      <span className="field-value">{formatRole(formData.role)}</span>
+                    </div>
+                  </div>
+
+                  <div className="account-field-group">
+                    <label>Email Address</label>
+                    <div className="field-row">
+                      <span className="field-value">{formData.email}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* TAB 2: WARNING HISTORY */}
+            {activeTab === "warnings" && (
+              <div>
+                <h3>Warning History</h3>
+                <div style={{ padding: "40px 10px", textAlign: "center", color: "#666" }}>
+                  <FaExclamationTriangle style={{ fontSize: "40px", color: "#f0ad4e", marginBottom: "15px" }} />
+                  <p style={{ fontSize: "14px", marginTop: "8px" }}>
+                    This section will display active warnings and policy compliance logs. (Coming soon)
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: DEACTIVATE ACCOUNT */}
+            {activeTab === "deactivate" && (
+              <div>
+                <h3>Deactivate Account</h3>
+
+                {deactivationBlockerMessage ? (
+                  <div>
+                    <p style={{ fontSize: "14px", lineHeight: "1.6", color: "#444", marginBottom: "25px" }}>
+                      {deactivationBlockerMessage}
+                    </p>
+                    <button
+                      className="save-btn"
+                      onClick={() => {
+                        if (blockerActionType === "MANAGE_BOOKING") {
+                          router.push("/pet_owner/manage_bookings");
+                        } else if (blockerActionType === "SUMMARY_DASHBOARD") {
+                          router.push("/service_provider/sp_dashboard");
+                        }
+                      }}
+                    >
+                      Go to {blockerActionType === "MANAGE_BOOKING" ? "Manage Bookings" : "Dashboard"}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontSize: "14px", lineHeight: "1.6", color: "#444", marginBottom: "15px" }}>
+                      You won&apos;t be able to book new services, receive updates from providers, or view past appointments. Your account data will be safely stored if you decide to return.
+                    </p>
+                    <p style={{ fontSize: "13px", lineHeight: "1.5", color: "#666", marginBottom: "25px", fontStyle: "italic" }}>
+                      Reminder: You can easily reactivate your account anytime simply by logging back in.
+                    </p>
+                    <button
+                      className="save-btn"
+                      style={{ backgroundColor: "#d9534f" }}
+                      onClick={handleConfirmDeactivate}
+                      disabled={isDeactivating}
+                    >
+                      {isDeactivating ? "Deactivating..." : "Yes, deactivate"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+
         </div>
+
+        {showConfirmation && (
+          <div className="confirmation-overlay">
+            <div className="confirmation-dialog">
+              <h3>Confirm Changes</h3>
+              <p>Are you sure you want to update this information?</p>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+                <button className="save-btn" onClick={executeUpdate}>
+                  Yes, Update
+                </button>
+                <button className="cancel-btn" onClick={() => setShowConfirmation(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
       <Footer />
     </div>
