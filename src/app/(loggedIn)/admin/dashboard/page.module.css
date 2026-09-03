@@ -351,27 +351,6 @@
   border-color: #1e40af;
 }
 
-.btn-view-history {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%; 
-  padding: 0.75rem 1rem;
-  font-weight: 600; 
-  color: #4f46e5; 
-  background-color: #f5f3ff; 
-  border: 1px solid #e0e7ff;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-
-.btn-view-history:hover {
-  background-color: #e0e7ff;
-  color: #4338ca;
-}
-
 /* State Messages */
 .loading-state,
 .empty-state {
