@@ -1,6 +1,37 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/components/PricingTable.tsx */
 import React from "react";
-import { PET_TYPES, ALL_SIZES_DATA, ALLOWED_SIZES } from "../hooks/useServiceManager";
+import { ServiceItem, PricingRow } from "../hooks/useServiceManager";
+
+// Internal constants for pet types and sizing options
+const PET_TYPES = [
+  { value: "dog", label: "Dog" },
+  { value: "cat", label: "Cat" },
+  { value: "both_dog_cat", label: "Both" },
+];
+
+const ALL_SIZES_DATA = [
+  { key: "small", label: "Small" },
+  { key: "medium", label: "Medium" },
+  { key: "large", label: "Large" },
+  { key: "giant", label: "Giant" },
+  { key: "cat", label: "Cat" },
+  { key: "all", label: "All Sizes" },
+];
+
+const ALLOWED_SIZES: Record<string, string[]> = {
+  dog: ["small", "medium", "large", "giant", "all"],
+  cat: ["cat", "all"],
+  both_dog_cat: ["all", "small", "medium", "large", "giant"],
+};
+
+interface PricingTableProps {
+  service: ServiceItem;
+  serviceIndex: number;
+  updatePricing: (serviceIndex: number, pricingIndex: number, field: string, value: string) => void;
+  removePricingRow: (serviceIndex: number, pricingIndex: number) => void;
+  addPricingRow: (serviceIndex: number) => void;
+  validationErrors: Record<string, string>;
+}
 
 export default function PricingTable({
   service,
@@ -9,15 +40,15 @@ export default function PricingTable({
   removePricingRow,
   addPricingRow,
   validationErrors,
-}) {
+}: PricingTableProps) {
   
-  const getAvailablePetTypes = (currentIndex) => {
+  const getAvailablePetTypes = (currentIndex: number) => {
     const currentRow = service.pricing[currentIndex];
-    const otherRows = service.pricing.filter((_, idx) => idx !== currentIndex);
-    const hasSpecific = otherRows.some((r) => r.petType === "dog" || r.petType === "cat");
-    const hasGeneral = otherRows.some((r) => r.petType === "both_dog_cat");
+    const otherRows = service.pricing.filter((_, idx: number) => idx !== currentIndex);
+    const hasSpecific = otherRows.some((r: PricingRow) => r.petType === "dog" || r.petType === "cat");
+    const hasGeneral = otherRows.some((r: PricingRow) => r.petType === "both_dog_cat");
 
-    return PET_TYPES.filter((type) => {
+    return PET_TYPES.filter((type: { value: string, label: string }) => {
       if (type.value === currentRow.petType) return true;
       if (hasSpecific && type.value === "both_dog_cat") return false;
       if (hasGeneral && (type.value === "dog" || type.value === "cat")) return false;
@@ -25,14 +56,14 @@ export default function PricingTable({
     });
   };
 
-  const getOptionsForPricingRow = (currentIndex) => {
+  const getOptionsForPricingRow = (currentIndex: number) => {
     const currentRow = service.pricing[currentIndex];
     const allowedKeys = ALLOWED_SIZES[currentRow.petType] || [];
     const usedKeys = service.pricing
-      .filter((r, idx) => idx !== currentIndex && r.petType === currentRow.petType)
-      .map((r) => r.size);
+      .filter((r: PricingRow, idx: number) => idx !== currentIndex && r.petType === currentRow.petType)
+      .map((r: PricingRow) => r.size);
 
-    return ALL_SIZES_DATA.filter((sizeObj) => {
+    return ALL_SIZES_DATA.filter((sizeObj: { key: string, label: string }) => {
       if (!allowedKeys.includes(sizeObj.key)) return false;
       if (usedKeys.includes(sizeObj.key) && sizeObj.key !== currentRow.size) return false;
       return true;
@@ -53,11 +84,11 @@ export default function PricingTable({
           <div></div>
         </div>
 
-        {service.pricing.map((pricing, pi) => {
+        {service.pricing.map((pricing: PricingRow, pi: number) => {
           const isNa = pricing.size === "cat" || pricing.size === "all";
 
           return (
-            <div key={pricing.id} className="pricing-row" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr 0.8fr 1fr 40px' }}>
+            <div key={pi} className="pricing-row" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr 0.8fr 1fr 40px' }}>
               
               <div className="pricing-cell">
                 <select 
@@ -143,7 +174,7 @@ export default function PricingTable({
         <small className="error">{validationErrors[`service_${serviceIndex}_pricing_weights`]}</small>
       )}
 
-      {!service.pricing.some((p) => p.petType === "both_dog_cat") && (
+      {!service.pricing.some((p: PricingRow) => p.petType === "both_dog_cat") && (
         <button type="button" className="btn-add-pricing" onClick={() => addPricingRow(serviceIndex)}>
           + Add Pricing Variant
         </button>
