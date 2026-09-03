@@ -18,6 +18,15 @@ type ProfileFormData = {
   role: string;
 };
 
+type WarningItem = {
+  id: string;
+  warning_message: string;
+  severity: string;
+  status: string;
+  created_at: string;
+  expires_at: string | null;
+};
+
 const ROLE_LABELS: Record<string, string> = {
   service_provider: "Service Provider",
   pet_owner: "Pet Owner",
@@ -33,6 +42,18 @@ const formatDateDisplay = (dateString: string) => {
   if (!year || !month || !day) return dateString;
   const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
   return dateObj.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+};
+
+const formatDateTimeDisplay = (isoString: string) => {
+  if (!isoString) return "";
+  const dateObj = new Date(isoString);
+  return dateObj.toLocaleDateString("en-US", { 
+    year: "numeric", 
+    month: "long", 
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 };
 
 const getMaxDobDate = () => {
@@ -128,6 +149,9 @@ export default function ManageAccountPage() {
     role: "",
   });
 
+  const [warnings, setWarnings] = useState<WarningItem[]>([]);
+  const [warningsLoading, setWarningsLoading] = useState(false);
+
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState("");
   
@@ -207,6 +231,31 @@ export default function ManageAccountPage() {
       setGeneralError("Failed to load account information.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserWarnings = async () => {
+    setWarningsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Query warnings from user_warnings table, ordered from latest to oldest
+      const { data, error } = await supabase
+        .from("user_warnings")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching warnings:", error.message);
+      } else {
+        setWarnings(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load warnings", err);
+    } finally {
+      setWarningsLoading(false);
     }
   };
 
@@ -356,14 +405,17 @@ export default function ManageAccountPage() {
     }
   };
 
-  // Run validation checks when switching to the Deactivate Tab
+  // Run validation checks when switching tabs
   const handleTabSwitch = async (tab: "profile" | "warnings" | "deactivate") => {
-    // Prevent admins from navigating to restricted tabs
     if (formData.role === "admin" && tab !== "profile") return;
 
     setActiveTab(tab);
     setDeactivationBlockerMessage(null);
     setBlockerActionType(null);
+
+    if (tab === "warnings") {
+      fetchUserWarnings();
+    }
 
     if (tab === "deactivate") {
       setLoading(true);
@@ -479,7 +531,6 @@ export default function ManageAccountPage() {
                 <FaUser style={{ color: "#0a217a" }} /> Profile Information
               </button>
 
-              {/* Show Warning History and Deactivate tabs only if the user is NOT an admin */}
               {formData.role !== "admin" && (
                 <>
                   <button
@@ -686,12 +737,55 @@ export default function ManageAccountPage() {
             {activeTab === "warnings" && formData.role !== "admin" && (
               <div>
                 <h3>Warning History</h3>
-                <div style={{ padding: "40px 10px", textAlign: "center", color: "#666" }}>
-                  <FaExclamationTriangle style={{ fontSize: "40px", color: "#f0ad4e", marginBottom: "15px" }} />
-                  <p style={{ fontSize: "14px", marginTop: "8px" }}>
-                    This section will display active warnings and policy compliance logs. (Coming soon)
-                  </p>
-                </div>
+                {warningsLoading ? (
+                  <p style={{ fontSize: "14px", color: "#666", textAlign: "center", padding: "20px 0" }}>Loading warnings...</p>
+                ) : warnings.length === 0 ? (
+                  <div style={{ padding: "40px 10px", textAlign: "center", color: "#666" }}>
+                    <FaExclamationTriangle style={{ fontSize: "40px", color: "#f0ad4e", marginBottom: "15px" }} />
+                    <p style={{ fontSize: "14px", marginTop: "8px" }}>
+                      You have no recorded warnings. Keep up the great standing on Furlink!
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "15px" }}>
+                    {warnings.map((w) => (
+                      <div 
+                        key={w.id} 
+                        style={{ 
+                          border: "1px solid #e0e0e0", 
+                          borderRadius: "8px", 
+                          padding: "16px", 
+                          backgroundColor: "#fffdf9",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ 
+                            fontSize: "11px", 
+                            fontWeight: "bold", 
+                            textTransform: "uppercase", 
+                            padding: "3px 8px", 
+                            borderRadius: "4px",
+                            backgroundColor: w.severity === "high" ? "#fce8e6" : w.severity === "medium" ? "#fef3c7" : "#e6f4ea",
+                            color: w.severity === "high" ? "#c5221f" : w.severity === "medium" ? "#b45309" : "#137333"
+                          }}>
+                            Severity: {w.severity}
+                          </span>
+                          <span style={{ fontSize: "12px", color: "#666" }}>
+                            {formatDateTimeDisplay(w.created_at)}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: "14px", color: "#333", lineHeight: "1.5", margin: "8px 0 0 0" }}>
+                          {w.warning_message}
+                        </p>
+                        <div style={{ marginTop: "8px", fontSize: "12px", color: "#888", display: "flex", gap: "15px" }}>
+                          <span>Status: <strong style={{ textTransform: "capitalize", color: w.status === "active" ? "#d9534f" : "#555" }}>{w.status}</strong></span>
+                          {w.expires_at && <span>Expires: {formatDateDisplay(w.expires_at.split("T")[0])}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
