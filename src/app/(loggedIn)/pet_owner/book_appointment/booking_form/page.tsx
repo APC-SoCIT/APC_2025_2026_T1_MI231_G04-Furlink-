@@ -181,10 +181,15 @@ function BookingFormContent() {
             .eq('id', activeBookingId);
         }
         setShowSuccessModal(true);
+        setShowFailedModal(false);
         setShowSummaryModal(false);
       } else if (statusParam === 'failed' || statusParam === 'cancelled') {
         setShowFailedModal(true);
+        setShowSuccessModal(false);
         setShowSummaryModal(false);
+      } else {
+        // Keeps failure modal explicitly hidden on initial/normal page renders
+        setShowFailedModal(false);
       }
     };
 
@@ -734,12 +739,20 @@ function BookingFormContent() {
 
   // Launch PayMongo Session with Retry Threshold
   const handleConfirmBooking = async () => {
+    // Validate total amount before executing database insertions or checkout operations
+    if (grandTotal <= 0) {
+      alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s) before proceeding.');
+      return;
+    }
+
     if (cooldownUntil && Date.now() < cooldownUntil) {
       alert(`Payment attempts exceeded. Please try again in ${timeRemaining}.`);
       return;
     }
 
     setIsSubmitting(true);
+    setShowFailedModal(false); // Explicitly hide failed modal state
+
     try {
       const { bookingInfoId } = await createBookingInDatabase();
 
@@ -770,7 +783,6 @@ function BookingFormContent() {
       
       setShowSummaryModal(false);
       setIsSubmitting(false);
-      setShowFailedModal(true);
 
     } catch (err: any) {
       console.error('Booking processing error:', err);
@@ -781,6 +793,12 @@ function BookingFormContent() {
 
   // Handle Pay Later action
   const handlePayLater = async () => {
+    // Validate total amount before enabling pay-later persistence
+    if (grandTotal <= 0) {
+      alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s).');
+      return;
+    }
+
     setIsSavingPayLater(true);
     try {
       const { bookingInfoId } = await createBookingInDatabase();
@@ -807,10 +825,6 @@ function BookingFormContent() {
   const handleConfirmPayLaterRedirect = () => {
     setShowPayLaterSuccessModal(false);
     router.push('/pet_owner/manage_bookings');
-  };
-
-  const handleReturnHome = () => {
-    router.push('/pet_owner');
   };
 
   return (
@@ -1336,7 +1350,7 @@ function BookingFormContent() {
               <button
                 className="btn-confirm-booking"
                 onClick={handleConfirmBooking}
-                disabled={isSubmitting || cooldownUntil !== null}
+                disabled={isSubmitting || cooldownUntil !== null || grandTotal <= 0}
               >
                 {isSubmitting ? 'Opening Gateway...' : cooldownUntil ? 'Payment Locked' : 'Pay with PayMongo'}
               </button>
