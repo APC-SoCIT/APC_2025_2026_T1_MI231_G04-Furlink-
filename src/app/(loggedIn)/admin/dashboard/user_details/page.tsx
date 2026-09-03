@@ -34,7 +34,8 @@ function UserDetailsContent() {
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
-
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
   const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
 
@@ -103,6 +104,7 @@ function UserDetailsContent() {
               liftingSuspension={liftingSuspension}
               onSuspendClick={() => setShowSuspendConfirm(true)}
               onLiftSuspensionClick={() => setShowLiftConfirm(true)}
+              onViewHistoryClick={() => setShowHistoryModal(true)} 
             />
           </div>
 
@@ -137,6 +139,10 @@ function UserDetailsContent() {
         confirmLiftSuspension={handleLiftSuspensionConfirm}
         autoSuspendNotice={autoSuspendNotice}
         setAutoSuspendNotice={setAutoSuspendNotice}
+        warnings={warnings}
+        warningsLoading={warningsLoading}
+        showHistoryModal={showHistoryModal}
+        setShowHistoryModal={setShowHistoryModal}
       />
     </div>
   );

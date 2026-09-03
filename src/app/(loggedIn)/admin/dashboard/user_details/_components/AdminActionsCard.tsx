@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { FaExclamationTriangle, FaPaperPlane, FaChevronDown, FaChevronUp, FaUserSlash, FaUserCheck } from "react-icons/fa";
+import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory } from "react-icons/fa";
 import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
 import styles from "../page.module.css";
 
@@ -20,21 +19,14 @@ interface Props {
   liftingSuspension: boolean;
   onSuspendClick: () => void;
   onLiftSuspensionClick: () => void;
+  onViewHistoryClick: () => void;
 }
 
 export const AdminActionsCard = ({
   warnings, warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
   onSendWarningClick, isSuspended, currentSuspension, suspensionLoading, suspending, liftingSuspension,
-  onSuspendClick, onLiftSuspensionClick
+  onSuspendClick, onLiftSuspensionClick, onViewHistoryClick, 
 }: Props) => {
-  const [showHistory, setShowHistory] = useState(false);
-
-  const formatDateTime = (dateString: string | null | undefined) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
-    });
-  };
 
   return (
     <section className={styles["admin-actions-card"]}>
@@ -79,32 +71,10 @@ export const AdminActionsCard = ({
       <hr className={styles["admin-divider"]} />
 
       {/* View History */}
-      <button className={styles["btn-view-history"]} onClick={() => setShowHistory((prev) => !prev)}>
-        {showHistory ? <FaChevronUp /> : <FaChevronDown />}
+      <button className={styles["btn-view-history"]} onClick={onViewHistoryClick}>
+        <FaHistory /> 
         View History ({warningsLoading ? "…" : warnings.length})
       </button>
-
-      {showHistory && (
-        <div className={styles["warning-history-list"]}>
-          {warningsLoading ? (
-            <p className={styles["warning-history-empty"]}>Loading...</p>
-          ) : warnings.length === 0 ? (
-            <p className={styles["warning-history-empty"]}>No warnings issued yet.</p>
-          ) : (
-            warnings.map((w) => (
-              <div key={w.id} className={styles["warning-history-item"]}>
-                <div className={styles["warning-history-top"]}>
-                  <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${w.status}`] || ""}`}>
-                    {w.status}
-                  </span>
-                  <span className={styles["warning-history-date"]}>{formatDateTime(w.created_at)}</span>
-                </div>
-                <p className={styles["warning-history-message"]}>{w.warning_message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      )}
 
       <hr className={styles["admin-divider"]} />
 
@@ -113,7 +83,7 @@ export const AdminActionsCard = ({
         <span className={styles["admin-block-label"]}>Account Suspension</span>
         <p className={styles["admin-block-desc"]}>
           {isSuspended && currentSuspension
-            ? `Suspended until ${formatDateTime(currentSuspension.suspended_until)}.`
+            ? `Suspended until ${new Date(currentSuspension.suspended_until).toLocaleDateString()}.`
             : `Temporarily disable this user's access for ${SUSPENSION_DAYS} days. This also happens automatically once the user reaches ${WARNING_THRESHOLD} active warnings.`}
         </p>
         {isSuspended ? (
