@@ -22,6 +22,19 @@ export const PageHeader = ({ provider, isUpdating, onApproveClick, onRejectClick
         >
           {provider.registration_status}
         </span>
+
+        {provider.registration_status !== "pending" && provider.responder && (
+          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "8px" }}>
+            {provider.registration_status === "approved" ? "Approved" : "Rejected"} by{" "}
+            <strong>{provider.responder.first_name} {provider.responder.last_name}</strong>
+            {" "}on{" "}
+            {new Date(
+              provider.registration_status === "approved"
+                ? provider.registration_approved_at ?? provider.updated_at
+                : provider.updated_at
+            ).toLocaleString()}
+          </p>
+        )}
       </div>
 
       {provider.registration_status === "pending" && (

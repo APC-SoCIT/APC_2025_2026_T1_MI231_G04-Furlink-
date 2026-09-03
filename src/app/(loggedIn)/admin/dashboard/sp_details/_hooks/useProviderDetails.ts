@@ -45,7 +45,18 @@ export const useProviderDetails = (providerId: string | null) => {
         .single();
 
       if (error) throw error;
-      setProvider(data);
+
+      let responder = null;
+      if (data.registration_response_by) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name")
+          .eq("id", data.registration_response_by)
+          .single();
+        responder = profileData;
+      }
+
+      setProvider({ ...data, responder });
     } catch (err: any) {
       console.error("Error fetching provider details:", err);
       setError(err.message || "Failed to load provider details.");
