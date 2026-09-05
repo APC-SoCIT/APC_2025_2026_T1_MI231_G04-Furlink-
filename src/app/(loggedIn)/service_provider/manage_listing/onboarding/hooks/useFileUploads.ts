@@ -19,7 +19,7 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
   const [existingFacilityImages, setExistingFacilityImages] = useState<any[]>([]);
   const [existingPaymentChannels, setExistingPaymentChannels] = useState<any[]>([]);
 
-  // Fetch existing files from Supabase if editing/updating
+  // Fetch existing files from Supabase once providerId is ready
   useEffect(() => {
     if (!providerId) return;
 
@@ -27,8 +27,8 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
       try {
         const { data: generalData } = await supabase
           .from("sp_general_info")
-          .select("business_waiver_url, business_permit_url, business_payment_qr_url")
-          .eq("id", providerId)
+          .select("business_waiver_url, business_permit_url, business_payment_qr_url, id")
+          .eq("profiles_id", providerId)
           .maybeSingle();
 
         if (generalData) {
@@ -39,20 +39,26 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
             setExistingPermitUrl(generalData.business_permit_url);
           }
           if (generalData.business_payment_qr_url) {
-            setExistingPaymentChannels([{ id: '1', file_url: generalData.business_payment_qr_url }]);
+            // Split multiple comma-separated QR URLs if any
+            const qrs = generalData.business_payment_qr_url.split(',').map((url: string, idx: number) => ({
+              id: idx.toString(),
+              file_url: url.trim()
+            }));
+            setExistingPaymentChannels(qrs);
           }
-        }
 
-        const { data: facilityData } = await supabase
-          .from("sp_img_facilities")
-          .select("id, business_facility_images")
-          .eq("sp_id", providerId);
+          // Fetch facility images using the resolved generalData.id (the sp_id)
+          const { data: facilityData } = await supabase
+            .from("sp_img_facilities")
+            .select("id, business_facility_images")
+            .eq("sp_id", generalData.id);
 
-        if (facilityData) {
-          setExistingFacilityImages(facilityData.map((item: any) => ({
-            id: item.id,
-            image_url: item.business_facility_images
-          })));
+          if (facilityData) {
+            setExistingFacilityImages(facilityData.map((item: any) => ({
+              id: item.id,
+              image_url: item.business_facility_images
+            })));
+          }
         }
       } catch (err) {
         console.error("Error fetching existing files:", err);

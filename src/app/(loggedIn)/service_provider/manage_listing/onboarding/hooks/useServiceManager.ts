@@ -161,6 +161,7 @@ export function useServiceManager() {
 
   return {
     services,
+    setServices,
     addService,
     removeService,
     updateService,

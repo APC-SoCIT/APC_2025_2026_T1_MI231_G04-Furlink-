@@ -73,12 +73,12 @@ export default function ServiceProviderOnboardingPage() {
   const IMG_TYPES = ["image/jpeg", "image/png"];
   
   const { 
-    services, addService, removeService, updateService, 
+    services, setServices, addService, removeService, updateService, 
     addPricingRow, removePricingRow, updatePricing, saveServicesToSupabase 
   } = useServiceManager();
 
   /* -------------------------------------------------------------------- */
-  /* INITIAL DATA FETCH & STATUS CHECK                                    */
+  /* INITIAL DATA FETCH & STATUS CHECK (WITH PRE-FILL LOGIC)              */
   /* -------------------------------------------------------------------- */
   useEffect(() => {
     const checkApplicationStatus = async () => {
@@ -88,17 +88,120 @@ export default function ServiceProviderOnboardingPage() {
         
         setProviderId(user.id);
 
-        const { data, error } = await supabase
+        const { data: generalData, error } = await supabase
           .from('sp_general_info')
-          .select('registration_status, registration_rejection_reason')
+          .select('*')
           .eq('profiles_id', user.id)
           .maybeSingle();
 
         if (error && error.code !== 'PGRST116') throw error;
 
-        if (data) {
-          setAppStatus(data.registration_status);
-          setRejectionReason(data.registration_rejection_reason);
+        if (generalData) {
+          setAppStatus(generalData.registration_status);
+          setRejectionReason(generalData.registration_rejection_reason);
+
+          if (generalData.registration_status === 'rejected') {
+            
+            // 1. Parse Business Name & Branch
+            let bName = generalData.business_name;
+            let isB = false;
+            let bBranch = "";
+            if (bName.includes(" - ")) {
+              const parts = bName.split(" - ");
+              bName = parts[0];
+              bBranch = parts.slice(1).join(" - ");
+              isB = true;
+            }
+
+            // 2. Parse Mobile (Remove +63)
+            const mobile = generalData.business_contact.startsWith('+63')
+              ? generalData.business_contact.replace('+63', '')
+              : generalData.business_contact;
+
+            setBusinessInfo(prev => ({
+              ...prev,
+              businessName: bName,
+              isBranch: isB,
+              branchName: bBranch,
+              description: generalData.business_bio || "",
+              businessEmail: generalData.business_email || "",
+              businessMobile: mobile || "",
+              socialMediaUrl: generalData.business_social_media_url || "",
+              googleMapUrl: generalData.business_google_map_url || "",
+              typeOfService: generalData.business_service_type || "Pet Grooming",
+              useDefaultWaiver: generalData.business_waiver_url === "PLATFORM_DEFAULT_WAIVER",
+              houseStreet: generalData.business_street || "",
+              region: generalData.business_region || "",
+              barangay: generalData.business_barangay || "",
+              city: generalData.business_city || "",
+              province: generalData.business_province || "",
+              postalCode: generalData.business_postal_code || "",
+              country: generalData.business_country || "Philippines",
+            }));
+
+            // 3. Fetch & Set Employees
+            const { data: empData } = await supabase.from('sp_employees_info').select('*').eq('sp_id', generalData.id);
+            if (empData && empData.length > 0) {
+              setEmployees(empData.map((emp: any) => ({
+                firstName: emp.employee_first_name,
+                lastName: emp.employee_last_name,
+                position: emp.employee_position
+              })));
+            }
+
+            // 4. Fetch & Set Operating Hours
+            const { data: hoursData } = await supabase.from('sp_operating_hours').select('*').eq('sp_id', generalData.id);
+            if (hoursData && hoursData.length > 0) {
+              const groupedHours: any[] = [];
+              hoursData.forEach((row: any) => {
+                // Hardened substring extraction to prevent formatting crashes
+                const startTimeFmt = row.opening_time ? row.opening_time.substring(0, 5) : "09:00"; 
+                const endTimeFmt = row.closing_time ? row.closing_time.substring(0, 5) : "17:00";
+                const interval = row.slot_interval || 60;
+                const capacity = row.slot_capacity || 1;
+                
+                const match = groupedHours.find(g =>
+                  g.startTime === startTimeFmt && g.endTime === endTimeFmt &&
+                  (g.slotDurationHours * 60 + g.slotDurationMinutes) === interval &&
+                  g.capacityPerSlot === capacity
+                );
+
+                if (match) {
+                  if (!match.days.includes(row.day_of_week)) match.days.push(row.day_of_week);
+                } else {
+                  groupedHours.push({
+                    days: [row.day_of_week],
+                    startTime: startTimeFmt,
+                    endTime: endTimeFmt,
+                    slotDurationHours: Math.floor(interval / 60),
+                    slotDurationMinutes: interval % 60,
+                    capacityPerSlot: capacity
+                  });
+                }
+              });
+              if (groupedHours.length > 0) setBusinessInfo(prev => ({ ...prev, operatingHours: groupedHours }));
+            }
+
+            // 5. Fetch & Set Services and Pricing
+            const { data: srvData } = await supabase.from('sp_services').select(`*, sp_service_options (*)`).eq('sp_id', generalData.id);
+            if (srvData && srvData.length > 0) {
+              const loadedServices = srvData.map((s: any) => ({
+                type: s.service_type,
+                name: s.service_name,
+                description: s.service_description,
+                notes: s.service_notes || "",
+                haircutIncluded: s.service_haircut_included,
+                pricing: (s.sp_service_options || []).map((p: any) => ({
+                  petType: p.pet_type,
+                  size: p.pet_size,
+                  minWeight: p.pet_min_weight_range === 0 ? "" : p.pet_min_weight_range.toString(),
+                  maxWeight: p.pet_max_weight_range === 999 ? "" : p.pet_max_weight_range.toString(),
+                  price: p.service_price.toString()
+                }))
+              }));
+              setServices(loadedServices);
+            }
+          }
         }
       } catch (err: unknown) {
         console.error("Error checking application status:", err);
@@ -108,7 +211,7 @@ export default function ServiceProviderOnboardingPage() {
     };
 
     checkApplicationStatus();
-  }, [supabase]);
+  }, [supabase, setServices]);
 
   /* -------------------------------------------------------------------- */
   /* Input Handlers                                                       */
@@ -188,7 +291,6 @@ export default function ServiceProviderOnboardingPage() {
       s.pricing.forEach((p: any, pi: number) => {
         if (!p.price || parseFloat(p.price) <= 0) { newErrors[`service_${si}_pricing_${pi}_price`] = "Required"; isValid = false; }
         
-        // UPDATED: Removed the "cat" exception so weights are strictly validated unless size is "all"
         if (p.size !== "all") {
           if (p.minWeight === "" || p.maxWeight === "") {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Required"; isValid = false;
@@ -405,9 +507,30 @@ export default function ServiceProviderOnboardingPage() {
         <h1 className="page-title">Service Provider Application</h1>
         
         {appStatus === 'rejected' && (
-          <div className="error-banner" style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#b91c1c', marginBottom: '25px', padding: '16px', borderRadius: '8px' }}>
-            <strong>Your previous application was rejected.</strong>
-            <p style={{ margin: '8px 0 0 0' }}><strong>Reason:</strong> {rejectionReason || "Please review our guidelines and try submitting a new application."}</p>
+          <div 
+            style={{ 
+              background: '#fff1f2', 
+              border: '1px solid #fecdd3', 
+              borderLeft: '4px solid #e11d48', // Adds a nice modern accent stripe on the left
+              color: '#881337', 
+              marginBottom: '30px', 
+              padding: '20px', 
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '14px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>⚠️</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '1rem', color: '#9f1239' }}>Application Requires Updates</strong>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#4c0519', lineHeight: '1.5' }}>
+                Your previous application was returned with feedback: <strong style={{ color: '#881337' }}>"{rejectionReason || "Please review our guidelines and update your application below."}"</strong> Please make the necessary adjustments to your details or documents below and resubmit for review.
+              </p>
+            </div>
           </div>
         )}
 
@@ -629,7 +752,12 @@ export default function ServiceProviderOnboardingPage() {
                     <input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", IMG_TYPES, files.existingFacilityImages.length, 1)} hidden />
                   </label>
                   <div className="file-list">
-                    {files.existingFacilityImages.map((img: any) => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => files.removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}
+                    {/* UPDATED: Added anchor tags for existing facility images */}
+                    {files.existingFacilityImages.map((img: any) => (
+                      <div key={img.id} className="file-item">
+                        <span><a href={img.image_url} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeExistingFile("image", img.id, img.image_url)} style={{ cursor: 'pointer' }}>✕</span></span>
+                      </div>
+                    ))}
                     {files.facilityImages.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setFacilityImages, i)}>✕</button></div>))}
                   </div>
                   {(validationErrors as any).facilityImages && <small className="error">{(validationErrors as any).facilityImages}</small>}
@@ -642,7 +770,12 @@ export default function ServiceProviderOnboardingPage() {
                     <input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", IMG_TYPES, files.existingPaymentChannels.length, 1)} hidden />
                   </label>
                   <div className="file-list">
-                    {files.existingPaymentChannels.map((img: any) => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => files.removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}
+                    {/* UPDATED: Added anchor tags for existing payment QRs */}
+                    {files.existingPaymentChannels.map((img: any) => (
+                      <div key={img.id} className="file-item">
+                        <span><a href={img.file_url} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeExistingFile("payment", img.id, img.file_url)} style={{ cursor: 'pointer' }}>✕</span></span>
+                      </div>
+                    ))}
                     {files.paymentChannelFiles.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setPaymentChannelFiles, i)}>✕</button></div>))}
                   </div>
                   {(validationErrors as any).paymentChannelFiles && <small className="error">{(validationErrors as any).paymentChannelFiles}</small>}
