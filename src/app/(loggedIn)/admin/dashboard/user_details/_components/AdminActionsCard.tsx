@@ -1,7 +1,7 @@
 "use client";
 
 import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory, FaChevronDown } from "react-icons/fa";
-import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
+import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD, SEVERITY_LEVELS } from "../_types";
 import styles from "../page.module.css";
 
 interface Props {
@@ -10,6 +10,8 @@ interface Props {
   activeWarningCount: number;
   warningMessage: string;
   setWarningMessage: (msg: string) => void;
+  warningSeverity: string;
+  setWarningSeverity: (val: string) => void;
   sendingWarning: boolean;
   onSendWarningClick: () => void;
   isSuspended: boolean;
@@ -27,6 +29,7 @@ interface Props {
 
 export const AdminActionsCard = ({
   warnings, warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
+  warningSeverity, setWarningSeverity,
   onSendWarningClick, isSuspended, currentSuspension, suspensionLoading, suspending, liftingSuspension,
   onSuspendClick, onLiftSuspensionClick, onViewHistoryClick,
   suspensionHistory, suspensionHistoryLoading, onViewSuspensionHistoryClick
@@ -54,6 +57,23 @@ export const AdminActionsCard = ({
             Count: {warningsLoading ? "…" : activeWarningCount}
           </span>
         </div>
+
+        <select
+          className={styles["severity-select"]}
+          value={warningSeverity}
+          onChange={(e) => setWarningSeverity(e.target.value)}
+          disabled={sendingWarning}
+        >
+          {SEVERITY_LEVELS.map((level) => (
+            <option key={level.value} value={level.value}>
+              {level.label}
+            </option>
+          ))}
+        </select>
+        <p className={styles["severity-description"]}>
+          {SEVERITY_LEVELS.find((l) => l.value === warningSeverity)?.description}
+        </p>
+
         <textarea
           className={styles["warning-textarea"]}
           placeholder="Type warning message here..."
@@ -70,6 +90,8 @@ export const AdminActionsCard = ({
           <FaPaperPlane />
           {sendingWarning ? "Sending..." : "Send Warning"}
         </button>
+        
+        {/* Threshold Note */}
         {activeWarningCount >= WARNING_THRESHOLD - 1 && !isSuspended && (
           <p className={styles["threshold-note"]}>
             {activeWarningCount + 1 >= WARNING_THRESHOLD
