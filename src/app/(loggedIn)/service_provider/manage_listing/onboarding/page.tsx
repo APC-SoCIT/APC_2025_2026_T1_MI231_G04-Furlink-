@@ -16,7 +16,7 @@ import { useFileUploads } from "./hooks/useFileUploads";
 import { useServiceManager } from "./hooks/useServiceManager";
 import ServiceCard from "./components/ServiceCard";
 import PricingTable from "./components/PricingTable";
-import Footer from "@/components/Footer"; // <-- Added Footer import
+import Footer from "@/components/Footer"; 
 
 export default function ServiceProviderOnboardingPage() {
   const router = useRouter();
@@ -68,6 +68,9 @@ export default function ServiceProviderOnboardingPage() {
   // --- External Hooks ---
   const { errors: validationErrors, setErrors: setValidationErrors, setFieldError, clearFieldError, validate } = useValidation();
   const files = useFileUploads(supabase, providerId, { setFieldError, clearFieldError });
+  
+  const DOC_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+  const IMG_TYPES = ["image/jpeg", "image/png"];
   
   const { 
     services, addService, removeService, updateService, 
@@ -184,7 +187,9 @@ export default function ServiceProviderOnboardingPage() {
       if (!s.name.trim()) { newErrors[`service_${si}_name`] = "Required"; isValid = false; }
       s.pricing.forEach((p: any, pi: number) => {
         if (!p.price || parseFloat(p.price) <= 0) { newErrors[`service_${si}_pricing_${pi}_price`] = "Required"; isValid = false; }
-        if (p.size !== "cat" && p.size !== "all") {
+        
+        // UPDATED: Removed the "cat" exception so weights are strictly validated unless size is "all"
+        if (p.size !== "all") {
           if (p.minWeight === "" || p.maxWeight === "") {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Required"; isValid = false;
           } else if (parseFloat(p.minWeight) >= parseFloat(p.maxWeight)) {
@@ -209,6 +214,8 @@ export default function ServiceProviderOnboardingPage() {
   const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
     clearFieldError("general");
+    
+    let currentProviderId: string | null = null; 
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -268,7 +275,9 @@ export default function ServiceProviderOnboardingPage() {
 
       const { data: upsertData, error: upsertError } = await supabase.from("sp_general_info").upsert(payload, { onConflict: 'profiles_id' }).select().single();
       if (upsertError) throw upsertError;
-      const currentProviderId = upsertData.id;
+      
+      currentProviderId = upsertData.id;
+      if (!currentProviderId) throw new Error("Failed to retrieve provider ID after saving general info.");
 
       await Promise.all([
         supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId),
@@ -280,7 +289,7 @@ export default function ServiceProviderOnboardingPage() {
         const totalMinutes = (slot.slotDurationHours * 60) + slot.slotDurationMinutes;
         slot.days.forEach(day => {
           hoursPayload.push({
-            sp_id: currentProviderId,
+            sp_id: currentProviderId, 
             day_of_week: day,
             opening_time: slot.startTime,
             closing_time: slot.endTime,
@@ -296,13 +305,13 @@ export default function ServiceProviderOnboardingPage() {
       }
 
       if (newFacilityUrls.length > 0) {
-        const imgPayload = newFacilityUrls.map(url => ({ sp_id: currentProviderId, business_facility_images: url }));
+        const imgPayload = newFacilityUrls.map(url => ({ sp_id: currentProviderId, business_facility_images: url })); 
         const { error: imgErr } = await supabase.from("sp_img_facilities").insert(imgPayload);
         if (imgErr) throw imgErr;
       }
 
       const staffPayload = employees.map(emp => ({
-        sp_id: currentProviderId,
+        sp_id: currentProviderId, 
         employee_first_name: emp.firstName.trim(),
         employee_last_name: emp.lastName.trim(),
         employee_position: emp.position,
@@ -312,7 +321,7 @@ export default function ServiceProviderOnboardingPage() {
         if (sError) throw sError;
       }
 
-      const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId);
+      const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId); 
       if (!serviceSaveResult.success) throw new Error("Services save failed: " + serviceSaveResult.message);
 
       setShowConfirmModal(false);
@@ -320,7 +329,27 @@ export default function ServiceProviderOnboardingPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
 
     } catch (err: any) {
-      console.error("SUBMISSION FAILED:", JSON.stringify(err, null, 2), err);
+      console.error("SUBMISSION FAILED:", err);
+      
+      try {
+        if (currentProviderId) {
+          await Promise.all([
+            supabase.from("sp_services").delete().eq("sp_id", currentProviderId),
+            supabase.from("sp_employees_info").delete().eq("sp_id", currentProviderId),
+            supabase.from("sp_img_facilities").delete().eq("sp_id", currentProviderId),
+            supabase.from("sp_operating_hours").delete().eq("sp_id", currentProviderId)
+          ]);
+          
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("sp_general_info").delete().eq("profiles_id", user.id);
+            console.log("Rolled back partial database records successfully.");
+          }
+        }
+      } catch (cleanupErr) {
+        console.error("Failed to clean up orphaned records:", cleanupErr);
+      }
+
       setFieldError("general", "Submission failed: " + (err.message || err.details || "An unexpected error occurred."));
       setShowConfirmModal(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -569,8 +598,8 @@ export default function ServiceProviderOnboardingPage() {
                 <div className="form-group">
                   <label>Waiver</label>
                   <label className="file-btn" style={{ pointerEvents: businessInfo.useDefaultWaiver ? 'none' : 'auto', opacity: businessInfo.useDefaultWaiver ? 0.6 : 1, background: businessInfo.useDefaultWaiver ? '#f1f5f9' : '' }}>
-                    📁 <span>{businessInfo.useDefaultWaiver ? "Using Platform Waiver" : "Select File (Max 1MB)"}</span>
-                    <input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile")} hidden disabled={businessInfo.useDefaultWaiver} />
+                    📁 <span>{businessInfo.useDefaultWaiver ? "Using Platform Waiver" : "Select File (.pdf, .doc, .docx | Max 1MB)"}</span>
+                    <input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setWaiverFile, e, 1, "waiverFile", DOC_TYPES)} hidden disabled={businessInfo.useDefaultWaiver} />
                   </label>
                   
                   <div className="file-preview-small" style={{ opacity: businessInfo.useDefaultWaiver ? 0.5 : 1 }}>
@@ -581,7 +610,10 @@ export default function ServiceProviderOnboardingPage() {
 
                 <div className="form-group">
                   <label>Business Permit*</label>
-                  <label className={`file-btn ${(validationErrors as any).businessPermitFile ? "input-error" : ""}`}>📁 <span>Select File (Max 2MB)</span><input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile")} hidden /></label>
+                  <label className={`file-btn ${(validationErrors as any).businessPermitFile ? "input-error" : ""}`}>
+                    📁 <span>Select File (.pdf, .doc, .docx | Max 2MB)</span>
+                    <input type="file" accept=".pdf,.doc,.docx" onChange={(e: any) => files.handleFileSelect(files.setBusinessPermitFile, e, 2, "businessPermitFile", DOC_TYPES)} hidden />
+                  </label>
                   <div className="file-preview-small">
                     {files.businessPermitFile ? (<span>{(files.businessPermitFile as File).name} <span onClick={() => files.setBusinessPermitFile(null)} style={{ cursor: 'pointer' }}>✕</span></span>) : files.existingPermitUrl ? (<span><a href={files.existingPermitUrl} target="_blank" rel="noreferrer">View Existing</a> <span onClick={() => files.removeSingleFile(files.setBusinessPermitFile, files.setExistingPermitUrl)} style={{ cursor: 'pointer' }}>✕</span></span>) : null}
                   </div>
@@ -592,7 +624,10 @@ export default function ServiceProviderOnboardingPage() {
               <div className="form-grid-2">
                 <div className="form-group">
                   <label>Facility Images (Max 3)*</label>
-                  <label className={`file-btn ${(validationErrors as any).facilityImages ? "input-error" : ""}`}>📁 <span>Select Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", files.existingFacilityImages.length, 1)} hidden /></label>
+                  <label className={`file-btn ${(validationErrors as any).facilityImages ? "input-error" : ""}`}>
+                    📁 <span>Select Images (.jpg, .png | Max 1MB each)</span>
+                    <input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setFacilityImages, files.facilityImages, e, 3, "facilityImages", IMG_TYPES, files.existingFacilityImages.length, 1)} hidden />
+                  </label>
                   <div className="file-list">
                     {files.existingFacilityImages.map((img: any) => (<div key={img.id} className="file-item">📄 Existing Img <button type="button" onClick={() => files.removeExistingFile("image", img.id, img.image_url)}>✕</button></div>))}
                     {files.facilityImages.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setFacilityImages, i)}>✕</button></div>))}
@@ -602,7 +637,10 @@ export default function ServiceProviderOnboardingPage() {
 
                 <div className="form-group">
                   <label>Payment QR (Max 2)*</label>
-                  <label className={`file-btn ${(validationErrors as any).paymentChannelFiles ? "input-error" : ""}`}>📁 <span>Select QR Images (Max 1MB each)</span><input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", files.existingPaymentChannels.length, 1)} hidden /></label>
+                  <label className={`file-btn ${(validationErrors as any).paymentChannelFiles ? "input-error" : ""}`}>
+                    📁 <span>Select QR Images (.jpg, .png | Max 1MB each)</span>
+                    <input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(e: any) => files.handleMultiFileSelect(files.setPaymentChannelFiles, files.paymentChannelFiles, e, 2, "paymentChannelFiles", IMG_TYPES, files.existingPaymentChannels.length, 1)} hidden />
+                  </label>
                   <div className="file-list">
                     {files.existingPaymentChannels.map((img: any) => (<div key={img.id} className="file-item">📄 Existing QR <button type="button" onClick={() => files.removeExistingFile("payment", img.id, img.file_url)}>✕</button></div>))}
                     {files.paymentChannelFiles.map((f: File, i: number) => (<div key={i} className="file-item">📄 {f.name}<button type="button" onClick={() => files.removeFile(files.setPaymentChannelFiles, i)}>✕</button></div>))}

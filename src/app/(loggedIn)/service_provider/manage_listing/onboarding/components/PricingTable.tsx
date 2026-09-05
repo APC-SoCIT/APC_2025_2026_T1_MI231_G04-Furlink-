@@ -2,7 +2,6 @@
 import React from "react";
 import { ServiceItem, PricingRow } from "../hooks/useServiceManager";
 
-// Internal constants for pet types and sizing options
 const PET_TYPES = [
   { value: "dog", label: "Dog" },
   { value: "cat", label: "Cat" },
@@ -10,18 +9,19 @@ const PET_TYPES = [
 ];
 
 const ALL_SIZES_DATA = [
+  { key: "extra_small", label: "Extra Small" },
   { key: "small", label: "Small" },
   { key: "medium", label: "Medium" },
   { key: "large", label: "Large" },
-  { key: "giant", label: "Giant" },
-  { key: "cat", label: "Cat" },
+  { key: "extra_large", label: "Extra Large" },
   { key: "all", label: "All Sizes" },
 ];
 
+// UPDATED: 'cat' now shares the exact same size array as 'dog'
 const ALLOWED_SIZES: Record<string, string[]> = {
-  dog: ["small", "medium", "large", "giant", "all"],
-  cat: ["cat", "all"],
-  both_dog_cat: ["all", "small", "medium", "large", "giant"],
+  dog: ["extra_small", "small", "medium", "large", "extra_large", "all"],
+  cat: ["extra_small", "small", "medium", "large", "extra_large", "all"],
+  both_dog_cat: ["all", "extra_small", "small", "medium", "large", "extra_large"],
 };
 
 interface PricingTableProps {
@@ -85,7 +85,8 @@ export default function PricingTable({
         </div>
 
         {service.pricing.map((pricing: PricingRow, pi: number) => {
-          const isNa = pricing.size === "cat" || pricing.size === "all";
+          // UPDATED: Only disable min/max inputs if the size is explicitly "All Sizes"
+          const isNa = pricing.size === "all";
 
           return (
             <div key={pi} className="pricing-row" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr 0.8fr 1fr 40px' }}>

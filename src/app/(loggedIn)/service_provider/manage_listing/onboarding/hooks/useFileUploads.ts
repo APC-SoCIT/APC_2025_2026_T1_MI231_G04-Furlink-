@@ -62,10 +62,22 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
     fetchExistingFiles();
   }, [providerId, supabase]);
 
-  // Single File Select Handler with Size validation
-  const handleFileSelect = (setter: (file: File | null) => void, e: React.ChangeEvent<HTMLInputElement>, maxSizeMB: number, fieldName: string) => {
+  // Single File Select Handler with Size & MIME Type validation
+  const handleFileSelect = (
+    setter: (file: File | null) => void, 
+    e: React.ChangeEvent<HTMLInputElement>, 
+    maxSizeMB: number, 
+    fieldName: string, 
+    allowedTypes: string[]
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!allowedTypes.includes(file.type)) {
+      setFieldError(fieldName, `Invalid file format. Please upload an approved file type.`);
+      setter(null);
+      return;
+    }
 
     if (file.size > maxSizeMB * 1024 * 1024) {
       setFieldError(fieldName, `File size must be less than ${maxSizeMB}MB`);
@@ -77,13 +89,14 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
     setter(file);
   };
 
-  // Multi File Select Handler
+  // Multi File Select Handler with Size & MIME Type validation
   const handleMultiFileSelect = (
     setter: React.Dispatch<React.SetStateAction<File[]>>, 
     currentFiles: File[], 
     e: React.ChangeEvent<HTMLInputElement>, 
     maxFiles: number, 
     fieldName: string, 
+    allowedTypes: string[],
     existingCount: number = 0, 
     maxSizeMB: number = 1
   ) => {
@@ -98,6 +111,12 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
     const validFiles: File[] = [];
     for (const f of chosenFiles) {
       const fileItem = f as File;
+      
+      if (!allowedTypes.includes(fileItem.type)) {
+        setFieldError(fieldName, `Invalid file format detected: ${fileItem.name}.`);
+        return;
+      }
+
       if (fileItem.size > maxSizeMB * 1024 * 1024) {
         setFieldError(fieldName, `Each file must be less than ${maxSizeMB}MB`);
         return;
@@ -137,7 +156,11 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
       const filePath = `${userId}/${fileName}`;
 
-      const bucketName = folder === 'facilities' ? 'sp-facility-images' : 'sp-documents';
+      let bucketName = '';
+      if (folder === 'facilities') bucketName = 'sp-facility-images';
+      else if (folder === 'waivers') bucketName = 'sp-waiver';
+      else if (folder === 'permits') bucketName = 'sp-permit';
+      else if (folder === 'payments') bucketName = 'sp-payment-qr';
 
       const { error: uploadError } = await supabase.storage
         .from(bucketName)
@@ -150,9 +173,10 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
         .getPublicUrl(filePath);
 
       return publicUrl;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Storage upload failed:", err);
-      return null;
+      // Throw the error so the main submission process stops immediately and triggers a rollback!
+      throw new Error(`Failed to upload ${file.name}. Ensure it's a valid format and size.`);
     }
   };
 
