@@ -1,3 +1,4 @@
+/* /src/app/(loggedIn)/service_provider/business-dashboard/page.tsx */
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -32,7 +33,9 @@ export default function BusinessDashboardPage() {
   const [customDateEnd, setCustomDateEnd] = useState<string>('');
 
   const [spId, setSpId] = useState<string | null>(null);
-  const [profileViewCount, setProfileViewCount] = useState<number>(0); // State for Listing Visitors
+  const [profileViewCount, setProfileViewCount] = useState<number>(0);
+  const [registrationApprovedAt, setRegistrationApprovedAt] = useState<string | null>(null); // Track approval date
+  
   const [isClient, setIsClient] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
@@ -40,7 +43,7 @@ export default function BusinessDashboardPage() {
     setIsClient(true);
   }, []);
 
-  // Resolve the logged-in user's sp_id and business_profile_view_count on mount
+  // Resolve the logged-in user's sp_id, view count, and approval date on mount
   useEffect(() => {
     async function resolveProviderId() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -48,13 +51,14 @@ export default function BusinessDashboardPage() {
 
       const { data: providerData } = await supabase
         .from('sp_general_info')
-        .select('id, business_profile_view_count')
+        .select('id, business_profile_view_count, registration_approved_at') // Fetch approval timestamp
         .eq('profiles_id', user.id)
         .maybeSingle();
 
       if (providerData?.id) {
         setSpId(providerData.id);
         setProfileViewCount(providerData.business_profile_view_count || 0);
+        setRegistrationApprovedAt(providerData.registration_approved_at); // Save to state
       }
     }
 
@@ -192,19 +196,49 @@ export default function BusinessDashboardPage() {
       avgTrend: 0,
       cancellationsCount: cancelledBookings.length,
       cancelTrend: 0,
-      listingViews: profileViewCount, // Pulled directly from database column!
+      listingViews: profileViewCount, 
       viewsTrend: 0,
       realServiceBreakdown,
       peakActivity: peakActivityTime 
     };
   }, [filteredBookings, filteredPets, filteredServices, profileViewCount]);
 
+  // Calculate dynamic date display for the header using the approval date as the floor limit
   const currentDate = new Date();
-  const dateDisplay = currentDate.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  
+  let endDate = currentDate;
+  if (timeFilter === 'custom' && customDateEnd) {
+    endDate = new Date(customDateEnd);
+  }
+
+  let startDate = new Date();
+  if (timeFilter === 'weekly') {
+    startDate.setDate(startDate.getDate() - 7);
+  } else if (timeFilter === 'monthly') {
+    startDate.setMonth(startDate.getMonth() - 1);
+  } else if (timeFilter === 'yearly') {
+    startDate.setFullYear(startDate.getFullYear() - 1);
+  } else if (timeFilter === 'custom' && customDateStart) {
+    startDate = new Date(customDateStart);
+  }
+
+  // Clamp start date to the exact registration approval date
+  if (registrationApprovedAt) {
+    const approvedDate = new Date(registrationApprovedAt);
+    if (startDate < approvedDate) {
+      startDate = approvedDate;
+    }
+  }
+
+  const formatOpts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  
+  // Conditionally format the date string depending on if the start and end dates are identical
+  const formattedStartDate = startDate.toLocaleDateString('en-US', formatOpts);
+  const formattedEndDate = endDate.toLocaleDateString('en-US', formatOpts);
+  
+  const dateDisplay = formattedStartDate === formattedEndDate 
+    ? formattedEndDate 
+    : `${formattedStartDate} - ${formattedEndDate}`;
 
   const reportPeriodLabel = timeFilter === 'custom' && customDateStart 
     ? `${customDateStart} to ${customDateEnd || 'Present'}` 
