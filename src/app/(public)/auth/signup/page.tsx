@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -9,6 +9,8 @@ import { checkFieldExists } from "@/app/(public)/auth/validation-db";
 import { supabase } from "@/lib/supabase";
 import "@/app/(public)/auth/auth.css";
 import { ROUTES } from "@/config/routes";
+
+const OTP_VALIDITY_SECONDS = 120; // Exactly 2 minutes validity per code
 
 export default function SignupPage() {
   const router = useRouter();
@@ -22,49 +24,67 @@ export default function SignupPage() {
 
   const [errors, setErrors] = useState<any>({});
   const [touched, setTouched] = useState<any>({});
+
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Anyone younger than 13 today can't be selected in the calendar picker
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
+
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpTimer, setOtpTimer] = useState(OTP_VALIDITY_SECONDS);
+
+  const [resendLoading, setResendLoading] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+
+  useEffect(() => {
+    if (!pendingVerification || otpTimer <= 0) return;
+    const interval = setInterval(() => {
+      setOtpTimer((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pendingVerification, otpTimer]);
+
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
   const getMaxDob = () => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 13);
     return d.toISOString().split("T")[0];
   };
 
-  // The native date input's displayed format follows the browser/OS locale and can't be
-  // forced to mm/dd/yyyy directly, so we hide its native text and overlay our own formatting.
   const formatDobDisplay = (isoDate: string) => {
     if (!isoDate) return "";
     const [y, m, d] = isoDate.split("-");
     return `${m}/${d}/${y}`;
   };
 
-  const handleBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name } = e.target;
     setTouched((prev: any) => ({ ...prev, [name]: true }));
-
-    const currentData = { ...formData, [name]: value };
-    const validationErrors = validateSignup(currentData, agreedToTerms);
-
-    if ((name === "username" || name === "email") && !validationErrors[name]) {
-      const exists = await checkFieldExists(name as 'username' | 'email', value);
-      if (exists) {
-        validationErrors[name] = `${name.charAt(0).toUpperCase() + name.slice(1)} has already been used`;
-      }
-    }
-
+    const validationErrors = validateSignup(formData, agreedToTerms);
     setErrors(validationErrors);
   };
 
-  const handleRoleToggle = (role: string) => {
+  const handleRoleToggle = (role: 'pet_owner' | 'service_provider') => {
     setFormData(prev => {
-      const current = prev.roleChoice;
-      let next;
-      if (current === "") next = role;
-      else if (current === role) next = "";
-      else if (current === "both_sp_po") next = role === 'pet_owner' ? 'service_provider' : 'pet_owner';
-      else next = 'both_sp_po';
+      const isPetOwner = prev.roleChoice === 'pet_owner' || prev.roleChoice === 'both_sp_po';
+      const isServiceProvider = prev.roleChoice === 'service_provider' || prev.roleChoice === 'both_sp_po';
+
+      const nextPetOwner = role === 'pet_owner' ? !isPetOwner : isPetOwner;
+      const nextServiceProvider = role === 'service_provider' ? !isServiceProvider : isServiceProvider;
+
+      let next = '';
+      if (nextPetOwner && nextServiceProvider) next = 'both_sp_po';
+      else if (nextPetOwner) next = 'pet_owner';
+      else if (nextServiceProvider) next = 'service_provider';
 
       const newFormData = { ...prev, roleChoice: next };
       const validationErrors = validateSignup(newFormData, agreedToTerms);
@@ -76,17 +96,36 @@ export default function SignupPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if ((name === "password" || name === "confirmPassword") && value.length > 16) {
+      return;
+    }
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      const validationErrors = validateSignup(updated, agreedToTerms);
+      setErrors(validationErrors);
+      return updated;
+    });
   };
 
-  // Mobile: digits only, capped at 10
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
-    setFormData((prev) => ({ ...prev, mobile: digitsOnly }));
+    setFormData((prev) => {
+      const updated = { ...prev, mobile: digitsOnly };
+      const validationErrors = validateSignup(updated, agreedToTerms);
+      setErrors(validationErrors);
+      return updated;
+    });
+  };
+
+  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtpToken(digitsOnly);
   };
 
   const isFormValid = () => {
-    const hasErrors = Object.values(errors).some((err) => !!err);
+    const validationErrors = validateSignup(formData, agreedToTerms);
+    const hasErrors = Object.values(validationErrors).some((err) => !!err);
+
     const allFieldsFilled =
       formData.firstName &&
       formData.lastName &&
@@ -101,13 +140,113 @@ export default function SignupPage() {
     return agreedToTerms && !hasErrors && !!allFieldsFilled;
   };
 
+  // Rate limit check for requesting new codes
+  const checkSignupRateLimit = (email: string, isResend = false) => {
+    const key = `signup_attempts_${email.trim().toLowerCase()}`;
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000; // 10 minutes rolling window
+    const lockoutMs = 15 * 60 * 1000; // 15 minutes lockout
+
+    const rawData = localStorage.getItem(key);
+    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+
+    if (data.blockedUntil && now < data.blockedUntil) {
+      const remainingMs = data.blockedUntil - now;
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      setIsRateLimited(true);
+      return {
+        allowed: false,
+        message: `You have reached the maximum requests. Please try again in ${remainingMins} minute(s), or log back in later to request a new verification code.`
+      };
+    }
+
+    let attemptsArray = data?.attempts || [];
+    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
+
+    // If they already have 5 attempts recorded and are trying to make a *new* request (beyond the 5th)
+    if (validAttempts.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
+      setIsRateLimited(true);
+      return {
+        allowed: false,
+        message: "You have reached the maximum requests. Please try again in 15 minutes, or log back in later to request a new verification code."
+      };
+    }
+
+    if (isResend) {
+      validAttempts.push(now);
+    }
+
+    if (validAttempts.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
+      setIsRateLimited(true);
+    } else {
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
+      setIsRateLimited(false);
+    }
+
+    return { allowed: true };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid()) return;
+
+    const validationErrors = validateSignup(formData, agreedToTerms);
+    setErrors(validationErrors);
+    setTouched({
+      firstName: true, lastName: true, username: true, email: true,
+      mobile: true, dob: true, password: true, confirmPassword: true,
+      roleChoice: true, terms: true,
+    });
+
+    if (!isFormValid()) {
+      setFormError("Please fill out all required fields properly before continuing.");
+      return;
+    }
+
+    const usernameTaken = await checkFieldExists("username", formData.username);
+    const emailTaken = await checkFieldExists("email", formData.email);
+
+    if (usernameTaken || emailTaken) {
+      setFormError("Account already exists. Please log in instead.");
+      return;
+    }
+
+    setFormError(null);
+
+    // Initial sign-up is request #1. Pass false for isResend so it registers the first attempt.
+    const key = `signup_attempts_${formData.email.trim().toLowerCase()}`;
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const rawData = localStorage.getItem(key);
+    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+
+    if (data.blockedUntil && now < data.blockedUntil) {
+      const remainingMs = data.blockedUntil - now;
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      setIsRateLimited(true);
+      setFormError(`You have reached the maximum requests. Please try again in ${remainingMins} minute(s), or log back in later to request a new verification code.`);
+      return;
+    }
+
+    let attemptsArray = data?.attempts || [];
+    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
+
+    if (validAttempts.length >= 5) {
+      setIsRateLimited(true);
+      setFormError("You have reached the maximum requests. Please try again in 15 minutes, or log back in later to request a new verification code.");
+      return;
+    }
+
+    validAttempts.push(now);
+    localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
+
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data: authData, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -117,45 +256,172 @@ export default function SignupPage() {
             username: formData.username,
             mobile_number: formData.mobile,
             date_of_birth: formData.dob,
-            role: formData.roleChoice
-          }
-        }
+            role: formData.roleChoice,
+          },
+        },
       });
 
       if (error) {
-        console.error("Signup error:", error);
-        alert(error.message);
-      } else {
-        router.refresh();
-
-        // UPDATED REDIRECTION LOGIC
-        if (formData.roleChoice === 'service_provider') {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else {
-          // Handles 'pet_owner' and 'both_sp_po'
-          router.push(ROUTES.PET_OWNER.DASHBOARD);
+        if (error.message.toLowerCase().includes("already registered") || error.message.toLowerCase().includes("already been used")) {
+          setFormError("Account already exists. Please log in instead.");
+          setLoading(false);
+          return;
         }
+
+        setFormError(error.message);
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Unexpected signup error:", err);
-      alert("Something went wrong. Please try again.");
+
+      setOtpTimer(OTP_VALIDITY_SECONDS);
+      setOtpError(null);
+      setPendingVerification(true);
+    } catch {
+      setFormError("Something went wrong. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpToken || otpTimer <= 0) return;
+    setOtpError(null);
+    setVerificationLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: formData.email,
+        token: otpToken,
+        type: "signup",
+      });
+
+      if (error) {
+        setOtpError("Invalid OTP Code. Please check the code or try again after 15 minutes if limit was reached.");
+        return;
+      }
+
+      if (!data.session) {
+        setOtpError("Account verified, but automatic sign-in failed. Redirecting you to log in...");
+        setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 2000);
+        return;
+      }
+
+      router.refresh();
+      if (formData.roleChoice === "service_provider") {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else {
+        router.push(ROUTES.PET_OWNER.DASHBOARD);
+      }
+    } catch {
+      setOtpError("Failed to verify code. Please check your connection and try again.");
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (otpTimer > 0 || isRateLimited) return;
+
+    const rateCheck = checkSignupRateLimit(formData.email, true);
+    if (!rateCheck.allowed) {
+      setOtpError(rateCheck.message ?? null);
+      setIsRateLimited(true);
+      return;
+    }
+
+    setOtpError(null);
+    setResendLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: formData.email,
+      });
+
+      if (error) {
+        setOtpError(error.message);
+      } else {
+        setOtpTimer(OTP_VALIDITY_SECONDS);
+        setOtpToken("");
+      }
+    } catch {
+      setOtpError("Something went wrong resending the code. Please check your connection.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  if (pendingVerification) {
+    return (
+      <div className="signup-wrapper">
+        <form className="signup-card" onSubmit={handleVerifyOtp}>
+          <h1>Verify Your Email</h1>
+          <p className="otp-instructions">
+            We have sent a verification code to <strong>{formData.email}</strong>. Please enter it below to activate your account.
+          </p>
+          <p className="otp-spam-note">
+            Didn&apos;t receive it? Check your spam or trash folder.
+          </p>
+
+          {otpError && <p className="otp-error-banner">{otpError}</p>}
+
+          <div className="input-group" style={{ marginBottom: "20px" }}>
+            <input
+              type="text"
+              placeholder="Enter 6-digit OTP"
+              value={otpToken}
+              onChange={handleOtpChange}
+              maxLength={6}
+              required
+              inputMode="numeric"
+              disabled={otpTimer <= 0}
+            />
+          </div>
+
+          {otpTimer > 0 ? (
+            <p className="otp-timer">Code expires in {formatTimer(otpTimer)}</p>
+          ) : (
+            <p className="otp-timer otp-expired">Code expired.</p>
+          )}
+
+          <p className="otp-resend">
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              disabled={resendLoading || otpTimer > 0 || isRateLimited}
+              className="resend-link"
+            >
+              {resendLoading ? "Resending..." : isRateLimited ? "Request limit reached" : "Resend code"}
+            </button>
+          </p>
+
+          <button
+            type="submit"
+            className="register-btn"
+            disabled={verificationLoading || !otpToken || otpTimer <= 0}
+          >
+            {verificationLoading ? "Verifying..." : "Verify Account"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="signup-wrapper">
-      <form className="signup-card" onSubmit={handleSubmit}>
+      <form className="signup-card" onSubmit={handleSubmit} noValidate>
         <h1>Create Your Account</h1>
+
+        {formError && <p className="form-error-banner">{formError}</p>}
 
         <div className="form-row">
           <div className="input-group">
-            <input name="firstName" placeholder="First Name" onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} onBlur={handleBlur} className={errors.firstName ? "input-error" : ""} />
+            <input name="firstName" placeholder="First Name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} className={errors.firstName ? "input-error" : ""} />
             {touched.firstName && errors.firstName && <span className="error-text">{errors.firstName}</span>}
           </div>
           <div className="input-group">
-            <input name="lastName" placeholder="Last Name" onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} onBlur={handleBlur} className={errors.lastName ? "input-error" : ""} />
+            <input name="lastName" placeholder="Last Name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} className={errors.lastName ? "input-error" : ""} />
             {touched.lastName && errors.lastName && <span className="error-text">{errors.lastName}</span>}
           </div>
         </div>
@@ -165,18 +431,19 @@ export default function SignupPage() {
             <div className={`phone-input-container ${errors.username ? "input-error" : ""}`}>
               <span className="phone-prefix">@</span>
               <div className="phone-divider"></div>
-              <input name="username" placeholder="username" onChange={(e) => setFormData({ ...formData, username: e.target.value })} onBlur={handleBlur} />
+              <input name="username" placeholder="username" value={formData.username} onChange={handleChange} onBlur={handleBlur} />
             </div>
             {touched.username && errors.username && <span className="error-text">{errors.username}</span>}
           </div>
           <div className="input-group">
-            <input name="email" placeholder="Email Address" onChange={(e) => setFormData({ ...formData, email: e.target.value })} onBlur={handleBlur} className={errors.email ? "input-error" : ""} />
+            <input name="email" placeholder="Email Address" value={formData.email} onChange={handleChange} onBlur={handleBlur} className={errors.email ? "input-error" : ""} />
             {touched.email && errors.email && <span className="error-text">{errors.email}</span>}
           </div>
         </div>
 
         <div className="form-row">
           <div className="input-group">
+            <label className="field-guide-label">Mobile Number</label>
             <div className={`phone-input-container ${errors.mobile ? "input-error" : ""}`}>
               <span className="phone-prefix">+63</span>
               <div className="phone-divider"></div>
@@ -193,6 +460,7 @@ export default function SignupPage() {
             {touched.mobile && errors.mobile && <span className="error-text">{errors.mobile}</span>}
           </div>
           <div className="input-group">
+            <label className="field-guide-label">Date of Birth</label>
             <div className="date-input-container">
               <input
                 type="date"
@@ -229,11 +497,12 @@ export default function SignupPage() {
             Service Provider
           </button>
         </div>
+        {touched.roleChoice && errors.roleChoice && <span className="error-text">{errors.roleChoice}</span>}
 
         <div className="form-row">
           <div className="input-group">
             <div className="password-container">
-              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" onChange={(e) => setFormData({ ...formData, password: e.target.value })} onBlur={handleBlur} />
+              <input type={showPassword ? "text" : "password"} name="password" placeholder="Password" value={formData.password} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -243,7 +512,7 @@ export default function SignupPage() {
 
           <div className="input-group">
             <div className="password-container">
-              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} onBlur={handleBlur} />
+              <input type={showPasswordConfirm ? "text" : "password"} name="confirmPassword" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} maxLength={16} />
               <button type="button" className="toggle-btn" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}>
                 {showPasswordConfirm ? <FaEyeSlash /> : <FaEye />}
               </button>
@@ -272,6 +541,11 @@ export default function SignupPage() {
         >
           {loading ? "Signing Up..." : "Sign Up"}
         </button>
+
+        <p className="auth-redirect-text">
+          Have an account?{" "}
+          <Link href="/auth/login" className="login-link">Log In</Link>
+        </p>
       </form>
     </div>
   );

@@ -6,8 +6,8 @@ export default function Footer() {
       <div className="footer-container">
         <div className="footer-left">
           <span>© 2026 furlink</span>
-          <Link href="/terms">Terms and Conditions</Link>
-          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/terms_and_conditions">Terms and Conditions</Link>
+          <Link href="/privacy_policy">Privacy Policy</Link>
         </div>
         
         <div className="footer-right">

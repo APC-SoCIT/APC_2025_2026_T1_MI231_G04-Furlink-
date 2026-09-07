@@ -1,13 +1,16 @@
 export const validateLogin = (data: any) => {
   const errors: any = {};
 
-  // Basic regex for email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const identifier = data.identifier ? data.identifier.trim() : "";
 
-  if (!data.identifier) {
-    errors.identifier = "Email is required";
-  } else if (!emailRegex.test(data.identifier)) {
-    errors.identifier = "Please enter a valid email address";
+  const isEmail = emailRegex.test(identifier);
+  const isUsername = identifier.length >= 3;
+
+  if (!identifier) {
+    errors.identifier = "Email or username is required";
+  } else if (!isEmail && !isUsername) {
+    errors.identifier = "Please enter a valid email address or username";
   }
 
   if (!data.password) {
