@@ -51,6 +51,8 @@ export interface WarningRow {
   severity: string;
   status: string; 
   expires_at: string | null;
+  issued_by: string | null;
+  issued_by_admin?: AdminInfo;
 }
 
 export interface SuspensionRow {
@@ -61,13 +63,21 @@ export interface SuspensionRow {
   suspended_until: string;
   lifted_at: string | null;
   lifted_by: string | null;
-  status: string; 
+  suspended_by: string | null;
+  status: string;
+  suspended_by_admin?: AdminInfo;
+  lifted_by_admin?: AdminInfo;
+}
+
+export interface AdminInfo {
+  first_name: string | null;
+  last_name: string | null;
 }
 
 // Roles that should have an email shown 
 export const ROLES_WITH_EMAIL = ["service_provider", "both"];
 
-// Human-friendly labels for booking_status
+// Labels for booking_status
 export const STATUS_LABELS: Record<string, string> = {
   pending_sp_response: "Pending",
   approved: "Approved",

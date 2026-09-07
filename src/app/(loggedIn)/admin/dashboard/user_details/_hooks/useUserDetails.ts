@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
-  UserProfile, BookingRow, WarningRow, SuspensionRow, 
+  UserProfile, BookingRow, WarningRow, SuspensionRow, AdminInfo,
   ROLES_WITH_EMAIL, SUSPENSION_DAYS, WARNING_THRESHOLD 
 } from "../_types";
 
@@ -26,6 +26,8 @@ export const useUserDetails = (userId: string | null) => {
   const [suspending, setSuspending] = useState(false);
   const [liftingSuspension, setLiftingSuspension] = useState(false);
   const [autoSuspended, setAutoSuspended] = useState(false);
+  const [suspensionHistory, setSuspensionHistory] = useState<SuspensionRow[]>([]);
+  const [suspensionHistoryLoading, setSuspensionHistoryLoading] = useState(true);
 
   // Feedback for admin actions
   const [actionError, setActionError] = useState<string | null>(null);
@@ -38,12 +40,14 @@ export const useUserDetails = (userId: string | null) => {
       fetchBookingHistory();
       fetchWarnings();
       fetchCurrentSuspension();
+      fetchSuspensionHistory();
     } else {
       setError("No User ID found in URL.");
       setLoading(false);
       setBookingsLoading(false);
       setWarningsLoading(false);
       setSuspensionLoading(false);
+      setSuspensionHistoryLoading(false);
     }
   }, [userId]);
 
@@ -117,14 +121,28 @@ export const useUserDetails = (userId: string | null) => {
   const fetchWarnings = async () => {
     try {
       setWarningsLoading(true);
+      
       const { data, error } = await supabase
         .from("user_warnings")
-        .select("id, warning_message, created_at, severity, status, expires_at")
+        .select("id, warning_message, created_at, severity, status, expires_at, issued_by")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setWarnings(data || []);
+
+      if (data && data.length > 0) {
+        const adminIds = data.map((w) => w.issued_by);
+        const adminInfoMap = await fetchAdminInfo(adminIds);
+        const warningsWithAdmins = data.map((w) => ({
+          ...w,
+          issued_by_admin: w.issued_by ? adminInfoMap[w.issued_by] : undefined,
+        }));
+
+        setWarnings(warningsWithAdmins);
+      } else {
+        setWarnings([]);
+      }
+      
     } catch (err: any) {
       console.error("Error fetching warnings:", err);
     } finally {
@@ -132,13 +150,12 @@ export const useUserDetails = (userId: string | null) => {
     }
   };
 
-  // Most recet active suspension (if any)
   const fetchCurrentSuspension = async () => {
     try {
       setSuspensionLoading(true);
       const { data, error } = await supabase
         .from("user_suspensions")
-        .select("id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status")
+        .select("id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status, suspended_by")
         .eq("user_id", userId)
         .eq("status", "active")
         .order("suspended_at", { ascending: false })
@@ -154,8 +171,51 @@ export const useUserDetails = (userId: string | null) => {
     }
   };
 
+  const fetchAdminInfo = async (ids: (string | null | undefined)[]): Promise<Record<string, AdminInfo>> => {
+    const uniqueIds = Array.from(new Set(ids.filter((id): id is string => !!id)));
+    if (uniqueIds.length === 0) return {};
+
+    const { data, error } = await supabase.rpc("get_admin_names", { admin_ids: uniqueIds });
+
+    if (error) {
+      console.error("Error fetching admin info:", error);
+      return {};
+    }
+
+    return Object.fromEntries(
+      (data || []).map((p: any) => [p.id, { first_name: p.first_name, last_name: p.last_name }])
+    );
+  };
+
+  const fetchSuspensionHistory = async () => {
+    try {
+      setSuspensionHistoryLoading(true);
+      const { data, error } = await supabase
+        .from("user_suspensions")
+        .select("id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, suspended_by, status")
+        .eq("user_id", userId)
+        .order("suspended_at", { ascending: false });
+
+      if (error) throw error;
+
+      const rows = data || [];
+      const adminMap = await fetchAdminInfo(rows.flatMap((s) => [s.suspended_by, s.lifted_by]));
+      setSuspensionHistory(
+        rows.map((s) => ({
+          ...s,
+          suspended_by_admin: s.suspended_by ? adminMap[s.suspended_by] : undefined,
+          lifted_by_admin: s.lifted_by ? adminMap[s.lifted_by] : undefined,
+        }))
+      );
+    } catch (err: any) {
+      console.error("Error fetching suspension history:", err);
+    } finally {
+      setSuspensionHistoryLoading(false);
+    }
+  };
+
   // Suspension
-  const performSuspension = async (warningIds: string[], reason: string): Promise<SuspensionRow> => {
+  const performSuspension = async (warningIds: string[], reason: string, suspendedBy: string | null): Promise<SuspensionRow> => {
     const suspendedUntil = new Date(Date.now() + SUSPENSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const { data, error } = await supabase
@@ -166,8 +226,9 @@ export const useUserDetails = (userId: string | null) => {
         triggered_by_warning_ids: warningIds,
         suspended_until: suspendedUntil,
         status: "active",
+        suspended_by: suspendedBy,
       })
-      .select("id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status")
+      .select("id, reason, triggered_by_warning_ids, suspended_at, suspended_until, lifted_at, lifted_by, status, suspended_by")
       .single();
 
     if (error) throw error;
@@ -195,8 +256,12 @@ export const useUserDetails = (userId: string | null) => {
       );
     }
 
-    setCurrentSuspension(data);
-    return data;
+    const adminMap = await fetchAdminInfo([suspendedBy]);
+    const enriched = { ...data, suspended_by_admin: suspendedBy ? adminMap[suspendedBy] : undefined };
+    
+    setCurrentSuspension(enriched);
+    setSuspensionHistory((prev) => [enriched, ...prev]);
+    return enriched;
   };
 
   // 1 -> "1st", 2 -> "2nd", etc.
@@ -232,7 +297,7 @@ export const useUserDetails = (userId: string | null) => {
           warning_message: trimmed,
           issued_by: adminUser?.id || null,
         })
-        .select("id, warning_message, created_at, severity, status, expires_at")
+        .select("id, warning_message, created_at, severity, status, expires_at, issued_by")
         .single();
 
       if (error) throw error;
@@ -251,7 +316,8 @@ export const useUserDetails = (userId: string | null) => {
         const warningIds = activeWarnings.map((w) => w.id);
         await performSuspension(
           warningIds,
-          `Auto-suspended: reached ${activeWarnings.length} active warnings`
+          `Auto-suspended: reached ${activeWarnings.length} active warnings`,
+          adminUser?.id || null
         );
         setAutoSuspended(true);
         setAutoSuspendNotice(
@@ -282,12 +348,15 @@ export const useUserDetails = (userId: string | null) => {
     setSuspending(true);
     
     try {
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+
       const warningIds = activeWarnings.map((w) => w.id);
       await performSuspension(
         warningIds,
         warningIds.length > 0
           ? `Manual suspension by admin (${warningIds.length} active warning${warningIds.length === 1 ? "" : "s"})`
-          : "Manual suspension by admin"
+          : "Manual suspension by admin",
+        adminUser?.id || null
       );
       setActionSuccess(`User suspended for ${SUSPENSION_DAYS} days.`);
       return true;
@@ -335,6 +404,8 @@ export const useUserDetails = (userId: string | null) => {
 
       setCurrentSuspension(null);
       setActionSuccess("Suspension lifted.");
+      fetchSuspensionHistory();
+      
       return true;
     } catch (err: any) {
       console.error("Error lifting suspension:", err);
@@ -349,6 +420,7 @@ export const useUserDetails = (userId: string | null) => {
     user, businessEmail, bookings, loading, bookingsLoading, error,
     warnings, warningsLoading, sendingWarning,
     currentSuspension, suspensionLoading, suspending, liftingSuspension, autoSuspended,
+    suspensionHistory, suspensionHistoryLoading,
     actionError, actionSuccess, autoSuspendNotice, setAutoSuspendNotice,
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   };
