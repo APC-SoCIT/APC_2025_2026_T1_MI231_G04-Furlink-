@@ -1,5 +1,23 @@
-/* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/components/ServiceCard.tsx */
-import React from "react";
+import React, { ReactNode } from "react";
+
+// Define the shape of your service object
+export interface Service {
+  type: string;
+  name: string;
+  description: string;
+  notes: string;
+  haircutIncluded: boolean;
+}
+
+// Define the props for the ServiceCard component
+interface ServiceCardProps {
+  service: Service;
+  serviceIndex: number;
+  updateService: (index: number, field: string, value: string | boolean) => void;
+  removeService: (index: number) => void;
+  validationErrors: Record<string, string>;
+  children?: ReactNode;
+}
 
 export default function ServiceCard({
   service,
@@ -8,7 +26,7 @@ export default function ServiceCard({
   removeService,
   validationErrors,
   children
-}) {
+}: ServiceCardProps) {
   return (
     <div className="service-form-card">
       <div className="service-card-header">
