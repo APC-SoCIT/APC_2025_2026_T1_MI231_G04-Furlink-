@@ -277,36 +277,43 @@ export const useUserDetails = (userId: string | null) => {
   };
 
   // Runs insert/auto-suspend logic
-  const confirmSendWarning = async (message: string) => {
-    const trimmed = message.trim();
-    if (!trimmed || !userId) return false;
+  const confirmSendWarning = async (message: string, severity: string) => {
+  const trimmed = message.trim();
+  if (!trimmed || !userId) return false;
 
-    setActionError(null);
-    setActionSuccess(null);
-    setAutoSuspended(false);
-    setAutoSuspendNotice(null);
-    setSendingWarning(true);
-    
-    try {
-      const { data: { user: adminUser } } = await supabase.auth.getUser();
+  setActionError(null);
+  setActionSuccess(null);
+  setAutoSuspended(false);
+  setAutoSuspendNotice(null);
+  setSendingWarning(true);
+  
+  try {
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
 
-      const { data: newWarning, error } = await supabase
-        .from("user_warnings")
-        .insert({
-          user_id: userId,
-          warning_message: trimmed,
-          issued_by: adminUser?.id || null,
-        })
-        .select("id, warning_message, created_at, severity, status, expires_at, issued_by")
-        .single();
+    const { data: newWarning, error } = await supabase
+      .from("user_warnings")
+      .insert({
+        user_id: userId,
+        warning_message: trimmed,
+        issued_by: adminUser?.id || null,
+        severity, // Added severity here
+      })
+      .select("id, warning_message, created_at, severity, status, expires_at, issued_by")
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const updatedWarnings = [newWarning, ...warnings];
-      setWarnings(updatedWarnings);
+     const adminMap = await fetchAdminInfo([newWarning.issued_by]);
+    const enrichedWarning = {
+      ...newWarning,
+      issued_by_admin: newWarning.issued_by ? adminMap[newWarning.issued_by] : undefined,
+    };
 
-      // Only auto-suspend if the user isnt already in an active suspension
-      const activeWarnings = updatedWarnings.filter((w) => w.status === "active");
+    const updatedWarnings = [enrichedWarning, ...warnings];
+    setWarnings(updatedWarnings);
+
+    // Only auto-suspend if the user isnt already in an active suspension
+    const activeWarnings = updatedWarnings.filter((w) => w.status === "active");
       const alreadySuspended =
         !!currentSuspension &&
         currentSuspension.status === "active" &&

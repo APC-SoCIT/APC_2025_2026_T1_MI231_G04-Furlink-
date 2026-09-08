@@ -31,6 +31,7 @@ function UserDetailsContent() {
 
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
+  const [warningSeverity, setWarningSeverity] = useState("normal"); 
 
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
@@ -43,10 +44,11 @@ function UserDetailsContent() {
 
   // Handlers to link the UI Modals to the hook logic
   const handleSendWarningConfirm = async () => {
-    const success = await confirmSendWarning(warningMessage);
+    const success = await confirmSendWarning(warningMessage, warningSeverity);
     if (success) {
       setShowSendWarningConfirm(false);
       setWarningMessage("");
+      setWarningSeverity("normal");
     }
   };
 
@@ -97,6 +99,8 @@ function UserDetailsContent() {
               activeWarningCount={activeWarningCount}
               warningMessage={warningMessage}
               setWarningMessage={setWarningMessage}
+              warningSeverity={warningSeverity}              
+              setWarningSeverity={setWarningSeverity}        
               sendingWarning={sendingWarning}
               onSendWarningClick={() => setShowSendWarningConfirm(true)}
               isSuspended={isSuspended}
@@ -128,6 +132,7 @@ function UserDetailsContent() {
       <AdminModals 
         user={user}
         warningMessage={warningMessage}
+        warningSeverity={warningSeverity}
         activeWarningCount={activeWarningCount}
         isSuspended={isSuspended}
         sendingWarning={sendingWarning}

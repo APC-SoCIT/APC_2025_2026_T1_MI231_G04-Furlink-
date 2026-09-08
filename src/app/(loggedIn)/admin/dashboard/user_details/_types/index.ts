@@ -74,6 +74,12 @@ export interface AdminInfo {
   last_name: string | null;
 }
 
+export interface SeverityLevel {
+  value: string;
+  label: string;
+  description: string;
+}
+
 // Roles that should have an email shown 
 export const ROLES_WITH_EMAIL = ["service_provider", "both"];
 
@@ -90,3 +96,11 @@ export const STATUS_LABELS: Record<string, string> = {
 
 export const SUSPENSION_DAYS = 7;
 export const WARNING_THRESHOLD = 3;
+
+// Severity levels
+export const SEVERITY_LEVELS: SeverityLevel[] = [
+  { value: "minor", label: "Minor", description: "Small or first-time issue; mostly a heads-up." },
+  { value: "normal", label: "Normal", description: "Standard policy violation." },
+  { value: "severe", label: "Severe", description: "Serious violation warranting closer monitoring." },
+  { value: "critical", label: "Critical", description: "Major violation; likely to lead to suspension." },
+];

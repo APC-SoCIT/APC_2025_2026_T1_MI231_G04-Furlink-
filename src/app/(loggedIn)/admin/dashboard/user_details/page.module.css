@@ -767,6 +767,62 @@
   color: #047857;
 }
 
+.severity-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-family: inherit;
+  font-size: 0.85rem;
+  background: #ffffff;
+  color: #374151;
+}
+
+.severity-select:focus {
+  outline: none;
+  border-color: #10245c;
+}
+
+.severity-description {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin: -4px 0 0 0;
+}
+
+.severity-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.warning-history-meta {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.warning-history-meta strong {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.warning-history-meta {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.warning-history-meta strong {
+  color: #6b7280;
+  font-weight: 600;
+}
+
 /* Lift suspension button */
 .btn-lift-suspend {
   display: flex;

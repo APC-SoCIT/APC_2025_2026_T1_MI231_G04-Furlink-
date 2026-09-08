@@ -1,7 +1,7 @@
 "use client";
 
 import { FaTimes } from "react-icons/fa";
-import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD, SuspensionRow } from "../_types";
+import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD, SuspensionRow, SEVERITY_LEVELS } from "../_types";
 import styles from "../page.module.css";
 import { WarningRow } from "../_types";
 
@@ -21,6 +21,7 @@ interface Props {
   showSendWarningConfirm: boolean;
   setShowSendWarningConfirm: (val: boolean) => void;
   confirmSendWarning: () => void;
+  warningSeverity: string;
 
   showSuspendConfirm: boolean;
   setShowSuspendConfirm: (val: boolean) => void;
@@ -55,6 +56,7 @@ export const AdminModals = ({
   showSendWarningConfirm, 
   setShowSendWarningConfirm, 
   confirmSendWarning,
+  warningSeverity,
   showSuspendConfirm, 
   setShowSuspendConfirm, 
   suspending, 
@@ -95,6 +97,9 @@ export const AdminModals = ({
                   active warning, which will automatically suspend the user for {SUSPENSION_DAYS} days.
                 </>
               )}
+            </p>
+            <p className={styles["confirm-modal-message"]}>
+              Severity: <strong>{SEVERITY_LEVELS.find((l) => l.value === warningSeverity)?.label}</strong>
             </p>
             <p className={styles["confirm-modal-message"]}>
               <em>&ldquo;{warningMessage.trim()}&rdquo;</em>
@@ -180,15 +185,18 @@ export const AdminModals = ({
                 warnings.map((w) => (
                   <div key={w.id} className={styles["warning-history-item"]}>
                     <div className={styles["warning-history-top"]}>
+                      <span className={styles["severity-tag"]}>{w.severity}</span>
                       <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${w.status}`] || ""}`}>
                         {w.status}
                       </span>
-                      <span className={styles["warning-history-date"]}>
-                        {formatDateTime(w.created_at)}
-                        {w.issued_by_admin && ` · by ${w.issued_by_admin.first_name} ${w.issued_by_admin.last_name}`}
-                      </span>
                     </div>
                     <p className={styles["warning-history-message"]}>{w.warning_message}</p>
+                    <p className={styles["warning-history-meta"]}>
+                      {formatDateTime(w.created_at)}
+                      {w.issued_by_admin && (
+                        <> · issued by <strong>{w.issued_by_admin.first_name} {w.issued_by_admin.last_name}</strong></>
+                      )}
+                    </p>
                   </div>
                 ))
               )}
@@ -219,18 +227,20 @@ export const AdminModals = ({
                       <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${s.status}`] || ""}`}>
                         {s.status}
                       </span>
-                      <span className={styles["warning-history-date"]}>
-                        {formatDateTime(s.suspended_at)}
-                        {s.suspended_by_admin && ` · by ${s.suspended_by_admin.first_name} ${s.suspended_by_admin.last_name}`}
-                      </span>
                     </div>
                     <p className={styles["warning-history-message"]}>{s.reason}</p>
-                    <p className={styles["warning-history-date"]}>
+                    <p className={styles["warning-history-meta"]}>
+                      {formatDateTime(s.suspended_at)}
+                      {s.suspended_by_admin && (
+                        <> · by <strong>{s.suspended_by_admin.first_name} {s.suspended_by_admin.last_name}</strong></>
+                      )}
+                    </p>
+                    <p className={styles["warning-history-meta"]}>
                       Until {formatDateTime(s.suspended_until)}
                       {s.status === "lifted" && s.lifted_at && (
                         <>
                           {" "}— lifted {formatDateTime(s.lifted_at)}
-                          {s.lifted_by_admin && ` by ${s.lifted_by_admin.first_name} ${s.lifted_by_admin.last_name}`}
+                          {s.lifted_by_admin && <> by <strong>{s.lifted_by_admin.first_name} {s.lifted_by_admin.last_name}</strong></>}
                         </>
                       )}
                     </p>
