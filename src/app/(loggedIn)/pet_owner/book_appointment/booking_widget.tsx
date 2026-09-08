@@ -19,6 +19,7 @@ export type ExistingBooking = {
   booking_date: string;
   booking_timeslot: string;
   booking_status: string;
+  pet_count?: number;
 };
 
 type BookingWidgetProps = {
@@ -36,17 +37,14 @@ export default function BookingWidget({
 }: BookingWidgetProps) {
   const router = useRouter();
 
-  // Current live timestamp references
   const today = useMemo(() => new Date(), []);
   const nowTime = today.getTime();
   const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-  // Set default view to current month/year
   const [currentDate, setCurrentDate] = useState<Date>(
     new Date(today.getFullYear(), today.getMonth(), 1)
   );
 
-  // Calculate default selected date: First available date >= 24 hours ahead
   const defaultSelectedDate = useMemo(() => {
     const minBookingTime = new Date(nowTime + TWENTY_FOUR_HOURS_MS);
     return new Date(minBookingTime.getFullYear(), minBookingTime.getMonth(), minBookingTime.getDate());
@@ -66,7 +64,6 @@ export default function BookingWidget({
   const selectedDayName = selectedDate ? DAYS_OF_WEEK[selectedDate.getDay()] : null;
   const currentOperatingHour = selectedDayName ? hoursByDay.get(selectedDayName) : null;
 
-  // Filter slots to ensure individual time slots on the cutoff day also adhere to >= 24 hours in advance
   const generatedSlots = useMemo(() => {
     if (!currentOperatingHour || !selectedDate) return [];
 
@@ -82,7 +79,6 @@ export default function BookingWidget({
       const h = Math.floor(currentMin / 60);
       const m = currentMin % 60;
 
-      // Construct concrete Date instance for this specific timeslot
       const slotDateTime = new Date(
         selectedDate.getFullYear(),
         selectedDate.getMonth(),
@@ -91,7 +87,6 @@ export default function BookingWidget({
         m
       );
 
-      // Only include slot if it is at least 24 hours into the future
       if (slotDateTime.getTime() - nowTime >= TWENTY_FOUR_HOURS_MS) {
         const period = h >= 12 ? 'PM' : 'AM';
         const formattedH = h % 12 === 0 ? 12 : h % 12;
@@ -105,9 +100,33 @@ export default function BookingWidget({
     return slots;
   }, [currentOperatingHour, selectedDate, nowTime]);
 
-  const maxCapacity = currentOperatingHour ? currentOperatingHour.slot_capacity : 1;
+  // Helper to compute remaining capacity for a specific slot
+  const getRemainingCapacity = (slot: string): number => {
+    if (!selectedDate || !currentOperatingHour) return 0;
 
-  // Check if user already has a booking on the selected date
+    const yyyy = selectedDate.getFullYear();
+    const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    const activeStatuses = ['pending_sp_response', 'confirmed', 'to pay', 'paid'];
+    
+    const slotBookings = existingBookings.filter(
+      (b) =>
+        b.booking_date === dateStr &&
+        b.booking_timeslot === slot &&
+        activeStatuses.includes(b.booking_status.toLowerCase())
+    );
+
+    const bookedPets = slotBookings.reduce((sum, b) => sum + (b.pet_count || 1), 0);
+    return Math.max(0, currentOperatingHour.slot_capacity - bookedPets);
+  };
+
+  const maxCapacity = useMemo(() => {
+    if (!selectedTimeSlot) return currentOperatingHour ? currentOperatingHour.slot_capacity : 1;
+    return getRemainingCapacity(selectedTimeSlot);
+  }, [selectedTimeSlot, selectedDate, existingBookings, currentOperatingHour]);
+
   const sameDayBooking = useMemo(() => {
     if (!selectedDate) return null;
     
@@ -119,7 +138,6 @@ export default function BookingWidget({
     return existingBookings.find((b) => b.booking_date === dateStr) || null;
   }, [selectedDate, existingBookings]);
 
-  // Check if user is on current or past month to restrict previous button
   const isMinMonth =
     currentDate.getFullYear() < today.getFullYear() ||
     (currentDate.getFullYear() === today.getFullYear() && currentDate.getMonth() <= today.getMonth());
@@ -154,7 +172,7 @@ export default function BookingWidget({
       setNumPets(1);
     } else if (val > maxCapacity) {
       setNumPets(maxCapacity);
-      alert(`The maximum slot capacity for this provider is ${maxCapacity} pet(s).`);
+      alert(`The maximum slot capacity remaining for this time slot is ${maxCapacity} pet(s).`);
     } else {
       setNumPets(val);
     }
@@ -165,6 +183,7 @@ export default function BookingWidget({
     selectedTimeSlot !== '' &&
     numPets >= 1 &&
     numPets <= maxCapacity &&
+    maxCapacity > 0 &&
     agreedTerms;
 
   const handleCompleteBooking = () => {
@@ -224,11 +243,9 @@ export default function BookingWidget({
               const dayName = DAYS_OF_WEEK[thisDate.getDay()];
               const isOpen = hoursByDay.has(dayName);
 
-              // End of the target day (23:59:59) to check if the day is past or within 24 hours
               const endOfThisDate = new Date(year, month, dayNum, 23, 59, 59).getTime();
               const isPastOrWithin24Hours = endOfThisDate < (nowTime + TWENTY_FOUR_HOURS_MS);
 
-              // Date is selectable only if it is open and at least 24 hours in the future
               const isSelectable = isOpen && !isPastOrWithin24Hours;
 
               const isSelected =
@@ -244,7 +261,6 @@ export default function BookingWidget({
 
               const hasExisting = existingBookings.some((b) => b.booking_date === dStr);
 
-              // Generate appropriate tooltip message
               let tooltipMessage = `${dayName}: Open`;
               if (isPastOrWithin24Hours) {
                 tooltipMessage = 'Bookings require at least 24 hours advance notice';
@@ -273,7 +289,6 @@ export default function BookingWidget({
         </div>
       </div>
 
-      {/* Same-Day Booking Warning Notice */}
       {sameDayBooking && (
         <div className="same-day-warning">
           <FaExclamationTriangle className="warning-icon" />
@@ -288,7 +303,10 @@ export default function BookingWidget({
         <select
           className="widget-select"
           value={selectedTimeSlot}
-          onChange={(e) => setSelectedTimeSlot(e.target.value)}
+          onChange={(e) => {
+            setSelectedTimeSlot(e.target.value);
+            setNumPets(1);
+          }}
           disabled={!currentOperatingHour || generatedSlots.length === 0}
         >
           {!currentOperatingHour ? (
@@ -298,11 +316,16 @@ export default function BookingWidget({
           ) : (
             <>
               <option value="" disabled>-- Select a Time Slot --</option>
-              {generatedSlots.map((slot) => (
-                <option key={slot} value={slot}>
-                  {slot} {sameDayBooking && sameDayBooking.booking_timeslot === slot ? '(Your Existing Slot)' : ''}
-                </option>
-              ))}
+              {generatedSlots.map((slot) => {
+                const remaining = getRemainingCapacity(slot);
+                const isFull = remaining <= 0;
+
+                return (
+                  <option key={slot} value={slot} disabled={isFull}>
+                    {slot} {isFull ? '(Fully Booked)' : `(${remaining} slot${remaining > 1 ? 's' : ''} left)`}
+                  </option>
+                );
+              })}
             </>
           )}
         </select>
@@ -310,7 +333,7 @@ export default function BookingWidget({
 
       <div className="form-group">
         <label className="field-label">
-          NUMBER OF PETS {currentOperatingHour && `(Max: ${maxCapacity})`}
+          NUMBER OF PETS {selectedTimeSlot && `(Max Available: ${maxCapacity})`}
         </label>
         <input
           type="number"
@@ -318,7 +341,7 @@ export default function BookingWidget({
           min={1}
           max={maxCapacity}
           onChange={handlePetChange}
-          disabled={!selectedTimeSlot}
+          disabled={!selectedTimeSlot || maxCapacity <= 0}
           className="widget-input"
         />
       </div>
