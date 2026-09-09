@@ -68,9 +68,6 @@ export type PetFormData = {
   aiSourcePhotoPreview: string | null;
   // Public url of the source photo once uploaded to storage (cached so no need to re-upload when re-generate is clicked)
   aiUploadedSourceUrl: string | null;
-  customStyleDetail: string;
-  // Used for the most recent generation kept so "Regenerate" can pick a new one
-  aiLastSeed: number | null;
   // The generated (not-yet-confirmed) preview image, held as a Blob + a local object URL for display.
   aiPreviewBlob: Blob | null;
   aiPreviewImageUrl: string | null;
@@ -86,9 +83,6 @@ export const HAIRCUT_STYLE_OPTIONS = [
   'Puppy Cut',
   'Lion Cut',
   'Summer / Short All-Over Trim',
-  'Breed Standard Trim',
-  'Asian Fusion Style',
-  'Custom / Describe Below',
 ];
 
 export const REVERSE_BEHAVIOR_MAP: Record<string, string> = {

@@ -38,7 +38,6 @@ interface PetFormCardProps {
   onUploadPetPhoto: (petId: string, file: File) => void;
   onRemovePetPhoto: (petId: string) => void;
   onGenerateAiPreview: (petId: string) => void;
-  onRegenerateAiPreview: (petId: string) => void;
   onConfirmAiPreview: (petId: string) => void;
   onEditConfirmedAiPreview: (petId: string) => void;
 }
@@ -65,7 +64,6 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
   onUploadPetPhoto,
   onRemovePetPhoto,
   onGenerateAiPreview,
-  onRegenerateAiPreview,
   onConfirmAiPreview,
   onEditConfirmedAiPreview,
 }) => {
@@ -380,7 +378,6 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
             onRemovePetPhoto={onRemovePetPhoto}
             onUpdateField={onUpdateField}
             onGeneratePreview={onGenerateAiPreview}
-            onRegeneratePreview={onRegenerateAiPreview}
             onConfirmPreview={onConfirmAiPreview}
             onEditConfirmedPreview={onEditConfirmedAiPreview}
           />

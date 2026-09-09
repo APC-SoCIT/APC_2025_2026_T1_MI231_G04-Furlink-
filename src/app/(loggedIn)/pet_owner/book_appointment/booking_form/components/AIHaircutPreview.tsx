@@ -19,7 +19,6 @@ interface AIHaircutPreviewProps {
   onRemovePetPhoto: (petId: string) => void;
   onUpdateField: (id: string, field: keyof PetFormData, value: any) => void;
   onGeneratePreview: (petId: string) => void;
-  onRegeneratePreview: (petId: string) => void;
   onConfirmPreview: (petId: string) => void;
   onEditConfirmedPreview: (petId: string) => void;
 }
@@ -30,7 +29,6 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
   onRemovePetPhoto,
   onUpdateField,
   onGeneratePreview,
-  onRegeneratePreview,
   onConfirmPreview,
   onEditConfirmedPreview,
 }) => {
@@ -115,19 +113,6 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
                 </select>
               </div>
 
-              {pet.desiredStyle === 'Custom / Describe Below' && (
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Describe the look you want, e.g. 'short rounded face, fluffy ears'"
-                    value={pet.customStyleDetail}
-                    onChange={(e) => onUpdateField(pet.id, 'customStyleDetail', e.target.value)}
-                    disabled={isBusy}
-                  />
-                </div>
-              )}
-
               <button
                 type="button"
                 className="ai-generate-btn"
@@ -170,14 +155,6 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
                   disabled={isBusy}
                 >
                   <FaCheckCircle /> Confirm this look
-                </button>
-                <button
-                  type="button"
-                  className="ai-regenerate-btn"
-                  onClick={() => onRegeneratePreview(pet.id)}
-                  disabled={isBusy}
-                >
-                  {isBusy ? <FaSpinner className="ai-spin-icon" /> : <FaRedoAlt />} Regenerate
                 </button>
               </div>
             </div>

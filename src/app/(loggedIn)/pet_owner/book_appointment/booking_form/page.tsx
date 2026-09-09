@@ -262,11 +262,10 @@ function BookingFormContent() {
     groomingSpecs: '',
     desiredStyle: 'Lion Cut',
     emergencyConsent: false,
+    // AI Haircut Preview defaults
     aiSourcePhotoFile: null,
     aiSourcePhotoPreview: null,
     aiUploadedSourceUrl: null,
-    customStyleDetail: '',
-    aiLastSeed: null,
     aiPreviewBlob: null,
     aiPreviewImageUrl: null,
     aiPreviewStatus: 'idle',
@@ -479,13 +478,40 @@ function BookingFormContent() {
     return publicData.publicUrl;
   };
 
-  const buildHaircutPrompt = (petType: string, style: string, customDetail: string) => {
-    const styleDescription =
-      style === 'Custom / Describe Below' && customDetail.trim() ? customDetail.trim() : style;
+  const STYLE_DETAILS: Record<string, string> = {
+    'Teddy Bear Cut':
+      'a rounded, plush "teddy bear" trim: fur kept at a medium length all over (roughly 1-1.5 inches), ' +
+      'face and head fur rounded into a full, fluffy circular shape framing the eyes, ears trimmed neatly ' +
+      'but left soft-edged, legs left slightly fuller and rounded at the paws like little pillars, overall ' +
+      'silhouette soft, plush, and evenly rounded with no sharp lines',
+    'Puppy Cut':
+      'a classic all-over "puppy cut": fur trimmed to a short, uniform length (about 1 inch) evenly across ' +
+      'the body, legs, and head, face trimmed short and neat rather than rounded or sculpted, ears trimmed ' +
+      'close to follow their natural shape, tail trimmed short and even, overall look clean, low-maintenance, ' +
+      'and youthful with no dramatic shaping anywhere',
+    'Lion Cut':
+      'a dramatic "lion cut": body fur shaved very short and close to the skin from the ribcage back through ' +
+      'the hindquarters and tail (leaving only a tufted pom at the very tip of the tail), while the fur on the ' +
+      'head, neck, chest, and front legs down to the "elbow" is left long, thick, and voluminous like a mane, ' +
+      'a sharp, visible line where the short-shaved body meets the long mane fur, strong visual contrast between ' +
+      'the shaved and unshaved sections',
+    'Summer / Short All-Over Trim':
+      'a short, practical summer trim: fur clipped very short and uniform (close to 0.5 inch) across the entire ' +
+      'body including legs, head, and tail, no shaping, rounding, or contouring of any kind, ears trimmed close ' +
+      'and flat against the head, the coat should look neat, cool, and minimal with an even buzzed texture ' +
+      'throughout',
+  };
+
+  const buildHaircutPrompt = (petType: string, style: string) => {
+    const petLabel = petType.toLowerCase();
+
+    const styleClause = STYLE_DETAILS[style] ?? `a "${style}" haircut, groomed neatly and evenly`;
     return (
-      `Professional pet grooming after-photo. Keep the exact same ${petType.toLowerCase()} ` +
-      `(same face, same fur color and markings, same pose and background), but re-style its coat ` +
-      `into a "${styleDescription}" haircut. Realistic, well-lit pet salon photo, no text, no watermark.`
+      `Professional pet grooming after-photo. Keep the exact same ${petLabel} ` +
+      `(same face, same eyes, same fur color and markings, same pose, same background, same lighting), ` +
+      `but re-style its coat into ${styleClause}. ` +
+      `The haircut should be clearly and visibly distinct in length and shape from the pet's original coat in the ` +
+      `source photo. Realistic, well-lit pet salon photo, natural fur texture, no text, no watermark.`
     );
   };
 
@@ -524,7 +550,7 @@ function BookingFormContent() {
     patchPetForm(petId, { aiHaircutUrl: null });
   };
 
-  const runAiHaircutGeneration = async (petId: string, forceNewSeed: boolean) => {
+  const runAiHaircutGeneration = async (petId: string) => {
     const pet = petForms.find((p) => p.id === petId);
     if (!pet) return;
 
@@ -534,10 +560,6 @@ function BookingFormContent() {
     }
     if (!pet.desiredStyle) {
       alert('Please select a desired haircut style.');
-      return;
-    }
-    if (pet.desiredStyle === 'Custom / Describe Below' && !pet.customStyleDetail.trim()) {
-      alert('Please describe the look you want for the custom style.');
       return;
     }
 
@@ -556,10 +578,8 @@ function BookingFormContent() {
 
       patchPetForm(petId, { aiPreviewStatus: 'generating', aiPreviewError: null });
 
-      const prompt = buildHaircutPrompt(pet.petType, pet.desiredStyle, pet.customStyleDetail);
-      const seed = forceNewSeed || pet.aiLastSeed === null
-        ? Math.floor(Math.random() * 1_000_000)
-        : pet.aiLastSeed;
+      const prompt = buildHaircutPrompt(pet.petType, pet.desiredStyle);
+      const seed = Math.floor(Math.random() * 1_000_000);
 
       const formData = new FormData();
       const sourceBlob = pet.aiSourcePhotoFile ?? (await (await fetch(sourceUrl)).blob());
@@ -567,7 +587,7 @@ function BookingFormContent() {
       formData.append('prompt', prompt);
       formData.append('model', 'kontext');
       formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
-      formData.append('seed', String(seed)); // add this line
+      formData.append('seed', String(seed));
 
       const response = await fetch(POLLINATIONS_EDIT_ENDPOINT, {
         method: 'POST',
@@ -577,16 +597,30 @@ function BookingFormContent() {
       if (!response.ok) {
         const bodyText = await response.text().catch(() => '');
         console.error('AI preview error:', response.status, response.statusText, bodyText);
+
+        if (response.status === 504) {
+          throw new Error('Too many requests. Please wait about 15 seconds before generating another preview.');
+        }
+
+        if (response.status === 402) {
+          throw new Error('Unable to process your request at this moment. Please try again later.');
+        }
+
         throw new Error(bodyText || `AI service error (${response.status})`);
       }
 
       const blob = await response.blob();
+
+      if (!blob.type.startsWith('image/')) {
+        console.error('Unexpected AI preview content type:', blob.type);
+        throw new Error('The AI service returned an unexpected response. Please try again.');
+      }
+
       const previewObjectUrl = URL.createObjectURL(blob);
 
       patchPetForm(petId, {
         aiPreviewBlob: blob,
         aiPreviewImageUrl: previewObjectUrl,
-        aiLastSeed: seed,
         aiPreviewStatus: 'idle',
         aiPreviewError: null,
         aiHaircutUrl: null,
@@ -601,11 +635,7 @@ function BookingFormContent() {
   };
 
   const handleGenerateAiPreview = (petId: string) => {
-    runAiHaircutGeneration(petId, false);
-  };
-
-  const handleRegenerateAiPreview = (petId: string) => {
-    runAiHaircutGeneration(petId, true);
+    runAiHaircutGeneration(petId);
   };
 
   const handleConfirmAiPreview = async (petId: string) => {
@@ -865,7 +895,6 @@ function BookingFormContent() {
             onUploadPetPhoto={handleUploadPetPhoto}
             onRemovePetPhoto={handleRemovePetPhoto}
             onGenerateAiPreview={handleGenerateAiPreview}
-            onRegenerateAiPreview={handleRegenerateAiPreview}
             onConfirmAiPreview={handleConfirmAiPreview}
             onEditConfirmedAiPreview={handleEditConfirmedAiPreview}
           />
