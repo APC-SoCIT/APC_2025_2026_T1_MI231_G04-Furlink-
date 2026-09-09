@@ -4,107 +4,28 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Footer from '@/components/Footer';
+
 import {
-  FaArrowLeft,
-  FaCalendarAlt,
-  FaPlus,
-  FaTrashAlt,
-  FaExclamationCircle,
-  FaFileUpload,
-  FaExclamation,
-  FaMagic,
-  FaTimes,
-  FaFileAlt,
-  FaTag,
-  FaMinus,
-  FaChevronDown,
-  FaCheckCircle,
-  FaCreditCard,
-  FaTimesCircle,
-  FaClock,
-} from 'react-icons/fa';
+  RegisteredPet,
+  ServiceOption,
+  ServiceWeightOption,
+  SelectedServiceItem,
+  PetFormData,
+  REVERSE_BEHAVIOR_MAP,
+  BEHAVIOR_MAP,
+  DAYS_OF_WEEK,
+} from './types';
+
+import { HeaderBar } from './components/HeaderBar';
+import { InfoSummaryCard } from './components/InfoSummaryCard';
+import { PetFormCard } from './components/PetFormCard';
+import { SummaryModal } from './components/SummaryModal';
+import { SuccessModal } from './components/SuccessModal';
+import { FailedModal } from './components/FailedModal';
+import { PayLaterSuccessModal } from './components/PayLaterSuccessModal';
+import { CapacityModal } from './components/CapacityModal';
+
 import './booking_form.css';
-
-type RegisteredPet = {
-  id: string;
-  pet_name: string;
-  pet_type: 'dog' | 'cat';
-  pet_breed: string;
-  pet_gender: 'male' | 'female';
-  pet_date_of_birth: string;
-  pet_weight: number;
-  pet_behaviors: string[];
-  pet_vaccine_url: string;
-  pet_illness_proof_url: string | null;
-  pet_grooming_notes: string | null;
-  pet_emergency_consent: boolean;
-};
-
-type ServiceOption = {
-  id: string;
-  sp_id: string;
-  service_name: string;
-  service_type: string;
-  service_status: string;
-};
-
-type ServiceWeightOption = {
-  id: string;
-  sp_services_id: string;
-  pet_type: string;
-  pet_size: string;
-  pet_min_weight_range: number;
-  pet_max_weight_range: number;
-  service_price: number;
-  option_status: string;
-};
-
-type SelectedServiceItem = {
-  serviceId: string;
-  matchedOptionId: string | null;
-  price: number;
-};
-
-type PetFormData = {
-  id: string;
-  selectedRegisteredPetId: string;
-  selectedServices: SelectedServiceItem[];
-  serviceError: string | null;
-  petType: 'Dog' | 'Cat';
-  petName: string;
-  breed: string;
-  gender: 'Male' | 'Female';
-  dob: string;
-  weight: string;
-  calculatedSize: string;
-  behaviors: string[];
-  vaccineFile: File | null;
-  vaccineUrl: string | null;
-  illnessFile: File | null;
-  illnessUrl: string | null;
-  groomingSpecs: string;
-  desiredStyle: string;
-  emergencyConsent: boolean;
-};
-
-const REVERSE_BEHAVIOR_MAP: Record<string, string> = {
-  'Friendly / Social': 'friendly',
-  'Aggressive / Reactive': 'aggressive',
-  'Anxious / Nervous': 'anxious',
-  'High Energy': 'energetic',
-  'House Trained': 'trained',
-};
-
-const BEHAVIOR_MAP: Record<string, string> = {
-  friendly: 'Friendly / Social',
-  aggressive: 'Aggressive / Reactive',
-  anxious: 'Anxious / Nervous',
-  energetic: 'High Energy',
-  trained: 'House Trained',
-};
-
-const BEHAVIOR_OPTIONS = Object.values(BEHAVIOR_MAP);
-const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function BookingFormContent() {
   const searchParams = useSearchParams();
@@ -120,31 +41,32 @@ function BookingFormContent() {
   const [slotCapacity, setSlotCapacity] = useState<number>(queryPetsCount || 1);
   const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
   const [userRegisteredPets, setUserRegisteredPets] = useState<RegisteredPet[]>([]);
-
-  // Track created booking ID for status updates
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
 
-  // Modal controls
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
   const [showFailedModal, setShowFailedModal] = useState<boolean>(false);
   const [showPayLaterSuccessModal, setShowPayLaterSuccessModal] = useState<boolean>(false);
-  const [showPaymentBreakdown, setShowPaymentBreakdown] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
 
-  // Payment Retry & 1-Hour Cooldown Logic
   const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
 
+  const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
+  const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
+  const [loadingServices, setLoadingServices] = useState<boolean>(false);
+
+  const [dogBreeds, setDogBreeds] = useState<string[]>([]);
+  const [catBreeds, setCatBreeds] = useState<string[]>([]);
+  const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
+
+  // Cooldown interval timer
   useEffect(() => {
     if (!cooldownUntil) return;
-
     const interval = setInterval(() => {
-      const now = Date.now();
-      const diff = cooldownUntil - now;
-
+      const diff = cooldownUntil - Date.now();
       if (diff <= 0) {
         setCooldownUntil(null);
         setPaymentAttempts(0);
@@ -160,17 +82,7 @@ function BookingFormContent() {
     return () => clearInterval(interval);
   }, [cooldownUntil]);
 
-  // Services and Service Weight Options
-  const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
-  const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
-  const [loadingServices, setLoadingServices] = useState<boolean>(false);
-
-  // Breed API states
-  const [dogBreeds, setDogBreeds] = useState<string[]>([]);
-  const [catBreeds, setCatBreeds] = useState<string[]>([]);
-  const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
-
-  // Automatically detect redirect status from PayMongo
+  // Payment status redirect handlers
   useEffect(() => {
     const handlePaymentSuccess = async () => {
       if (statusParam === 'success') {
@@ -191,14 +103,12 @@ function BookingFormContent() {
         setShowFailedModal(false);
       }
     };
-
     handlePaymentSuccess();
   }, [statusParam, activeBookingId, supabase]);
 
   const formattedDateDisplay = useMemo(() => {
     try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-US', {
+      return new Date(dateStr).toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
@@ -212,8 +122,7 @@ function BookingFormContent() {
   const formatDateForSummary = (dateVal: string) => {
     if (!dateVal) return 'N/A';
     try {
-      const d = new Date(dateVal);
-      return d.toLocaleDateString('en-US', {
+      return new Date(dateVal).toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
@@ -223,10 +132,9 @@ function BookingFormContent() {
     }
   };
 
-  // Fetch Capacity
+  // Fetch Operating Capacity
   useEffect(() => {
     if (!spId || !dateStr) return;
-
     const fetchCapacity = async () => {
       const selectedDay = DAYS_OF_WEEK[new Date(dateStr).getDay()];
       const { data, error } = await supabase
@@ -240,14 +148,12 @@ function BookingFormContent() {
         setSlotCapacity(data.slot_capacity);
       }
     };
-
     fetchCapacity();
   }, [spId, dateStr, supabase]);
 
-  // Fetch Services & options
+  // Fetch Available Services & Options
   useEffect(() => {
     if (!spId) return;
-
     const fetchServicesAndOptions = async () => {
       setLoadingServices(true);
       const { data: svcData, error: svcErr } = await supabase
@@ -258,7 +164,6 @@ function BookingFormContent() {
 
       if (!svcErr && svcData) {
         setAvailableServices(svcData as ServiceOption[]);
-
         const serviceIds = svcData.map((s) => s.id);
         if (serviceIds.length > 0) {
           const { data: optData } = await supabase
@@ -274,16 +179,14 @@ function BookingFormContent() {
       }
       setLoadingServices(false);
     };
-
     fetchServicesAndOptions();
   }, [spId, supabase]);
 
-  // Fetch User Registered Pets
+  // Fetch Registered Pets
   useEffect(() => {
     const fetchRegisteredPets = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data, error } = await supabase
         .from('po_registered_pet')
         .select('*')
@@ -293,11 +196,10 @@ function BookingFormContent() {
         setUserRegisteredPets(data as RegisteredPet[]);
       }
     };
-
     fetchRegisteredPets();
   }, [supabase]);
 
-  // Fetch Breeds
+  // Fetch External Breeds
   useEffect(() => {
     const fetchBreeds = async () => {
       setLoadingBreeds(true);
@@ -317,8 +219,7 @@ function BookingFormContent() {
                 breedList.push(formatted);
               });
             } else {
-              const formatted = mainBreed.charAt(0).toUpperCase() + mainBreed.slice(1);
-              breedList.push(formatted);
+              breedList.push(mainBreed.charAt(0).toUpperCase() + mainBreed.slice(1));
             }
           });
           setDogBreeds(breedList.sort());
@@ -335,7 +236,6 @@ function BookingFormContent() {
         setLoadingBreeds(false);
       }
     };
-
     fetchBreeds();
   }, []);
 
@@ -382,32 +282,20 @@ function BookingFormContent() {
     }
 
     let detectedSize = 'AUTO-CALC';
-
     const updatedServices = selectedSvcs.map((item) => {
       if (!item.serviceId) return { ...item, price: 0, matchedOptionId: null };
 
       const matched = serviceWeightOptions.find((opt) => {
         if (opt.sp_services_id !== item.serviceId) return false;
-
-        const isTypeMatch =
-          opt.pet_type === 'both_dog_cat' || opt.pet_type === targetPetType;
-
-        const isWeightMatch =
-          w >= Number(opt.pet_min_weight_range) && w <= Number(opt.pet_max_weight_range);
-
+        const isTypeMatch = opt.pet_type === 'both_dog_cat' || opt.pet_type === targetPetType;
+        const isWeightMatch = w >= Number(opt.pet_min_weight_range) && w <= Number(opt.pet_max_weight_range);
         return isTypeMatch && isWeightMatch;
       });
 
       if (matched) {
         detectedSize = matched.pet_size;
-
-        return {
-          ...item,
-          matchedOptionId: matched.id,
-          price: Number(matched.service_price),
-        };
+        return { ...item, matchedOptionId: matched.id, price: Number(matched.service_price) };
       }
-
       return { ...item, matchedOptionId: null, price: 0 };
     });
 
@@ -431,7 +319,6 @@ function BookingFormContent() {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== id) return pet;
-
         const updatedPet = { ...pet, [field]: value };
 
         if (field === 'weight' || field === 'petType') {
@@ -453,7 +340,6 @@ function BookingFormContent() {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== petId) return pet;
-
         const currentServices = [...pet.selectedServices];
         currentServices[index] = { serviceId, matchedOptionId: null, price: 0 };
 
@@ -477,21 +363,13 @@ function BookingFormContent() {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== petId) return pet;
-
         const lastService = pet.selectedServices[pet.selectedServices.length - 1];
         if (!lastService?.serviceId) {
-          return {
-            ...pet,
-            serviceError: 'Please select a service before adding another field.',
-          };
+          return { ...pet, serviceError: 'Please select a service before adding another field.' };
         }
-
         return {
           ...pet,
-          selectedServices: [
-            ...pet.selectedServices,
-            { serviceId: '', matchedOptionId: null, price: 0 },
-          ],
+          selectedServices: [...pet.selectedServices, { serviceId: '', matchedOptionId: null, price: 0 }],
           serviceError: null,
         };
       })
@@ -501,9 +379,7 @@ function BookingFormContent() {
   const handleRemoveServiceField = (petId: string, index: number) => {
     setPetForms((prev) =>
       prev.map((pet) => {
-        if (pet.id !== petId) return pet;
-        if (pet.selectedServices.length <= 1) return pet;
-
+        if (pet.id !== petId || pet.selectedServices.length <= 1) return pet;
         const updatedServices = pet.selectedServices.filter((_, i) => i !== index);
         const { sizeLabel, updatedServices: recalculated } = calculateSizeAndPrice(
           pet.weight,
@@ -523,7 +399,6 @@ function BookingFormContent() {
 
   const handleAutofillPet = (formId: string, registeredPetId: string) => {
     const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
-
     if (!selectedPet) {
       updatePetField(formId, 'selectedRegisteredPetId', '');
       return;
@@ -536,15 +411,9 @@ function BookingFormContent() {
     setPetForms((prev) =>
       prev.map((pet) => {
         if (pet.id !== formId) return pet;
-
         const pType = selectedPet.pet_type.toLowerCase() === 'cat' ? 'Cat' : 'Dog';
         const weightVal = selectedPet.pet_weight.toString();
-
-        const { sizeLabel, updatedServices } = calculateSizeAndPrice(
-          weightVal,
-          pType,
-          pet.selectedServices
-        );
+        const { sizeLabel, updatedServices } = calculateSizeAndPrice(weightVal, pType, pet.selectedServices);
 
         return {
           ...pet,
@@ -574,18 +443,10 @@ function BookingFormContent() {
       prev.map((pet) => {
         if (pet.id !== id) return pet;
         const exists = pet.behaviors.includes(behavior);
-        const updated = exists
-          ? pet.behaviors.filter((b) => b !== behavior)
-          : [...pet.behaviors, behavior];
+        const updated = exists ? pet.behaviors.filter((b) => b !== behavior) : [...pet.behaviors, behavior];
         return { ...pet, behaviors: updated };
       })
     );
-  };
-
-  const isImageFile = (file: File | null, url: string | null) => {
-    if (file) return file.type.startsWith('image/');
-    if (url) return /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url);
-    return false;
   };
 
   const grandTotal = useMemo(() => {
@@ -605,12 +466,9 @@ function BookingFormContent() {
     return publicData.publicUrl;
   };
 
-  // Process Booking Database Records (REFACTORED FOR MULTI-PET SUPPORT)
   const createBookingInDatabase = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('User authentication failed. Please log in again.');
-    }
+    if (!user) throw new Error('User authentication failed. Please log in again.');
 
     let currentBookingId = activeBookingId;
 
@@ -628,10 +486,7 @@ function BookingFormContent() {
         .select()
         .single();
 
-      if (bookingErr || !bookingData) {
-        throw new Error(bookingErr?.message || 'Failed to create booking.');
-      }
-
+      if (bookingErr || !bookingData) throw new Error(bookingErr?.message || 'Failed to create booking.');
       currentBookingId = bookingData.id;
       setActiveBookingId(currentBookingId);
     }
@@ -673,9 +528,7 @@ function BookingFormContent() {
           .select()
           .single();
 
-        if (regErr || !newRegPet) {
-          throw new Error(regErr?.message || 'Failed to register pet context.');
-        }
+        if (regErr || !newRegPet) throw new Error(regErr?.message || 'Failed to register pet context.');
         regPetId = newRegPet.id;
       }
 
@@ -706,9 +559,7 @@ function BookingFormContent() {
         .select()
         .single();
 
-      if (petInfoErr || !petInfoData) {
-        throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
-      }
+      if (petInfoErr || !petInfoData) throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
 
       const servicesToInsert = pet.selectedServices
         .filter((svcItem) => svcItem.matchedOptionId)
@@ -728,22 +579,18 @@ function BookingFormContent() {
           .from('booking_service_info')
           .insert(servicesToInsert);
 
-        if (svcInsertErr) {
-          throw new Error(svcInsertErr.message);
-        }
+        if (svcInsertErr) throw new Error(svcInsertErr.message);
       }
     }
 
     return { bookingInfoId: currentBookingId, userId: user.id };
   };
 
-  // Launch PayMongo Session with Retry Threshold
   const handleConfirmBooking = async () => {
     if (grandTotal <= 0) {
-      alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s) before proceeding.');
+      alert('Invalid Booking: Total amount cannot be ₱0.00.');
       return;
     }
-
     if (cooldownUntil && Date.now() < cooldownUntil) {
       alert(`Payment attempts exceeded. Please try again in ${timeRemaining}.`);
       return;
@@ -754,7 +601,6 @@ function BookingFormContent() {
 
     try {
       const { bookingInfoId } = await createBookingInDatabase();
-
       const response = await fetch('/api/paymongo/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -766,23 +612,15 @@ function BookingFormContent() {
       });
 
       const result = await response.json();
-
-      if (!response.ok || !result.checkoutUrl) {
-        throw new Error(result.error || 'Failed to initialize payment.');
-      }
+      if (!response.ok || !result.checkoutUrl) throw new Error(result.error || 'Failed to initialize payment.');
 
       const nextAttempts = paymentAttempts + 1;
       setPaymentAttempts(nextAttempts);
-
-      if (nextAttempts >= 3) {
-        setCooldownUntil(Date.now() + 60 * 60 * 1000);
-      }
+      if (nextAttempts >= 3) setCooldownUntil(Date.now() + 60 * 60 * 1000);
 
       window.open(result.checkoutUrl, '_blank');
-      
       setShowSummaryModal(false);
       setIsSubmitting(false);
-
     } catch (err: any) {
       console.error('Booking processing error:', err);
       alert(`Booking Error: ${err.message || 'An error occurred while initiating payment.'}`);
@@ -790,25 +628,21 @@ function BookingFormContent() {
     }
   };
 
-  // Handle Pay Later action
   const handlePayLater = async () => {
     if (grandTotal <= 0) {
-      alert('Invalid Booking: Total amount cannot be ₱0.00. Please select valid services for your pet(s).');
+      alert('Invalid Booking: Total amount cannot be ₱0.00.');
       return;
     }
 
     setIsSavingPayLater(true);
     try {
       const { bookingInfoId } = await createBookingInDatabase();
-
       const { error: updateErr } = await supabase
         .from('booking_info')
         .update({ booking_status: 'to pay' })
         .eq('id', bookingInfoId);
 
-      if (updateErr) {
-        throw new Error(updateErr.message);
-      }
+      if (updateErr) throw new Error(updateErr.message);
 
       setShowFailedModal(false);
       setShowPayLaterSuccessModal(true);
@@ -820,647 +654,94 @@ function BookingFormContent() {
     }
   };
 
-  const handleConfirmPayLaterRedirect = () => {
-    setShowPayLaterSuccessModal(false);
-    router.push('/pet_owner/manage_bookings');
-  };
-
   return (
     <div className="booking-form-page">
       <main className="booking-form-main">
-        <div className="form-header-bar">
-          <button className="back-circle-btn" onClick={() => router.back()}>
-            <FaArrowLeft />
-          </button>
-          <h1 className="form-main-title">Pet Information</h1>
-        </div>
+        <HeaderBar onBack={() => router.back()} />
 
-        {/* Date & Pricing Summary Bar */}
-        <div className="info-summary-card">
-          <div className="summary-left">
-            <div className="summary-date flex-item">
-              <FaCalendarAlt className="summary-icon" />
-              <span>{`${formattedDateDisplay} at ${timeSlot}`}</span>
-            </div>
-            <div className="summary-total">
-              Total Amount: ₱{grandTotal.toFixed(2)}
-            </div>
-          </div>
+        <InfoSummaryCard
+          dateDisplay={formattedDateDisplay}
+          timeSlot={timeSlot}
+          grandTotal={grandTotal}
+          onProceed={() => setShowSummaryModal(true)}
+        />
 
-          <div className="summary-right">
-            <button className="proceed-btn" onClick={() => setShowSummaryModal(true)}>
-              Proceed to Summary
-            </button>
-          </div>
-        </div>
-
-        {petForms.map((pet, index) => {
-          const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
-          const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
-
-          return (
-            <div key={pet.id} className="pet-form-card">
-              <div className="pet-card-header">
-                <div className="pet-badge-tag">Pet #{index + 1}</div>
-                <div className="pet-header-actions">
-                  <span className="pet-price">₱{petFormTotal.toFixed(2)}</span>
-
-                  {index === petForms.length - 1 && (
-                    <button
-                      type="button"
-                      className="icon-action-btn add-btn"
-                      onClick={handleAddPet}
-                      title="Add another pet slot"
-                    >
-                      <FaPlus />
-                    </button>
-                  )}
-
-                  {petForms.length > 1 && (
-                    <button
-                      type="button"
-                      className="icon-action-btn delete-btn"
-                      onClick={() => handleDeletePet(pet.id)}
-                      title="Remove pet form"
-                    >
-                      <FaTrashAlt />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Autofill Registered Pet Selector */}
-              {userRegisteredPets.length > 0 && (
-                <div className="autofill-banner-box">
-                  <div className="autofill-label">
-                    <FaMagic className="magic-icon" />
-                    <span>Autofill from Registered Pets</span>
-                  </div>
-                  <select
-                    className="form-control autofill-select"
-                    value={pet.selectedRegisteredPetId}
-                    onChange={(e) => handleAutofillPet(pet.id, e.target.value)}
-                  >
-                    <option value="">-- Choose a Registered Pet --</option>
-                    {userRegisteredPets.map((regPet) => (
-                      <option key={regPet.id} value={regPet.id}>
-                        {regPet.pet_name} ({regPet.pet_type} - {regPet.pet_breed})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Service Selection */}
-              <div className="section-block">
-                <h3 className="block-title">Service Selection</h3>
-
-                {pet.selectedServices.map((svcItem, sIdx) => (
-                  <div key={sIdx} className="form-group service-row-group">
-                    <label className="field-label flex-label">
-                      <FaTag className="tag-icon" /> Select Service {sIdx + 1} *
-                    </label>
-                    <div className="input-with-action">
-                      <select
-                        className="form-control"
-                        value={svcItem.serviceId}
-                        onChange={(e) => handleServiceChange(pet.id, sIdx, e.target.value)}
-                        disabled={loadingServices}
-                      >
-                        <option value="">
-                          {loadingServices ? 'Loading services...' : 'Choose a Service'}
-                        </option>
-                        {availableServices.map((service) => (
-                          <option key={service.id} value={service.id}>
-                            {service.service_name} ({service.service_type === 'individual_service' ? 'Individual' : 'Package'})
-                          </option>
-                        ))}
-                      </select>
-
-                      {sIdx === pet.selectedServices.length - 1 && (
-                        <button
-                          type="button"
-                          className="add-service-btn"
-                          onClick={() => handleAddServiceField(pet.id)}
-                          title="Add another service"
-                        >
-                          <FaPlus />
-                        </button>
-                      )}
-
-                      {pet.selectedServices.length > 1 && (
-                        <button
-                          type="button"
-                          className="remove-service-btn"
-                          onClick={() => handleRemoveServiceField(pet.id, sIdx)}
-                          title="Remove service"
-                        >
-                          <FaMinus />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {pet.serviceError && (
-                  <div className="service-error-alert">
-                    <FaExclamationCircle className="alert-icon" />
-                    <span>{pet.serviceError}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Pet Information */}
-              <div className="section-block">
-                <h3 className="block-title">Pet Information</h3>
-
-                <div className="form-grid-two">
-                  <div className="form-group">
-                    <label className="field-label">Pet Type *</label>
-                    <select
-                      className="form-control"
-                      value={pet.petType}
-                      onChange={(e) => {
-                        const newType = e.target.value as 'Dog' | 'Cat';
-                        updatePetField(pet.id, 'petType', newType);
-                        updatePetField(pet.id, 'breed', '');
-                      }}
-                    >
-                      <option value="Dog">Dog</option>
-                      <option value="Cat">Cat</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="field-label">Pet's Name *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Pet Name"
-                      value={pet.petName}
-                      onChange={(e) => updatePetField(pet.id, 'petName', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-grid-two">
-                  <div className="form-group">
-                    <label className="field-label">Breed *</label>
-                    <select
-                      className="form-control"
-                      value={pet.breed}
-                      onChange={(e) => updatePetField(pet.id, 'breed', e.target.value)}
-                      disabled={loadingBreeds}
-                    >
-                      <option value="">
-                        {loadingBreeds ? 'Loading breeds...' : '-- Select Breed --'}
-                      </option>
-                      {currentBreedList.map((b) => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                      <option value="Mixed Breed / Other">Mixed Breed / Other</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="field-label">Gender *</label>
-                    <select
-                      className="form-control"
-                      value={pet.gender}
-                      onChange={(e) => updatePetField(pet.id, 'gender', e.target.value as 'Male' | 'Female')}
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-grid-two">
-                  <div className="form-group">
-                    <label className="field-label">Date of Birth *</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={pet.dob}
-                      onChange={(e) => updatePetField(pet.id, 'dob', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="field-label">Weight (kg) *</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="form-control"
-                      placeholder="0.0"
-                      value={pet.weight}
-                      onChange={(e) => updatePetField(pet.id, 'weight', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Calculated Size Badge */}
-                <div className="calc-size-box">
-                  Calculated Size: <strong>{pet.calculatedSize.toUpperCase()}</strong>
-                </div>
-
-                {/* Behaviors */}
-                <div className="form-group">
-                  <label className="field-label">Pet Behavior *</label>
-                  <div className="checkbox-row">
-                    {BEHAVIOR_OPTIONS.map((opt) => (
-                      <label key={opt} className="custom-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={pet.behaviors.includes(opt)}
-                          onChange={() => toggleBehavior(pet.id, opt)}
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Medical Records */}
-                <div className="form-group">
-                  <label className="field-label">Medical Records</label>
-                  <div className="medical-records-grid">
-                    {pet.vaccineFile || pet.vaccineUrl ? (
-                      <div className="file-preview-card">
-                        <button
-                          type="button"
-                          className="remove-file-badge"
-                          onClick={() => {
-                            updatePetField(pet.id, 'vaccineFile', null);
-                            updatePetField(pet.id, 'vaccineUrl', null);
-                          }}
-                          title="Remove file"
-                        >
-                          <FaTimes />
-                        </button>
-
-                        {isImageFile(pet.vaccineFile, pet.vaccineUrl) ? (
-                          <img
-                            src={
-                              pet.vaccineFile
-                                ? URL.createObjectURL(pet.vaccineFile)
-                                : pet.vaccineUrl!
-                            }
-                            alt="Vaccine Record"
-                            className="record-preview-img"
-                          />
-                        ) : (
-                          <div className="file-doc-placeholder">
-                            <FaFileAlt className="doc-icon" />
-                            <span>Vaccine Record</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <label className="upload-dropzone">
-                        <FaFileUpload className="upload-icon" />
-                        <span>Vaccine Record *</span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          hidden
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              updatePetField(pet.id, 'vaccineFile', file);
-                              updatePetField(pet.id, 'vaccineUrl', null);
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-
-                    {pet.illnessFile || pet.illnessUrl ? (
-                      <div className="file-preview-card">
-                        <button
-                          type="button"
-                          className="remove-file-badge"
-                          onClick={() => {
-                            updatePetField(pet.id, 'illnessFile', null);
-                            updatePetField(pet.id, 'illnessUrl', null);
-                          }}
-                          title="Remove file"
-                        >
-                          <FaTimes />
-                        </button>
-
-                        {isImageFile(pet.illnessFile, pet.illnessUrl) ? (
-                          <img
-                            src={
-                              pet.illnessFile
-                                ? URL.createObjectURL(pet.illnessFile)
-                                : pet.illnessUrl!
-                            }
-                            alt="Illness Record"
-                            className="record-preview-img"
-                          />
-                        ) : (
-                          <div className="file-doc-placeholder">
-                            <FaFileAlt className="doc-icon" />
-                            <span>Illness Record</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <label className="upload-dropzone">
-                        <FaFileUpload className="upload-icon" />
-                        <span>Illness Record</span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          hidden
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              updatePetField(pet.id, 'illnessFile', file);
-                              updatePetField(pet.id, 'illnessUrl', null);
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grooming Specifications */}
-                <div className="form-group">
-                  <label className="field-label">Grooming Specifications</label>
-                  <textarea
-                    rows={3}
-                    className="form-control"
-                    placeholder="e.g., leave the tail fluffy, trim short around eyes..."
-                    value={pet.groomingSpecs}
-                    onChange={(e) => updatePetField(pet.id, 'groomingSpecs', e.target.value)}
-                  />
-                </div>
-
-                {/* Emergency Consent Checkbox */}
-                <div className="form-group consent-check">
-                  <label className="custom-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={pet.emergencyConsent}
-                      onChange={(e) => updatePetField(pet.id, 'emergencyConsent', e.target.checked)}
-                    />
-                    <span>
-                      I agree that in a critical emergency, the Provider has permission to transport my pet to the nearest emergency facility.
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {petForms.map((pet, index) => (
+          <PetFormCard
+            key={pet.id}
+            pet={pet}
+            index={index}
+            isLast={index === petForms.length - 1}
+            totalPets={petForms.length}
+            userRegisteredPets={userRegisteredPets}
+            availableServices={availableServices}
+            loadingServices={loadingServices}
+            dogBreeds={dogBreeds}
+            catBreeds={catBreeds}
+            loadingBreeds={loadingBreeds}
+            onAddPet={handleAddPet}
+            onDeletePet={handleDeletePet}
+            onUpdateField={updatePetField}
+            onServiceChange={handleServiceChange}
+            onAddServiceField={handleAddServiceField}
+            onRemoveServiceField={handleRemoveServiceField}
+            onAutofillPet={handleAutofillPet}
+            onToggleBehavior={toggleBehavior}
+          />
+        ))}
       </main>
 
-      {/* 1. BOOKING CONFIRMATION SUMMARY MODAL */}
+      {/* Summary Modal */}
       {showSummaryModal && (
-        <div className="modal-backdrop">
-          <div className="summary-modal-card">
-            <div className="summary-modal-header">
-              <div className="modal-header-title">
-                <FaFileAlt className="header-doc-icon" />
-                <h2>Booking Confirmation</h2>
-              </div>
-              <button
-                className="modal-close-x"
-                onClick={() => setShowSummaryModal(false)}
-                disabled={isSubmitting}
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="summary-modal-body">
-              {petForms.map((pet, pIdx) => {
-                const petTotal = pet.selectedServices.reduce((sum, s) => sum + s.price, 0);
-
-                return (
-                  <div key={pet.id} className="summary-pet-card">
-                    <div className="summary-pet-top">
-                      <h3 className="summary-pet-name">
-                        Pet #{pIdx + 1}: {pet.petName || 'Unnamed Pet'}
-                      </h3>
-                      <div className="summary-pet-total-box">
-                        <span className="summary-pet-total-label">Pet Total</span>
-                        <span className="summary-pet-total-val">₱{petTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="summary-pet-info-grid">
-                      <div>Type: <strong>{pet.petType}</strong></div>
-                      <div>Breed: <strong>{pet.breed || 'N/A'}</strong></div>
-                      <div>Gender: <strong>{pet.gender}</strong></div>
-                      <div>Birth Date: <strong>{formatDateForSummary(pet.dob)}</strong></div>
-                      <div>Weight: <strong>{pet.weight ? `${pet.weight} kg` : 'N/A'}</strong></div>
-                      <div>Size: <strong>{pet.calculatedSize.toUpperCase()}</strong></div>
-                    </div>
-
-                    <div className="summary-services-box">
-                      <div className="availed-title">AVAILED SERVICES:</div>
-                      {pet.selectedServices.map((sItem, sIndex) => {
-                        const matchedSvc = availableServices.find((s) => s.id === sItem.serviceId);
-                        return (
-                          <div key={sIndex} className="availed-service-item">
-                            <span>• {matchedSvc ? matchedSvc.service_name : 'No service selected'}</span>
-                            <span>₱{sItem.price.toFixed(2)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="summary-behaviors">
-                      Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
-                    </div>
-
-                    <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
-                      <FaExclamationCircle />
-                      <span>
-                        Emergency Transport Consent: {pet.emergencyConsent ? 'APPROVED' : 'DECLINED'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <hr className="summary-divider" />
-
-              <div className="paymongo-supported-methods">
-                <div className="payment-notice-header">
-                  <FaCreditCard className="pay-icon" />
-                  <span>Secure Online Payment via PayMongo</span>
-                </div>
-                <div className="payment-badges-list">
-                  <span className="pay-badge gcash">GCash</span>
-                  <span className="pay-badge maya">Maya</span>
-                  <span className="pay-badge card">Cards</span>
-                  <span className="pay-badge qrph">QR Ph</span>
-                </div>
-              </div>
-
-              <div className="summary-financials">
-                <div className="financial-row total-row">
-                  <span>Total Service Amount (VAT Inclusive):</span>
-                  <span className="amount-bold">₱{grandTotal.toFixed(2)}</span>
-                </div>
-
-                <div className="breakdown-toggle-box">
-                  <button
-                    className="toggle-breakdown-btn"
-                    onClick={() => setShowPaymentBreakdown(!showPaymentBreakdown)}
-                  >
-                    <span>See payment breakdown</span>
-                    <FaChevronDown className={`chevron-icon ${showPaymentBreakdown ? 'open' : ''}`} />
-                  </button>
-
-                  {showPaymentBreakdown && (
-                    <div className="payment-breakdown-details">
-                      {petForms.map((p, idx) => (
-                        <div key={p.id} className="breakdown-item">
-                          <span>Pet #{idx + 1} ({p.petName || 'Unnamed'}):</span>
-                          <span>₱{p.selectedServices.reduce((a, b) => a + b.price, 0).toFixed(2)}</span>
-                        </div>
-                      ))}
-                      <hr className="breakdown-dashed-hr" />
-                      <div className="breakdown-item bold-item">
-                        <span>Grand Total:</span>
-                        <span>₱{grandTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="summary-modal-footer">
-              <button
-                className="btn-back-edit"
-                onClick={() => setShowSummaryModal(false)}
-                disabled={isSubmitting}
-              >
-                Back to Edit
-              </button>
-              <button
-                className="btn-confirm-booking"
-                onClick={handleConfirmBooking}
-                disabled={isSubmitting || cooldownUntil !== null || grandTotal <= 0}
-              >
-                {isSubmitting ? 'Opening Gateway...' : cooldownUntil ? 'Payment Locked' : 'Pay with PayMongo'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SummaryModal
+          petForms={petForms}
+          availableServices={availableServices}
+          grandTotal={grandTotal}
+          isSubmitting={isSubmitting}
+          cooldownUntil={cooldownUntil}
+          formatDateForSummary={formatDateForSummary}
+          onClose={() => setShowSummaryModal(false)}
+          onConfirm={handleConfirmBooking}
+        />
       )}
 
-      {/* 2. PAYMENT COMPLETED SUCCESS MODAL */}
+      {/* Success Modal */}
       {showSuccessModal && (
-        <div className="modal-backdrop">
-          <div className="success-modal-card">
-            <div className="success-icon-wrapper">
-              <FaCheckCircle className="success-green-check" />
-            </div>
-            <h2 className="success-title">Payment Completed!</h2>
-            <p className="success-message">
-              Your payment has been successfully processed and your booking request is submitted. Please wait for the provider to confirm your slot.
-            </p>
-            <button className="btn-return-home" onClick={() => router.push('/pet_owner/manage_bookings')}>
-              Go to Manage Bookings
-            </button>
-          </div>
-        </div>
+        <SuccessModal onRedirect={() => router.push('/pet_owner/manage_bookings')} />
       )}
 
-      {/* 3. PAYMENT FAILED / INCOMPLETE MODAL WITH RETRY & COOLDOWN */}
+      {/* Failed Modal */}
       {showFailedModal && !showSuccessModal && (
-        <div className="modal-backdrop">
-          <div className="success-modal-card">
-            <div className="failed-icon-wrapper">
-              <FaTimesCircle className="failed-red-cross" />
-            </div>
-            <h2 className="failed-title">Payment Incomplete or Cancelled</h2>
-            
-            {cooldownUntil ? (
-              <p className="success-message">
-                You have reached the maximum number of payment attempts (3/3). Online payment attempts are temporarily locked. Please try again in <strong>{timeRemaining}</strong> or choose <strong>Pay Later</strong>.
-              </p>
-            ) : (
-              <p className="success-message">
-                Your payment transaction was not completed. You have <strong>{3 - paymentAttempts}</strong> attempt(s) remaining before a 1-hour cooldown.
-              </p>
-            )}
-
-            <div className="failed-modal-actions">
-              <button
-                className="btn-try-again"
-                disabled={isSavingPayLater || cooldownUntil !== null}
-                onClick={() => {
-                  setShowFailedModal(false);
-                  setShowSummaryModal(true);
-                }}
-              >
-                {cooldownUntil ? 'Locked' : 'Try Again'}
-              </button>
-              <button
-                className="btn-pay-later"
-                disabled={isSavingPayLater}
-                onClick={handlePayLater}
-              >
-                <FaClock />
-                {isSavingPayLater ? 'Saving...' : 'Pay Later'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FailedModal
+          cooldownUntil={cooldownUntil}
+          timeRemaining={timeRemaining}
+          paymentAttempts={paymentAttempts}
+          isSavingPayLater={isSavingPayLater}
+          onRetry={() => {
+            setShowFailedModal(false);
+            setShowSummaryModal(true);
+          }}
+          onPayLater={handlePayLater}
+        />
       )}
 
-      {/* 4. PAY LATER SUCCESS CONFIRMATION MODAL */}
+      {/* Pay Later Modal */}
       {showPayLaterSuccessModal && (
-        <div className="modal-backdrop">
-          <div className="success-modal-card">
-            <div className="success-icon-wrapper">
-              <FaCheckCircle className="success-green-check" />
-            </div>
-            <h2 className="success-title">Booking Saved!</h2>
-            <p className="success-message">
-              Your booking status has been updated to <strong>"To Pay"</strong>. You can view and manage your booking anytime from your appointments dashboard.
-            </p>
-            <button 
-              className="btn-return-home" 
-              onClick={handleConfirmPayLaterRedirect}
-            >
-              Go to Manage Bookings
-            </button>
-          </div>
-        </div>
+        <PayLaterSuccessModal
+          onRedirect={() => {
+            setShowPayLaterSuccessModal(false);
+            router.push('/pet_owner/manage_bookings');
+          }}
+        />
       )}
 
-      {/* Capacity Reached Modal */}
+      {/* Capacity Modal */}
       {showCapacityModal && (
-        <div className="capacity-modal-overlay">
-          <div className="capacity-modal-card">
-            <div className="capacity-icon-circle">
-              <FaExclamation className="capacity-exclamation-icon" />
-            </div>
-            <h2 className="capacity-modal-title">Capacity Reached</h2>
-            <p className="capacity-modal-message">
-              We apologize, but this shop only has <strong>{slotCapacity} slot(s)</strong> remaining for your selected time:
-            </p>
-            <p className="capacity-modal-time">
-              <strong>{timeSlot}</strong>.
-            </p>
-            <button
-              className="capacity-modal-btn"
-              onClick={() => setShowCapacityModal(false)}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
+        <CapacityModal
+          slotCapacity={slotCapacity}
+          timeSlot={timeSlot}
+          onClose={() => setShowCapacityModal(false)}
+        />
       )}
 
       <Footer />
