@@ -1,0 +1,80 @@
+export type RegisteredPet = {
+  id: string;
+  pet_name: string;
+  pet_type: 'dog' | 'cat';
+  pet_breed: string;
+  pet_gender: 'male' | 'female';
+  pet_date_of_birth: string;
+  pet_weight: number;
+  pet_behaviors: string[];
+  pet_vaccine_url: string;
+  pet_illness_proof_url: string | null;
+  pet_grooming_notes: string | null;
+  pet_emergency_consent: boolean;
+};
+
+export type ServiceOption = {
+  id: string;
+  sp_id: string;
+  service_name: string;
+  service_type: string;
+  service_status: string;
+};
+
+export type ServiceWeightOption = {
+  id: string;
+  sp_services_id: string;
+  pet_type: string;
+  pet_size: string;
+  pet_min_weight_range: number;
+  pet_max_weight_range: number;
+  service_price: number;
+  option_status: string;
+};
+
+export type SelectedServiceItem = {
+  serviceId: string;
+  matchedOptionId: string | null;
+  price: number;
+};
+
+export type PetFormData = {
+  id: string;
+  selectedRegisteredPetId: string;
+  selectedServices: SelectedServiceItem[];
+  serviceError: string | null;
+  petType: 'Dog' | 'Cat';
+  petName: string;
+  breed: string;
+  gender: 'Male' | 'Female';
+  dob: string;
+  weight: string;
+  calculatedSize: string;
+  behaviors: string[];
+  vaccineFile: File | null;
+  vaccineUrl: string | null;
+  illnessFile: File | null;
+  illnessUrl: string | null;
+  groomingSpecs: string;
+  desiredStyle: string;
+  emergencyConsent: boolean;
+};
+
+export const REVERSE_BEHAVIOR_MAP: Record<string, string> = {
+  'Friendly / Social': 'friendly',
+  'Aggressive / Reactive': 'aggressive',
+  'Anxious / Nervous': 'anxious',
+  'High Energy': 'energetic',
+  'House Trained': 'trained',
+};
+
+export const BEHAVIOR_MAP: Record<string, string> = {
+  friendly: 'Friendly / Social',
+  aggressive: 'Aggressive / Reactive',
+  anxious: 'Anxious / Nervous',
+  energetic: 'High Energy',
+  trained: 'House Trained',
+};
+
+export const BEHAVIOR_OPTIONS = Object.values(BEHAVIOR_MAP);
+export const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
