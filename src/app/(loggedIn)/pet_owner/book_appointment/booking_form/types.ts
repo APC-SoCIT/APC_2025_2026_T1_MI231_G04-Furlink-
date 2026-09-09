@@ -38,6 +38,9 @@ export type SelectedServiceItem = {
   price: number;
 };
 
+// Status of the AI haircut preview generation lifecycle for a single pet form.
+export type AiPreviewStatus = 'idle' | 'uploading' | 'generating' | 'error';
+
 export type PetFormData = {
   id: string;
   selectedRegisteredPetId: string;
@@ -58,7 +61,35 @@ export type PetFormData = {
   groomingSpecs: string;
   desiredStyle: string;
   emergencyConsent: boolean;
+
+  // Raw photo the pet owner uploaded to use as the source for the AI preview
+  aiSourcePhotoFile: File | null;
+  // Local preview of the uploaded source photo
+  aiSourcePhotoPreview: string | null;
+  // Public url of the source photo once uploaded to storage (cached so no need to re-upload when re-generate is clicked)
+  aiUploadedSourceUrl: string | null;
+  customStyleDetail: string;
+  // Used for the most recent generation kept so "Regenerate" can pick a new one
+  aiLastSeed: number | null;
+  // The generated (not-yet-confirmed) preview image, held as a Blob + a local object URL for display.
+  aiPreviewBlob: Blob | null;
+  aiPreviewImageUrl: string | null;
+  aiPreviewStatus: AiPreviewStatus;
+  aiPreviewError: string | null;
+  // Once the pet owner confirms a preview, it is uploaded to permanent storage and its public URL
+  // lives here. This maps directly to booking_pet_info.booking_ai_haircut_url.
+  aiHaircutUrl: string | null;
 };
+
+export const HAIRCUT_STYLE_OPTIONS = [
+  'Teddy Bear Cut',
+  'Puppy Cut',
+  'Lion Cut',
+  'Summer / Short All-Over Trim',
+  'Breed Standard Trim',
+  'Asian Fusion Style',
+  'Custom / Describe Below',
+];
 
 export const REVERSE_BEHAVIOR_MAP: Record<string, string> = {
   'Friendly / Social': 'friendly',

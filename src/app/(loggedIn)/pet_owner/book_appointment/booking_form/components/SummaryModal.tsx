@@ -7,6 +7,7 @@ import {
   FaExclamationCircle,
   FaCreditCard,
   FaChevronDown,
+  FaMagic,
 } from 'react-icons/fa';
 import { PetFormData, ServiceOption } from '../types';
 
@@ -86,6 +87,15 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
                 <div className="summary-behaviors">
                   Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
                 </div>
+
+                {pet.aiHaircutUrl && (
+                  <div className="summary-ai-haircut-box">
+                    <div className="summary-ai-haircut-label">
+                      <FaMagic /> AI Haircut Preview ({pet.desiredStyle}):
+                    </div>
+                    <img src={pet.aiHaircutUrl} alt={`${pet.petName || 'Pet'} AI haircut preview`} className="summary-ai-haircut-img" />
+                  </div>
+                )}
 
                 <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
                   <FaExclamationCircle />

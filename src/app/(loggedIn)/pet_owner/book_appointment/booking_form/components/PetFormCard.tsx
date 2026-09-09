@@ -13,6 +13,7 @@ import {
   FaFileAlt,
 } from 'react-icons/fa';
 import { PetFormData, RegisteredPet, ServiceOption, BEHAVIOR_OPTIONS } from '../types';
+import { AIHaircutPreview } from './AIHaircutPreview';
 
 interface PetFormCardProps {
   pet: PetFormData;
@@ -33,6 +34,13 @@ interface PetFormCardProps {
   onRemoveServiceField: (petId: string, index: number) => void;
   onAutofillPet: (formId: string, registeredPetId: string) => void;
   onToggleBehavior: (id: string, behavior: string) => void;
+  // --- AI Haircut Preview handlers ---
+  onUploadPetPhoto: (petId: string, file: File) => void;
+  onRemovePetPhoto: (petId: string) => void;
+  onGenerateAiPreview: (petId: string) => void;
+  onRegenerateAiPreview: (petId: string) => void;
+  onConfirmAiPreview: (petId: string) => void;
+  onEditConfirmedAiPreview: (petId: string) => void;
 }
 
 export const PetFormCard: React.FC<PetFormCardProps> = ({
@@ -54,6 +62,12 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
   onRemoveServiceField,
   onAutofillPet,
   onToggleBehavior,
+  onUploadPetPhoto,
+  onRemovePetPhoto,
+  onGenerateAiPreview,
+  onRegenerateAiPreview,
+  onConfirmAiPreview,
+  onEditConfirmedAiPreview,
 }) => {
   const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
   const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
@@ -354,6 +368,21 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
             placeholder="e.g., leave the tail fluffy, trim short around eyes..."
             value={pet.groomingSpecs}
             onChange={(e) => onUpdateField(pet.id, 'groomingSpecs', e.target.value)}
+          />
+        </div>
+
+        {/* AI Haircut Preview */}
+        <div className="form-group">
+          <label className="field-label">AI Haircut Preview</label>
+          <AIHaircutPreview
+            pet={pet}
+            onUploadPetPhoto={onUploadPetPhoto}
+            onRemovePetPhoto={onRemovePetPhoto}
+            onUpdateField={onUpdateField}
+            onGeneratePreview={onGenerateAiPreview}
+            onRegeneratePreview={onRegenerateAiPreview}
+            onConfirmPreview={onConfirmAiPreview}
+            onEditConfirmedPreview={onEditConfirmedAiPreview}
           />
         </div>
 

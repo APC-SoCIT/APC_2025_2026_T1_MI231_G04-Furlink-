@@ -926,3 +926,282 @@
   font-weight: 600;
   cursor: pointer;
 }
+/* ===================== AI Haircut Preview ===================== */
+.ai-haircut-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  background-color: #faf5ff;
+}
+
+.ai-haircut-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6d28d9;
+  margin-bottom: 12px;
+}
+
+.ai-haircut-sparkle-icon {
+  color: #a855f7;
+}
+
+.ai-photo-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 500px) {
+  .ai-photo-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-photo-dropzone {
+  width: 140px;
+  height: 140px;
+  border: 2px dashed #c4b5fd;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  background-color: #f5f3ff;
+  color: #7c3aed;
+  font-size: 11px;
+  text-align: center;
+  padding: 8px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-photo-dropzone:hover {
+  background-color: #ede9fe;
+  border-color: #a855f7;
+}
+
+.ai-photo-dropzone img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.ai-photo-remove-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.ai-style-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+.ai-generate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #7c3aed;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.ai-generate-btn:hover:not(:disabled) {
+  background-color: #6d28d9;
+}
+
+.ai-generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-spin-icon {
+  animation: ai-spin 1s linear infinite;
+}
+
+@keyframes ai-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ai-preview-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-preview-result {
+  border-top: 1px dashed #ddd6fe;
+  padding-top: 16px;
+}
+
+.ai-preview-result-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6d28d9;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-preview-image-frame {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  background-color: #f1f5f9;
+}
+
+.ai-preview-image-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.ai-preview-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-confirm-btn,
+.ai-regenerate-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  transition: opacity 0.2s ease;
+}
+
+.ai-confirm-btn {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+
+.ai-regenerate-btn {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.ai-confirm-btn:hover:not(:disabled),
+.ai-regenerate-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ai-confirm-btn:disabled,
+.ai-regenerate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-confirmed-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  flex-wrap: wrap;
+}
+
+.ai-confirmed-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.ai-confirmed-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+}
+
+.ai-edit-preview-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* AI Haircut preview inside the booking summary modal */
+.summary-ai-haircut-box {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.summary-ai-haircut-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6d28d9;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.summary-ai-haircut-img {
+  width: 100%;
+  max-width: 220px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  display: block;
+}
