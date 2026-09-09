@@ -20,6 +20,7 @@ import { ROUTES } from "@/config/routes";
 
 type Notification = {
   id: string;
+  type: string;
   title: string;
   message: string;
   read: boolean;
@@ -112,6 +113,63 @@ export default function HeaderLoggedIn() {
   }, [supabase]);
 
   useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let isActive = true;
+
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isActive) return;
+
+      // In dev, React Strict Mode runs this effect twice (mount -> cleanup ->
+      // mount). If the first run's channel hasn't finished tearing down yet,
+      // Supabase's client still has a channel with this topic in a
+      // "subscribed" state, and calling .on() on it again throws. Clear out
+      // any stale channel with the same topic before creating a new one.
+      const topic = `notifications-${user.id}`;
+      const stale = supabase.getChannels().find((c) => c.topic === `realtime:${topic}`);
+      if (stale) {
+        await supabase.removeChannel(stale);
+      }
+
+      if (!isActive) return;
+
+      channel = supabase
+        .channel(topic)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const newNotif = payload.new as Notification;
+              setNotifications((prev) => [newNotif, ...prev].slice(0, 10));
+            } else if (payload.eventType === "UPDATE") {
+              const updatedNotif = payload.new as Notification;
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n))
+              );
+            } else if (payload.eventType === "DELETE") {
+              const deletedId = (payload.old as Notification).id;
+              setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      isActive = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const outsideDesktop = desktopNotifRef.current && !desktopNotifRef.current.contains(e.target as Node);
       const outsideMobile = mobileNotifRef.current && !mobileNotifRef.current.contains(e.target as Node);
@@ -135,6 +193,18 @@ export default function HeaderLoggedIn() {
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // For a both_sp_po user, whether they're currently browsing the
+  // service-provider side of the app (used to route both the "switch role"
+  // button and notification clicks to the right place).
+  const isCurrentlyServiceProvider =
+    pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
+    pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
+    pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
+    pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
+
+  const actingAsServiceProvider = userRole === 'service_provider' || (isBoth && isCurrentlyServiceProvider);
+  const actingAsPetOwner = userRole === 'pet_owner' || (isBoth && !isCurrentlyServiceProvider);
 
   const handleLogout = async () => {
     document.body.classList.remove("logged-in-page");
@@ -194,12 +264,6 @@ export default function HeaderLoggedIn() {
     }
 
     if (isBoth) {
-      const isCurrentlyServiceProvider = 
-        pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
-        pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
-        pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
-        pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
-
       if (isCurrentlyServiceProvider) {
         router.push(ROUTES.PET_OWNER.DASHBOARD);
       } else {
@@ -217,7 +281,28 @@ export default function HeaderLoggedIn() {
       await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
       setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
       setShowNotif(false);
-      router.push(notif.link || ROUTES.PET_OWNER.DASHBOARD);
+      setShowMobileMenu(false);
+
+      // Account-related notifications (warnings, suspensions, activation/
+      // deactivation, SP application status) always go to Manage Account,
+      // regardless of role.
+      const isAccountNotif =
+        notif.type?.startsWith("account") || notif.type?.startsWith("sp_application");
+
+      let destination: string;
+      if (isAccountNotif) {
+        destination = ROUTES.AUTH.MANAGE_ACCOUNT;
+      } else if (actingAsServiceProvider) {
+        destination = ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD;
+      } else if (actingAsPetOwner) {
+        destination = ROUTES.PET_OWNER.MANAGE_BOOKING;
+      } else {
+        // Admin or anything unforeseen: fall back to whatever the
+        // notification itself points to, or the role-based home route.
+        destination = notif.link || homeRoute;
+      }
+
+      router.push(destination);
     } catch (err) {
       console.error("Error marking notification as read:", err);
     }
@@ -266,12 +351,6 @@ export default function HeaderLoggedIn() {
       if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
         return null;
       }
-
-      const isCurrentlyServiceProvider = 
-        pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
-        pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
-        pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
-        pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
 
       let buttonText = "Switch to Business";
       if (isCurrentlyServiceProvider) {
