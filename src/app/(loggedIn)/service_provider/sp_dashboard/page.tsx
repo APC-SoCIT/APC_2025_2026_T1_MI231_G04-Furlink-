@@ -118,7 +118,11 @@ export default function ServiceProviderDashboardPage() {
 
   // Get active tab configuration and filter bookings
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
-  const filteredBookings = filterBookingsByStatus(bookings, activeTab);
+  
+  // Use the TAB_CARDS filter array instead of the strict utils function
+  const filteredBookings = activeTab === 'all' 
+    ? bookings 
+    : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status));
 
   // Show loading state
   if (loading) {
