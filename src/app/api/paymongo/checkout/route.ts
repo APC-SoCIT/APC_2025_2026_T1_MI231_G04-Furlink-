@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     const proto = req.headers.get('x-forwarded-proto') || 'https';
     const baseUrl = `${proto}://${host}`;
 
-    const successUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=success`;
-    const cancelUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed`;
+    const successUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=success&booking_id=${bookingId}`;
+    const cancelUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed&booking_id=${bookingId}`;
 
     const amountInCentavos = Math.round(amount * 100);
 
