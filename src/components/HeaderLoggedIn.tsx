@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import {
-  FaBell,
   FaUserCircle,
   FaSignOutAlt,
   FaStore,
@@ -13,20 +12,12 @@ import {
   FaPaw,
   FaUser,
   FaBars,
-  FaTimes
+  FaTimes,
+  FaBell
 } from "react-icons/fa";
 import brandIcon from "../app/icon.png";
 import { ROUTES } from "@/config/routes";
-
-type Notification = {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  read: boolean;
-  created_at: string;
-  link?: string;
-};
+import NotificationsDropdown from "./NotificationsDropdown";
 
 type Profile = {
   first_name?: string;
@@ -42,8 +33,8 @@ export default function HeaderLoggedIn() {
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [homeRoute, setHomeRoute] = useState<string>(ROUTES.HOME);
   const [registrationStatus, setRegistrationStatus] = useState<string | null | undefined>(undefined);
@@ -91,15 +82,6 @@ export default function HeaderLoggedIn() {
             setHomeRoute(ROUTES.ADMIN.ADMIN_DASHBOARD);
           }
         }
-
-        const { data: notifData } = await supabase
-          .from("notifications")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(10);
-
-        setNotifications(notifData || []);
       } catch (err) {
         console.error("Auth fetch error:", err);
       }
@@ -116,16 +98,28 @@ export default function HeaderLoggedIn() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let isActive = true;
 
-    const setupRealtime = async () => {
+    const fetchUnreadCount = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isActive) return;
 
-      // In dev, React Strict Mode runs this effect twice (mount -> cleanup ->
-      // mount). If the first run's channel hasn't finished tearing down yet,
-      // Supabase's client still has a channel with this topic in a
-      // "subscribed" state, and calling .on() on it again throws. Clear out
-      // any stale channel with the same topic before creating a new one.
-      const topic = `notifications-${user.id}`;
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: 'exact', head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+
+      if (!error && count !== null && isActive) {
+        setUnreadCount(count);
+      }
+    };
+
+    fetchUnreadCount();
+
+    const setupRealtimeBadge = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isActive) return;
+
+      const topic = `header-notifications-${user.id}`;
       const stale = supabase.getChannels().find((c) => c.topic === `realtime:${topic}`);
       if (stale) {
         await supabase.removeChannel(stale);
@@ -138,30 +132,31 @@ export default function HeaderLoggedIn() {
         .on(
           "postgres_changes",
           {
-            event: "*",
+            event: "INSERT",
             schema: "public",
             table: "notifications",
             filter: `user_id=eq.${user.id}`,
           },
-          (payload) => {
-            if (payload.eventType === "INSERT") {
-              const newNotif = payload.new as Notification;
-              setNotifications((prev) => [newNotif, ...prev].slice(0, 10));
-            } else if (payload.eventType === "UPDATE") {
-              const updatedNotif = payload.new as Notification;
-              setNotifications((prev) =>
-                prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n))
-              );
-            } else if (payload.eventType === "DELETE") {
-              const deletedId = (payload.old as Notification).id;
-              setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
-            }
+          () => {
+            setUnreadCount((prev) => prev + 1);
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchUnreadCount();
           }
         )
         .subscribe();
     };
 
-    setupRealtime();
+    setupRealtimeBadge();
 
     return () => {
       isActive = false;
@@ -192,19 +187,12 @@ export default function HeaderLoggedIn() {
   const isPetOwner = userRole === 'pet_owner' || isBoth;
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // For a both_sp_po user, whether they're currently browsing the
-  // service-provider side of the app (used to route both the "switch role"
-  // button and notification clicks to the right place).
   const isCurrentlyServiceProvider =
     pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
     pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
     pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
     pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
-
-  const actingAsServiceProvider = userRole === 'service_provider' || (isBoth && isCurrentlyServiceProvider);
-  const actingAsPetOwner = userRole === 'pet_owner' || (isBoth && !isCurrentlyServiceProvider);
 
   const handleLogout = async () => {
     document.body.classList.remove("logged-in-page");
@@ -264,6 +252,10 @@ export default function HeaderLoggedIn() {
     }
 
     if (isBoth) {
+      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
+        return null;
+      }
+
       if (isCurrentlyServiceProvider) {
         router.push(ROUTES.PET_OWNER.DASHBOARD);
       } else {
@@ -276,58 +268,14 @@ export default function HeaderLoggedIn() {
     }
   };
 
-  const handleNotifClick = async (notif: Notification) => {
-    try {
-      await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
-      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
-      setShowNotif(false);
-      setShowMobileMenu(false);
-
-      // Account-related notifications (warnings, suspensions, activation/
-      // deactivation, SP application status) always go to Manage Account,
-      // regardless of role.
-      const isAccountNotif =
-        notif.type?.startsWith("account") || notif.type?.startsWith("sp_application");
-
-      let destination: string;
-      if (isAccountNotif) {
-        destination = ROUTES.AUTH.MANAGE_ACCOUNT;
-      } else if (actingAsServiceProvider) {
-        destination = ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD;
-      } else if (actingAsPetOwner) {
-        destination = ROUTES.PET_OWNER.MANAGE_BOOKING;
-      } else {
-        // Admin or anything unforeseen: fall back to whatever the
-        // notification itself points to, or the role-based home route.
-        destination = notif.link || homeRoute;
-      }
-
-      router.push(destination);
-    } catch (err) {
-      console.error("Error marking notification as read:", err);
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch (err) {
-      console.error("Error marking all as read:", err);
-    }
-  };
-
   const RoleActionButton = () => {
     if (userRole === 'pet_owner') {
       if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
         return null;
       }
-      let buttonText = "Become a Service Provider";
       return (
         <button className="header-action-btn-outline" onClick={handleActionClick}>
-          {buttonText}
+          Become a Service Provider
         </button>
       );
     }
@@ -336,10 +284,7 @@ export default function HeaderLoggedIn() {
       if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
         return null;
       }
-      let buttonText = "Register Now!";
-      if (registrationStatus === 'approved') {
-        buttonText = "Become a Pet Owner";
-      }
+      let buttonText = registrationStatus === 'approved' ? "Become a Pet Owner" : "Register Now!";
       return (
         <button className="header-action-btn-outline" onClick={handleActionClick}>
           {buttonText}
@@ -352,10 +297,8 @@ export default function HeaderLoggedIn() {
         return null;
       }
 
-      let buttonText = "Switch to Business";
-      if (isCurrentlyServiceProvider) {
-        buttonText = "Switch to Pet Owner";
-      } else if (registrationStatus === null) {
+      let buttonText = isCurrentlyServiceProvider ? "Switch to Pet Owner" : "Switch to Business";
+      if (registrationStatus === null) {
         buttonText = "Become a service provider";
       }
 
@@ -400,40 +343,6 @@ export default function HeaderLoggedIn() {
     </>
   );
 
-  const NotificationDropdown = () => (
-    <div className="notif-dropdown">
-      <div className="notif-header">
-        <h3>Notifications</h3>
-        {unreadCount > 0 && (
-          <button className="notif-mark-read" onClick={handleMarkAllAsRead}>
-            Mark all as read
-          </button>
-        )}
-      </div>
-      <div className="notif-list">
-        {notifications.length > 0 ? (
-          notifications.map((n) => (
-            <div
-              key={n.id}
-              className={`notif-item ${!n.read ? "unread" : ""}`}
-              onClick={() => handleNotifClick(n)}
-            >
-              <div className="notif-title-row">
-                <span className="notif-title">{n.title}</span>
-                <span className="notif-date">
-                  {new Date(n.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                </span>
-              </div>
-              <p className="notif-message">{n.message}</p>
-            </div>
-          ))
-        ) : (
-          <div className="notif-empty">All caught up!</div>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <>
       <header className="site-header">
@@ -455,9 +364,11 @@ export default function HeaderLoggedIn() {
             <div ref={desktopNotifRef} className="notif-wrapper">
               <button className="icon-box-btn" onClick={() => setShowNotif(!showNotif)} aria-label="Notifications">
                 <FaBell />
-                {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
+                {unreadCount > 0 && (
+                  <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                )}
               </button>
-              {showNotif && <NotificationDropdown />}
+              {showNotif && <NotificationsDropdown onClose={() => setShowNotif(false)} />}
             </div>
 
             <div ref={menuRef} className="profile-menu">
@@ -481,9 +392,11 @@ export default function HeaderLoggedIn() {
             <div ref={mobileNotifRef} className="notif-wrapper">
               <button className="icon-box-btn" onClick={() => setShowNotif(!showNotif)} aria-label="Notifications">
                 <FaBell />
-                {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
+                {unreadCount > 0 && (
+                  <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                )}
               </button>
-              {showNotif && <NotificationDropdown />}
+              {showNotif && <NotificationsDropdown onClose={() => setShowNotif(false)} />}
             </div>
 
             <button className="icon-btn mobile-menu-btn" onClick={() => setShowMobileMenu(true)} aria-label="Open menu">
