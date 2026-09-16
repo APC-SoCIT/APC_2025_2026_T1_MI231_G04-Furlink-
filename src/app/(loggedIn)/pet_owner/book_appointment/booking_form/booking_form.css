@@ -931,7 +931,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 16px;
-  background-color: #faf5ff;
+  background-color: #bbd8ff21;
 }
 
 .ai-haircut-header {
@@ -940,12 +940,12 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: #6d28d9;
+  color: #2563eb;
   margin-bottom: 12px;
 }
 
 .ai-haircut-sparkle-icon {
-  color: #a855f7;
+  color: #2563eb;
 }
 
 .ai-photo-row {
@@ -964,7 +964,7 @@
 .ai-photo-dropzone {
   width: 140px;
   height: 140px;
-  border: 2px dashed #c4b5fd;
+  border: 2px dashed #2d2198;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -972,8 +972,8 @@
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  background-color: #f5f3ff;
-  color: #7c3aed;
+  background-color: #a2c1fb30;
+  color: #2563eb;
   font-size: 11px;
   text-align: center;
   padding: 8px;
@@ -983,8 +983,8 @@
 }
 
 .ai-photo-dropzone:hover {
-  background-color: #ede9fe;
-  border-color: #a855f7;
+  background-color: #accdfc6a;
+  border-color: #2563eb;
 }
 
 .ai-photo-dropzone img {
@@ -1026,7 +1026,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background-color: #7c3aed;
+  background-color: #2563eb;
   color: #ffffff;
   border: none;
   border-radius: 8px;
@@ -1038,7 +1038,7 @@
 }
 
 .ai-generate-btn:hover:not(:disabled) {
-  background-color: #6d28d9;
+  background-color: #2563eb;
 }
 
 .ai-generate-btn:disabled {
@@ -1075,7 +1075,7 @@
 .ai-preview-result-label {
   font-size: 12px;
   font-weight: 700;
-  color: #6d28d9;
+  color: #2563eb;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -1124,12 +1124,6 @@
 .ai-confirm-btn {
   background-color: #16a34a;
   color: #ffffff;
-}
-
-.ai-regenerate-btn {
-  background-color: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
 }
 
 .ai-confirm-btn:hover:not(:disabled),
@@ -1191,7 +1185,8 @@
 .summary-ai-haircut-label {
   font-size: 11px;
   font-weight: 700;
-  color: #6d28d9;
+  color: #2563eb;
+;
   margin-bottom: 6px;
   display: flex;
   align-items: center;
