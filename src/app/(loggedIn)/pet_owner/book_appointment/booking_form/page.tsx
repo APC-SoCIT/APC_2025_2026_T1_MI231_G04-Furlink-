@@ -27,6 +27,9 @@ import { CapacityModal } from './components/CapacityModal';
 
 import './booking_form.css';
 
+const POLLINATIONS_EDIT_ENDPOINT = '/api/generate-haircut-preview';
+const AI_PREVIEW_DIMENSION = 768;
+
 function BookingFormContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -259,6 +262,15 @@ function BookingFormContent() {
     groomingSpecs: '',
     desiredStyle: 'Lion Cut',
     emergencyConsent: false,
+    // AI Haircut Preview defaults
+    aiSourcePhotoFile: null,
+    aiSourcePhotoPreview: null,
+    aiUploadedSourceUrl: null,
+    aiPreviewBlob: null,
+    aiPreviewImageUrl: null,
+    aiPreviewStatus: 'idle',
+    aiPreviewError: null,
+    aiHaircutUrl: null,
   });
 
   const [petForms, setPetForms] = useState<PetFormData[]>(() => {
@@ -456,14 +468,206 @@ function BookingFormContent() {
     }, 0);
   }, [petForms]);
 
-  const uploadFileToBucket = async (file: File, path: string): Promise<string | null> => {
-    const { data, error } = await supabase.storage.from('pet_documents').upload(path, file);
+  const uploadFileToBucket = async (file: File, path: string): Promise<string> => {
+    const { data, error } = await supabase.storage.from('ai-haircut-previews').upload(path, file);
     if (error) {
-      console.error('File upload error:', error);
-      return null;
+      console.error('File upload error:', error.message, error);
+      throw new Error(`Upload failed: ${error.message}`);
     }
-    const { data: publicData } = supabase.storage.from('pet_documents').getPublicUrl(data.path);
+    const { data: publicData } = supabase.storage.from('ai-haircut-previews').getPublicUrl(data.path);
     return publicData.publicUrl;
+  };
+
+  const STYLE_DETAILS: Record<string, string> = {
+    'Teddy Bear Cut':
+      'a rounded, plush "teddy bear" trim: fur kept at a medium length all over (roughly 1-1.5 inches), ' +
+      'face and head fur rounded into a full, fluffy circular shape framing the eyes, ears trimmed neatly ' +
+      'but left soft-edged, legs left slightly fuller and rounded at the paws like little pillars, overall ' +
+      'silhouette soft, plush, and evenly rounded with no sharp lines',
+    'Puppy Cut':
+      'a classic all-over "puppy cut": fur trimmed to a short, uniform length (about 1 inch) evenly across ' +
+      'the body, legs, and head, face trimmed short and neat rather than rounded or sculpted, ears trimmed ' +
+      'close to follow their natural shape, tail trimmed short and even, overall look clean, low-maintenance, ' +
+      'and youthful with no dramatic shaping anywhere',
+    'Lion Cut':
+      'a dramatic "lion cut": body fur shaved very short and close to the skin from the ribcage back through ' +
+      'the hindquarters and tail (leaving only a tufted pom at the very tip of the tail), while the fur on the ' +
+      'head, neck, chest, and front legs down to the "elbow" is left long, thick, and voluminous like a mane, ' +
+      'a sharp, visible line where the short-shaved body meets the long mane fur, strong visual contrast between ' +
+      'the shaved and unshaved sections',
+    'Summer / Short All-Over Trim':
+      'a short, practical summer trim: fur clipped very short and uniform (close to 0.5 inch) across the entire ' +
+      'body including legs, head, and tail, no shaping, rounding, or contouring of any kind, ears trimmed close ' +
+      'and flat against the head, the coat should look neat, cool, and minimal with an even buzzed texture ' +
+      'throughout',
+  };
+
+  const buildHaircutPrompt = (petType: string, style: string) => {
+    const petLabel = petType.toLowerCase();
+
+    const styleClause = STYLE_DETAILS[style] ?? `a "${style}" haircut, groomed neatly and evenly`;
+    return (
+      `Professional pet grooming after-photo. Keep the exact same ${petLabel} ` +
+      `(same face, same eyes, same fur color and markings, same pose, same background, same lighting), ` +
+      `but re-style its coat into ${styleClause}. ` +
+      `The haircut should be clearly and visibly distinct in length and shape from the pet's original coat in the ` +
+      `source photo. Realistic, well-lit pet salon photo, natural fur texture, no text, no watermark.`
+    );
+  };
+
+  const patchPetForm = (petId: string, patch: Partial<PetFormData>) => {
+    setPetForms((prev) => prev.map((p) => (p.id === petId ? { ...p, ...patch } : p)));
+  };
+
+  const handleUploadPetPhoto = (petId: string, file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    patchPetForm(petId, {
+      aiSourcePhotoFile: file,
+      aiSourcePhotoPreview: previewUrl,
+      aiUploadedSourceUrl: null,
+      aiPreviewBlob: null,
+      aiPreviewImageUrl: null,
+      aiPreviewStatus: 'idle',
+      aiPreviewError: null,
+      aiHaircutUrl: null,
+    });
+  };
+
+  const handleRemovePetPhoto = (petId: string) => {
+    patchPetForm(petId, {
+      aiSourcePhotoFile: null,
+      aiSourcePhotoPreview: null,
+      aiUploadedSourceUrl: null,
+      aiPreviewBlob: null,
+      aiPreviewImageUrl: null,
+      aiPreviewStatus: 'idle',
+      aiPreviewError: null,
+      aiHaircutUrl: null,
+    });
+  };
+
+  const handleEditConfirmedAiPreview = (petId: string) => {
+    patchPetForm(petId, { aiHaircutUrl: null });
+  };
+
+  const runAiHaircutGeneration = async (petId: string) => {
+    const pet = petForms.find((p) => p.id === petId);
+    if (!pet) return;
+
+    if (!pet.aiSourcePhotoFile && !pet.aiUploadedSourceUrl) {
+      alert('Please upload a photo of your pet first.');
+      return;
+    }
+    if (!pet.desiredStyle) {
+      alert('Please select a desired haircut style.');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be logged in to use the AI haircut preview.');
+
+      let sourceUrl = pet.aiUploadedSourceUrl;
+
+      if (!sourceUrl) {
+        patchPetForm(petId, { aiPreviewStatus: 'uploading', aiPreviewError: null });
+        const filePath = `${user.id}/${Date.now()}_ai_source_${petId}_${pet.aiSourcePhotoFile!.name}`;
+        sourceUrl = await uploadFileToBucket(pet.aiSourcePhotoFile!, filePath);
+        patchPetForm(petId, { aiUploadedSourceUrl: sourceUrl });
+      }
+
+      patchPetForm(petId, { aiPreviewStatus: 'generating', aiPreviewError: null });
+
+      const prompt = buildHaircutPrompt(pet.petType, pet.desiredStyle);
+      const seed = Math.floor(Math.random() * 1_000_000);
+
+      const formData = new FormData();
+      const sourceBlob = pet.aiSourcePhotoFile ?? (await (await fetch(sourceUrl)).blob());
+      formData.append('image', sourceBlob, 'source.jpg');
+      formData.append('prompt', prompt);
+      formData.append('model', 'kontext');
+      formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
+      formData.append('seed', String(seed));
+
+      const response = await fetch(POLLINATIONS_EDIT_ENDPOINT, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const bodyText = await response.text().catch(() => '');
+        console.error('AI preview error:', response.status, response.statusText, bodyText);
+
+        if (response.status === 504) {
+          throw new Error('Too many requests. Please wait about 15 seconds before generating another preview.');
+        }
+
+        if (response.status === 402) {
+          throw new Error('Unable to process your request at this moment. Please try again later.');
+        }
+
+        throw new Error(bodyText || `AI service error (${response.status})`);
+      }
+
+      const blob = await response.blob();
+
+      if (!blob.type.startsWith('image/')) {
+        console.error('Unexpected AI preview content type:', blob.type);
+        throw new Error('The AI service returned an unexpected response. Please try again.');
+      }
+
+      const previewObjectUrl = URL.createObjectURL(blob);
+
+      patchPetForm(petId, {
+        aiPreviewBlob: blob,
+        aiPreviewImageUrl: previewObjectUrl,
+        aiPreviewStatus: 'idle',
+        aiPreviewError: null,
+        aiHaircutUrl: null,
+      });
+    } catch (err: any) {
+      console.error('AI haircut generation error:', err);
+      patchPetForm(petId, {
+        aiPreviewStatus: 'error',
+        aiPreviewError: err.message || 'Something went wrong while generating the preview.',
+      });
+    }
+  };
+
+  const handleGenerateAiPreview = (petId: string) => {
+    runAiHaircutGeneration(petId);
+  };
+
+  const handleConfirmAiPreview = async (petId: string) => {
+    const pet = petForms.find((p) => p.id === petId);
+    if (!pet || !pet.aiPreviewBlob) return;
+
+    patchPetForm(petId, { aiPreviewStatus: 'uploading', aiPreviewError: null });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be logged in to confirm this preview.');
+
+      const fileName = `${Date.now()}_ai_haircut_${petId}.jpg`;
+      const filePath = `${user.id}/${fileName}`;
+      const fileToUpload = new File([pet.aiPreviewBlob], fileName, {
+        type: pet.aiPreviewBlob.type || 'image/jpeg',
+      });
+
+      const uploadedUrl = await uploadFileToBucket(fileToUpload, filePath);
+
+      patchPetForm(petId, {
+        aiHaircutUrl: uploadedUrl,
+        aiPreviewStatus: 'idle',
+        aiPreviewError: null,
+      });
+    } catch (err: any) {
+      console.error('AI haircut confirm error:', err);
+      patchPetForm(petId, {
+        aiPreviewStatus: 'error',
+        aiPreviewError: err.message || 'Failed to confirm the preview. Please try again.',
+      });
+    }
   };
 
   const createBookingInDatabase = async () => {
@@ -553,6 +757,7 @@ function BookingFormContent() {
           booking_vaccine_url: finalVaccineUrl,
           booking_illness_proof_url: finalIllnessUrl,
           booking_grooming_notes: pet.groomingSpecs || null,
+          booking_ai_haircut_url: pet.aiHaircutUrl || null,
           booking_emergency_consent: pet.emergencyConsent,
           booking_calculated_size: normalizedSize,
         })
@@ -687,6 +892,11 @@ function BookingFormContent() {
             onRemoveServiceField={handleRemoveServiceField}
             onAutofillPet={handleAutofillPet}
             onToggleBehavior={toggleBehavior}
+            onUploadPetPhoto={handleUploadPetPhoto}
+            onRemovePetPhoto={handleRemovePetPhoto}
+            onGenerateAiPreview={handleGenerateAiPreview}
+            onConfirmAiPreview={handleConfirmAiPreview}
+            onEditConfirmedAiPreview={handleEditConfirmedAiPreview}
           />
         ))}
       </main>
