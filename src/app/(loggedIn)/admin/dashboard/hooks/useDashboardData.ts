@@ -75,7 +75,7 @@ export const useDashboardData = () => {
       const { count: pending } = await supabase
         .from("sp_general_info")
         .select("id, sp_services!inner(id)", { count: "exact", head: true })
-        .eq("registration_status", "pending");
+        .in("registration_status", ["pending", "re-applied"]);
 
       const { count: approved } = await supabase
         .from("sp_general_info")
@@ -135,10 +135,13 @@ export const useDashboardData = () => {
   const fetchPendingList = useCallback(async () => {
     setLoading(true);
     try {
+      // Pending Approvals bucket includes fresh submissions ("pending") and
+      // listings resubmitted after a rejection ("re-applied") — no separate
+      // dashboard category for the latter, they're just tagged in the row/detail view.
       let query = supabase
         .from("sp_general_info")
         .select("id, business_name, business_city, business_province, registration_status, created_at, updated_at, sp_services!inner(id)")
-        .eq("registration_status", "pending");
+        .in("registration_status", ["pending", "re-applied"]);
 
       if (dateRange.start) query = query.gte("created_at", dateRange.start);
       if (dateRange.end) {
@@ -147,7 +150,7 @@ export const useDashboardData = () => {
         query = query.lte("created_at", endDate.toISOString());
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false });
+      const { data, error } = await query.order("updated_at", { ascending: false });
       if (!error) setProviderData(data || []);
     } catch (err) {
       console.error("Error fetching pending list:", err);

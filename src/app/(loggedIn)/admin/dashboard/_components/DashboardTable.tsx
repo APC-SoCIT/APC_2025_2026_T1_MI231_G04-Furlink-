@@ -47,7 +47,7 @@ export const DashboardTable = ({ currentFilter, providerData, userData, loading 
             <tr>
               <th>Business Name</th>
               <th>Location</th>
-              <th>Date {currentFilter === "pending" ? "Submitted" : currentFilter === "active" ? "Approved" : "Updated"}</th>
+              <th>Date {currentFilter === "pending" ? "Submitted/Re-applied" : currentFilter === "active" ? "Approved" : "Updated"}</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -78,14 +78,15 @@ export const DashboardTable = ({ currentFilter, providerData, userData, loading 
                   <td>{item.business_city}{item.business_city && item.business_province ? ", " : ""}{item.business_province}</td>
                   <td>
                     {formatDate(
-                      currentFilter === "pending" ? item.created_at
+                      currentFilter === "pending"
+                        ? (item.registration_status === "re-applied" ? item.updated_at : item.updated_at)
                         : currentFilter === "active" ? item.registration_approved_at
                         : item.updated_at
                     )}
                   </td>
                   <td>
                     <span className={`${styles["status-pill"]} ${styles[item.registration_status]}`}>
-                      {item.registration_status}
+                      {item.registration_status === "re-applied" ? "Re-applied" : item.registration_status}
                     </span>
                   </td>
                   <td>
