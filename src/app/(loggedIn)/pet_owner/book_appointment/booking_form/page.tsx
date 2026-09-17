@@ -271,6 +271,7 @@ function BookingFormContent() {
     aiPreviewStatus: 'idle',
     aiPreviewError: null,
     aiHaircutUrl: null,
+    aiStylePreviewCache: {},
   });
 
   const [petForms, setPetForms] = useState<PetFormData[]>(() => {
@@ -530,6 +531,7 @@ function BookingFormContent() {
       aiPreviewStatus: 'idle',
       aiPreviewError: null,
       aiHaircutUrl: null,
+      aiStylePreviewCache: {},
     });
   };
 
@@ -543,6 +545,7 @@ function BookingFormContent() {
       aiPreviewStatus: 'idle',
       aiPreviewError: null,
       aiHaircutUrl: null,
+      aiStylePreviewCache: {},
     });
   };
 
@@ -560,6 +563,18 @@ function BookingFormContent() {
     }
     if (!pet.desiredStyle) {
       alert('Please select a desired haircut style.');
+      return;
+    }
+
+    const cached = pet.aiStylePreviewCache[pet.desiredStyle];
+    if (cached) {
+      patchPetForm(petId, {
+        aiPreviewBlob: cached.blob,
+        aiPreviewImageUrl: cached.url,
+        aiPreviewStatus: 'idle',
+        aiPreviewError: null,
+        aiHaircutUrl: null,
+      });
       return;
     }
 
@@ -617,14 +632,26 @@ function BookingFormContent() {
       }
 
       const previewObjectUrl = URL.createObjectURL(blob);
+      const styleUsed = pet.desiredStyle;
 
-      patchPetForm(petId, {
-        aiPreviewBlob: blob,
-        aiPreviewImageUrl: previewObjectUrl,
-        aiPreviewStatus: 'idle',
-        aiPreviewError: null,
-        aiHaircutUrl: null,
-      });
+      setPetForms((prev) =>
+        prev.map((p) =>
+          p.id === petId
+            ? {
+                ...p,
+                aiPreviewBlob: blob,
+                aiPreviewImageUrl: previewObjectUrl,
+                aiPreviewStatus: 'idle',
+                aiPreviewError: null,
+                aiHaircutUrl: null,
+                aiStylePreviewCache: {
+                  ...p.aiStylePreviewCache,
+                  [styleUsed]: { blob, url: previewObjectUrl },
+                },
+              }
+            : p
+        )
+      );
     } catch (err: any) {
       console.error('AI haircut generation error:', err);
       patchPetForm(petId, {

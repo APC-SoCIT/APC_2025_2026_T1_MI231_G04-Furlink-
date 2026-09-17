@@ -76,6 +76,7 @@ export type PetFormData = {
   // Once the pet owner confirms a preview, it is uploaded to permanent storage and its public URL
   // lives here. This maps directly to booking_pet_info.booking_ai_haircut_url.
   aiHaircutUrl: string | null;
+  aiStylePreviewCache: Record<string, { blob: Blob; url: string }>;
 };
 
 export const HAIRCUT_STYLE_OPTIONS = [
