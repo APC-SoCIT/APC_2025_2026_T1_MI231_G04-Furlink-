@@ -12,6 +12,7 @@ type Notification = {
   message: string;
   read: boolean;
   created_at: string;
+  channel?: string;
 };
 
 const getTimeAgo = (dateString: string): string => {
@@ -81,6 +82,7 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
           .from("notifications")
           .select("*")
           .eq("user_id", user.id)
+          .neq("channel", "email_only") // Excludes email-only notifications (like deactivations) from the UI bell
           .order("created_at", { ascending: false })
           .limit(10);
 
@@ -126,13 +128,16 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            const newNotif = payload.new as Notification;
+            
+            // Ignore updates or inserts meant purely for background emails
+            if (newNotif.channel === 'email_only') return;
+
             if (payload.eventType === "INSERT") {
-              const newNotif = payload.new as Notification;
               setNotifications((prev) => [newNotif, ...prev].slice(0, 10));
             } else if (payload.eventType === "UPDATE") {
-              const updatedNotif = payload.new as Notification;
               setNotifications((prev) =>
-                prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n))
+                prev.map((n) => (n.id === newNotif.id ? newNotif : n))
               );
             } else if (payload.eventType === "DELETE") {
               const deletedId = (payload.old as Notification).id;

@@ -8,20 +8,30 @@ interface CreateNotificationParams {
   type: string;
   title: string;
   message: string;
+  channel?: 'all' | 'email_only' | 'ui_only';
+  read?: boolean;
 }
 
-async function insertNotification({ supabase, userId, type, title, message }: CreateNotificationParams) {
+async function insertNotification({ supabase, userId, type, title, message, channel = 'all', read = false }: CreateNotificationParams) {
   try {
+    // 🛡️ OVERRIDE TRAP: If the notification is an account status change, 
+    // automatically force it to 'email_only' and mark it as read so it never hits the UI bell!
+    const isAccountStatus = type === "account_deactivation_notice" || type === "account_reactivation_notice";
+    const finalChannel = isAccountStatus ? 'email_only' : channel;
+    const finalRead = isAccountStatus ? true : read;
+
     const { error } = await supabase.from("notifications").insert({
       user_id: userId,
       type,
       title,
       message,
-      read: false,
+      read: finalRead,
+      channel: finalChannel, 
+      emailed_at: null, // Ensures the background worker/webhook picks it up for email dispatch
     });
 
     if (error) {
-      console.error("Failed to insert in-app notification:", error);
+      console.error("Failed to insert notification:", error);
     }
   } catch (err) {
     console.error("Error in insertNotification:", err);
@@ -36,6 +46,7 @@ export async function notifyAdminNewApplication(supabase: SupabaseClient, adminI
     type: "admin_new_application",
     title: "New SP Application",
     message: `${username} has submitted an onboarding application for ${businessName}. Please review it for approval.`,
+    channel: 'all',
   });
 }
 
@@ -47,6 +58,7 @@ export async function notifyAdminResubmittedApplication(supabase: SupabaseClient
     type: "admin_resubmitted_application",
     title: "Resubmitted SP Application",
     message: `${username} has re-submitted their onboarding application for ${businessName}. Please review the updates.`,
+    channel: 'all',
   });
 }
 
@@ -61,6 +73,7 @@ export async function notifySPApplicationStatus(supabase: SupabaseClient, spUser
     message: isApproved
       ? `Congratulations! Your application for ${businessName} has been approved. You're ready to receive bookings from pet owners.`
       : `Your application for ${businessName} could not be approved due to: ${reason || "unspecified reasons"}. Please update your details and re-submit.`,
+    channel: 'all',
   });
 }
 
@@ -72,6 +85,7 @@ export async function notifySPNewBooking(supabase: SupabaseClient, spUserId: str
     type: "sp_new_booking",
     title: "New Booking Request",
     message: `${businessName} received a new booking request for ${numPets} pet(s) on ${bookingDate} at ${timeslot}. Please respond within 24 hours.`,
+    channel: 'all',
   });
 }
 
@@ -83,6 +97,7 @@ export async function notifyPOBookingStatus(supabase: SupabaseClient, poUserId: 
     type: "po_booking_status_update",
     title: "Booking Status Update",
     message: `${businessName} has ${bookingStatus} your booking request for ${numPets} pet(s) on ${bookingDate} at ${timeslot}.`,
+    channel: 'all',
   });
 }
 
@@ -94,6 +109,7 @@ export async function notifySPBookingRescheduled(supabase: SupabaseClient, spUse
     type: "sp_po_rescheduled",
     title: "Booking Rescheduled",
     message: `${username} has updated the schedule for their booking request to ${bookingDate} at ${timeslot}. Please review and respond.`,
+    channel: 'all',
   });
 }
 
@@ -105,6 +121,7 @@ export async function notifySPBookingCancelled(supabase: SupabaseClient, spUserI
     type: "sp_po_cancelled",
     title: "Booking Cancelled",
     message: `${username} has cancelled their booking scheduled for ${bookingDate} at ${timeslot}.`,
+    channel: 'all',
   });
 }
 
@@ -116,6 +133,7 @@ export async function notifyPOSPCancelled(supabase: SupabaseClient, poUserId: st
     type: "po_sp_cancelled",
     title: "Booking Cancelled",
     message: `${businessName} has cancelled your scheduled booking for ${bookingDate} at ${timeslot}.`,
+    channel: 'all',
   });
 }
 
@@ -127,6 +145,7 @@ export async function notifyPOBookingCompleted(supabase: SupabaseClient, poUserI
     type: "po_booking_completed",
     title: "Booking Completed",
     message: `${employeeFirstName} ${employeeLastName} from ${businessName} completed your booking on ${bookingDate} at ${timeslot}. Tap to share your feedback!`,
+    channel: 'all',
   });
 }
 
@@ -138,6 +157,7 @@ export async function notifySPNewReview(supabase: SupabaseClient, spUserId: stri
     type: "sp_new_review",
     title: "New Review Received",
     message: `${username} left a review and rating for their completed booking on ${bookingDate} at ${timeslot}.`,
+    channel: 'all',
   });
 }
 
@@ -149,5 +169,22 @@ export async function notifyAccountWarning(supabase: SupabaseClient, userId: str
     type: "account_warning",
     title: "Account Notice",
     message: `Account Notice: A warning has been issued regarding your account. Reason: ${warningMessage}.`,
+    channel: 'all',
+  });
+}
+
+/** 12. Account Deactivation / Reactivation (Email Only, Hidden from UI Bell) */
+export async function notifyAccountStatusEmailOnly(supabase: SupabaseClient, userId: string, action: "deactivated" | "reactivated") {
+  const isDeactivated = action === "deactivated";
+  await insertNotification({
+    supabase,
+    userId: userId,
+    type: isDeactivated ? "account_deactivation_notice" : "account_reactivation_notice",
+    title: isDeactivated ? "Account Deactivated" : "Account Re-activated",
+    message: isDeactivated 
+      ? "Your furlink account has been successfully deactivated." 
+      : "Your furlink account has been successfully re-activated.",
+    channel: 'email_only', 
+    read: true,            
   });
 }
