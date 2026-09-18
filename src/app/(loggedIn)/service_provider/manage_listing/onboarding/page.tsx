@@ -348,6 +348,10 @@ export default function ServiceProviderOnboardingPage() {
         ? `${businessInfo.businessName.trim()} - ${businessInfo.branchName.trim()}`
         : businessInfo.businessName.trim();
 
+      // --- NEW DYNAMIC STATUS LOGIC ---
+      // If the current appStatus in state is 'rejected', they are re-applying. Otherwise, fresh 'pending' application.
+      const newStatus = appStatus === 'rejected' ? 're-applied' : 'pending';
+
       const payload = {
         profiles_id: user.id,
         business_name: finalBusinessName,
@@ -367,8 +371,8 @@ export default function ServiceProviderOnboardingPage() {
         business_waiver_url: waiverUrl,
         business_permit_url: permitUrl,
         business_payment_qr_url: finalPaymentUrl,
-        registration_status: 'pending',
-        registration_rejection_reason: null,
+        registration_status: newStatus, // Injects dynamic status here
+        registration_rejection_reason: null, // Clears the rejection reason upon resubmission
         business_latitude: 0, 
         business_longitude: 0,
         updated_at: new Date().toISOString(),
@@ -425,16 +429,9 @@ export default function ServiceProviderOnboardingPage() {
       const serviceSaveResult = await saveServicesToSupabase(supabase, currentProviderId); 
       if (!serviceSaveResult.success) throw new Error("Services save failed: " + serviceSaveResult.message);
 
+      // --- CLEANED UP REDUNDANT CODE ---
       setShowConfirmModal(false);
-      setAppStatus('pending');
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      // -----------------------------------------
-
-      setShowConfirmModal(false);
-      setAppStatus('pending');
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      setShowConfirmModal(false);
-      setAppStatus('pending');
+      setAppStatus(newStatus); // Updates local state so the view switches correctly
       window.scrollTo({ top: 0, behavior: "smooth" });
 
     } catch (err: any) {
@@ -472,7 +469,10 @@ export default function ServiceProviderOnboardingPage() {
   /* -------------------------------------------------------------------- */
   
   if (isCheckingStatus) return <ApplicationStatusView status="loading" />;
-  if (appStatus === 'pending') return <ApplicationStatusView status="pending" />;
+  
+  // --- UPDATED RENDER CHECK ---
+  // Allow the ApplicationStatusView to render properly for both fresh pending & re-applied states
+  if (appStatus === 'pending' || appStatus === 're-applied') return <ApplicationStatusView status="pending" />;
   if (appStatus === 'approved') return <ApplicationStatusView status="approved" />;
 
   return (
