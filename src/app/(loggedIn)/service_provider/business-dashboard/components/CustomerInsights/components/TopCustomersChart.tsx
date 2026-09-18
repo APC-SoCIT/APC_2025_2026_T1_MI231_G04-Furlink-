@@ -60,8 +60,6 @@ export default function TopCustomersChart({ customers }: TopCustomersChartProps)
         grid: { display: false },
         ticks: {
           font: { size: 11 },
-          // Explicitly define return type as string and map directly from the 
-          // customers prop to avoid Chart.js 'this' context type errors during deployment
           callback: function(val: string | number): string {
             const label = customers[val as number]?.name || '';
             return label.length > 15 ? label.substring(0, 15) + '...' : label;
