@@ -123,38 +123,177 @@ function wrapEmailTemplate(brandTitleHtml, bodyContentHtml) {
 function getEmailContent(item) {
   const type = item.type;
   const msg = item.message || '';
-  const title = item.title || 'Notification - furlink';
 
   switch (type) {
-    case 'account_reactivation_notice':
+    case 'admin_new_application':
       return {
-        subject: 'Welcome Back! Account Re-activated - furlink',
-        html: wrapEmailTemplate('Account Re-activated', `<p>${msg}</p>`),
+        subject: "New Service Provider Application Submitted - furlink",
+        html: wrapEmailTemplate("New Service Provider Application", `
+          <p>Hello Admin,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink admin account to review and approve this application.</p>
+        `)
       };
-    case 'account_deactivation_notice':
+
+    case 'admin_resubmitted_application':
       return {
-        subject: 'Account Deactivation Confirmation - furlink',
-        html: wrapEmailTemplate('Account Deactivated', `<p>${msg}</p>`),
+        subject: "Service Provider Application Resubmitted - furlink",
+        html: wrapEmailTemplate("Resubmitted SP Application", `
+          <p>Hello Admin,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink admin account to review the latest changes.</p>
+        `)
       };
-    case 'account_suspension':
+
+    case 'sp_application_approved':
       return {
-        subject: 'Important: Account Suspension Notice - furlink',
-        html: wrapEmailTemplate('Account Suspended', `<p>${msg}</p>`),
+        subject: "Application Approved! Welcome to furlink",
+        html: wrapEmailTemplate("Application Status Update", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to set up your dashboard and manage listings.</p>
+        `)
       };
-    case 'account_suspension_lifted':
+
+    case 'sp_application_rejected':
       return {
-        subject: 'Good News: Account Suspension Lifted - furlink',
-        html: wrapEmailTemplate('Account Suspension Lifted', `<p>${msg}</p>`),
+        subject: "Update Regarding Your furlink Application",
+        html: wrapEmailTemplate("Application Status Update", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>If you have any questions or concerns, please reach out to us through our official channels: email support, Instagram, or Facebook.</p>
+          <p>Please log in to your furlink account to update your onboarding details.</p>
+        `)
       };
+
+    case 'sp_new_booking':
+      return {
+        subject: "New Booking Request Received - furlink",
+        html: wrapEmailTemplate("New Booking Request", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to manage this request.</p>
+        `)
+      };
+
+    case 'po_booking_status_update':
+      return {
+        subject: "Update on Your Booking Request - furlink",
+        html: wrapEmailTemplate("Booking Status Update", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to view full booking details.</p>
+        `)
+      };
+
+    case 'sp_po_rescheduled':
+      return {
+        subject: "Booking Schedule Updated - furlink",
+        html: wrapEmailTemplate("Booking Rescheduled", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to respond to the rescheduled request.</p>
+        `)
+      };
+
+    case 'sp_po_cancelled':
+      return {
+        subject: "Booking Cancelled by Pet Owner - furlink",
+        html: wrapEmailTemplate("Booking Cancelled", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to view your updated schedule.</p>
+        `)
+      };
+
+    case 'po_sp_cancelled':
+      return {
+        subject: "Notice: Booking Cancelled - furlink",
+        html: wrapEmailTemplate("Booking Cancelled", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account for more information.</p>
+        `)
+      };
+
+    case 'po_booking_completed':
+      return {
+        subject: "Your Booking Has Been Completed - furlink",
+        html: wrapEmailTemplate("Booking Completed", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to share your feedback and rate your experience!</p>
+        `)
+      };
+
+    case 'sp_new_review':
+      return {
+        subject: "New Review and Rating Received - furlink",
+        html: wrapEmailTemplate("New Review Received", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to view all client feedback on your dashboard.</p>
+        `)
+      };
+
     case 'account_warning':
       return {
-        subject: 'Important: Account Warning Notice - furlink',
-        html: wrapEmailTemplate('Account Warning Issued', `<p>${msg}</p>`),
+        subject: "Important: Account Warning Notice - furlink",
+        html: wrapEmailTemplate("Account Warning Issued", `
+          <p>Hello,</p>
+          <p>Account Notice: A formal warning has been issued regarding your account.</p>
+          <p><strong>Warning Details:</strong> ${msg}</p>
+          <p>Please review our community guidelines to ensure your account remains in good standing.</p>
+          <p>Please log in to your furlink account to manage your profile settings.</p>
+        `)
       };
+
+    case 'account_suspension':
+      return {
+        subject: "Important: Account Suspension Notice - furlink",
+        html: wrapEmailTemplate("Account Suspended", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to review your account status or contact support via our official channels.</p>
+        `)
+      };
+
+    case 'account_suspension_lifted':
+      return {
+        subject: "Good News: Account Suspension Lifted - furlink",
+        html: wrapEmailTemplate("Account Suspension Lifted", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink account to resume your activities.</p>
+        `)
+      };
+
+    case 'account_deactivation_notice':
+      return {
+        subject: "Account Deactivation Confirmation - furlink",
+        html: wrapEmailTemplate("Account Deactivated", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>If you did not initiate this request, please contact our support team immediately.</p>
+          <p>You can re-activate your account at any time simply by logging back in.</p>
+        `)
+      };
+
+    case 'account_reactivation_notice':
+      return {
+        subject: "Welcome Back! Account Re-activated - furlink",
+        html: wrapEmailTemplate("Account Re-activated", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>You now have full access to your profile, listings, and bookings once again.</p>
+          <p>Please log in to your furlink account to resume your activities.</p>
+        `)
+      };
+
     default:
       return {
-        subject: `${title} - furlink`,
-        html: wrapEmailTemplate(title, `<p>${msg}</p>${item.link ? `<p><a href="${item.link}">View details on furlink</a></p>` : ''}`),
+        subject: `${item.title || 'Notification'} - furlink`,
+        html: wrapEmailTemplate(item.title || 'Notification', `<p>${msg}</p>`)
       };
   }
 }
