@@ -14,11 +14,9 @@ interface CreateNotificationParams {
 
 async function insertNotification({ supabase, userId, type, title, message, channel = 'all', read = false }: CreateNotificationParams) {
   try {
-    // 🛡️ OVERRIDE TRAP: If the notification is an account status change, 
-    // automatically force it to 'email_only' and mark it as read so it never hits the UI bell!
-    const isAccountStatus = type === "account_deactivation_notice" || type === "account_reactivation_notice";
-    const finalChannel = isAccountStatus ? 'email_only' : channel;
-    const finalRead = isAccountStatus ? true : read;
+    const isDeactivation = type === "account_deactivation_notice" || type === "account_reactivation_notice";
+    const finalChannel = isDeactivation ? 'email_only' : channel;
+    const finalRead = isDeactivation ? true : read;
 
     const { error } = await supabase.from("notifications").insert({
       user_id: userId,
@@ -27,7 +25,7 @@ async function insertNotification({ supabase, userId, type, title, message, chan
       message,
       read: finalRead,
       channel: finalChannel, 
-      emailed_at: null, // Ensures the background worker/webhook picks it up for email dispatch
+      emailed_at: null, 
     });
 
     if (error) {
@@ -44,7 +42,7 @@ export async function notifyAdminNewApplication(supabase: SupabaseClient, adminI
     supabase,
     userId: adminId,
     type: "admin_new_application",
-    title: "New SP Application",
+    title: "New Service Provider Application",
     message: `${username} has submitted an onboarding application for ${businessName}. Please review it for approval.`,
     channel: 'all',
   });
@@ -56,15 +54,29 @@ export async function notifyAdminResubmittedApplication(supabase: SupabaseClient
     supabase,
     userId: adminId,
     type: "admin_resubmitted_application",
-    title: "Resubmitted SP Application",
-    message: `${username} has re-submitted their onboarding application for ${businessName}. Please review the updates.`,
+    title: "Resubmitted Service Provider Application",
+    message: `Here's another re-application submitted: ${username} has re-submitted their onboarding application for ${businessName}. Please review the updates.`,
     channel: 'all',
   });
 }
 
 /** 3. SP: Application Approved or Rejected */
-export async function notifySPApplicationStatus(supabase: SupabaseClient, spUserId: string, businessName: string, status: "approved" | "rejected", reason?: string) {
+export async function notifySPApplicationStatus(supabase: SupabaseClient, spUserId: string, businessName: string, status: "approved" | "rejected") {
   const isApproved = status === "approved";
+  
+  let rejectionReason = "unspecified reasons";
+  if (!isApproved) {
+    const { data: spInfo } = await supabase
+      .from("sp_general_info")
+      .select("registration_rejection_reason")
+      .eq("profiles_id", spUserId)
+      .maybeSingle();
+    
+    if (spInfo?.registration_rejection_reason) {
+      rejectionReason = spInfo.registration_rejection_reason;
+    }
+  }
+
   await insertNotification({
     supabase,
     userId: spUserId,
@@ -72,7 +84,7 @@ export async function notifySPApplicationStatus(supabase: SupabaseClient, spUser
     title: isApproved ? "Application Approved" : "Application Rejected",
     message: isApproved
       ? `Congratulations! Your application for ${businessName} has been approved. You're ready to receive bookings from pet owners.`
-      : `Your application for ${businessName} could not be approved due to: ${reason || "unspecified reasons"}. Please update your details and re-submit.`,
+      : `Your application for ${businessName} could not be approved due to: ${rejectionReason}. Please update your details and re-submit.`,
     channel: 'all',
   });
 }
@@ -84,7 +96,7 @@ export async function notifySPNewBooking(supabase: SupabaseClient, spUserId: str
     userId: spUserId,
     type: "sp_new_booking",
     title: "New Booking Request",
-    message: `${businessName} received a new booking request for ${numPets} pet(s) on ${bookingDate} at ${timeslot}. Please respond within 24 hours.`,
+    message: `${businessName} received a new booking request for ${numPets} pet(s) on ${bookingDate} at ${timeslot}. Please respond to the booking request within 24 hours.`,
     channel: 'all',
   });
 }
@@ -108,7 +120,7 @@ export async function notifySPBookingRescheduled(supabase: SupabaseClient, spUse
     userId: spUserId,
     type: "sp_po_rescheduled",
     title: "Booking Rescheduled",
-    message: `${username} has updated the schedule for their booking request to ${bookingDate} at ${timeslot}. Please review and respond.`,
+    message: `${username} has updated the schedule for their booking request to ${bookingDate} at ${timeslot}. Please respond to the booking request within 24 hours.`,
     channel: 'all',
   });
 }
@@ -125,8 +137,22 @@ export async function notifySPBookingCancelled(supabase: SupabaseClient, spUserI
   });
 }
 
-/** 8. PO: SP Cancelled Booking */
-export async function notifyPOSPCancelled(supabase: SupabaseClient, poUserId: string, businessName: string, bookingDate: string, timeslot: string) {
+/** 8. PO: SP Cancelled Booking (Guarded against duplicates using actual booking statuses) */
+export async function notifyPOSPCancelled(supabase: SupabaseClient, poUserId: string, businessName: string, bookingDate: string, timeslot: string, bookingId?: string) {
+  if (bookingId) {
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("user_id", poUserId)
+      .eq("type", "po_booking_status_update")
+      .or("message.ilike.%declined%,message.ilike.%cancelled_by_sp%,message.ilike.%cancelled_by_po%")
+      .maybeSingle();
+
+    if (existing) {
+      return; // Skip duplicate if status update notification already exists
+    }
+  }
+
   await insertNotification({
     supabase,
     userId: poUserId,
@@ -156,7 +182,7 @@ export async function notifySPNewReview(supabase: SupabaseClient, spUserId: stri
     userId: spUserId,
     type: "sp_new_review",
     title: "New Review Received",
-    message: `${username} left a review and rating for their completed booking on ${bookingDate} at ${timeslot}.`,
+    message: `${username} left a feedback for their completed booking on ${bookingDate} at ${timeslot}.`,
     channel: 'all',
   });
 }
@@ -168,12 +194,40 @@ export async function notifyAccountWarning(supabase: SupabaseClient, userId: str
     userId: userId,
     type: "account_warning",
     title: "Account Notice",
-    message: `Account Notice: A warning has been issued regarding your account. Reason: ${warningMessage}.`,
+    message: `Account Notice: A warning has been issued regarding your account due to ${warningMessage}.`,
     channel: 'all',
   });
 }
 
-/** 12. Account Deactivation / Reactivation (Email Only, Hidden from UI Bell) */
+/** 12. Account Suspension Issued */
+export async function notifyAccountSuspension(supabase: SupabaseClient, userId: string, reason: string, suspendedUntil: string) {
+  const formattedDate = new Date(suspendedUntil).toLocaleString();
+  await insertNotification({
+    supabase,
+    userId: userId,
+    type: "account_suspension",
+    title: "Account Suspended",
+    message: `Account Notice: A suspension has been issued regarding your account due to ${reason} and it will last until ${formattedDate}.`,
+    channel: 'all',
+    read: true,
+  });
+}
+
+/** 13. Account Suspension Lifted */
+export async function notifyAccountSuspensionLifted(supabase: SupabaseClient, userId: string, reason: string, liftedAt: string) {
+  const formattedDate = new Date(liftedAt).toLocaleString();
+  await insertNotification({
+    supabase,
+    userId: userId,
+    type: "account_suspension_lifted",
+    title: "Account Suspension Lifted",
+    message: `Your account suspension due to ${reason} was lifted at ${formattedDate}. You may now use your account as usual.`,
+    channel: 'all',
+    read: true,
+  });
+}
+
+/** 14. Account Deactivation / Reactivation (Email Only, Hidden from UI Bell) */
 export async function notifyAccountStatusEmailOnly(supabase: SupabaseClient, userId: string, action: "deactivated" | "reactivated") {
   const isDeactivated = action === "deactivated";
   await insertNotification({
