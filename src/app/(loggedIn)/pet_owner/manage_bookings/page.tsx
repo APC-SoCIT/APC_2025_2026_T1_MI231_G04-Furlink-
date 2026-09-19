@@ -17,6 +17,7 @@ import {
   FaFileAlt,
   FaExclamationCircle,
   FaCommentAlt,
+  FaMagic,
 } from 'react-icons/fa';
 import './manage_bookings.css';
 
@@ -46,6 +47,7 @@ type PetInfoItem = {
   booking_behavior: string[];
   booking_emergency_consent: boolean;
   booking_grooming_notes: string | null;
+  booking_ai_haircut_url?: string | null;
   booking_service_info?: ServiceItem[];
 };
 
@@ -192,6 +194,7 @@ export default function ManageBookingsPage() {
               booking_behavior,
               booking_emergency_consent,
               booking_grooming_notes,
+              booking_ai_haircut_url,
               booking_service_info (
                 id,
                 booking_service_name,
@@ -500,6 +503,47 @@ export default function ManageBookingsPage() {
                       <div>Weight: <strong>{pet.booking_weight ? `${pet.booking_weight} kg` : 'N/A'}</strong></div>
                       <div>Size: <strong>{pet.booking_calculated_size?.toUpperCase()}</strong></div>
                     </div>
+
+                    {/* AI Haircut Reference Preview */}
+                    {pet.booking_ai_haircut_url && (
+                      <div style={{
+                        marginTop: '12px',
+                        padding: '12px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: '8px',
+                          color: '#166534',
+                          fontWeight: 600,
+                          fontSize: '13px'
+                        }}>
+                          <FaMagic /> AI Haircut Style Reference:
+                        </div>
+                        <a
+                          href={pet.booking_ai_haircut_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-block' }}
+                        >
+                          <img
+                            src={pet.booking_ai_haircut_url}
+                            alt="AI Haircut Reference"
+                            style={{
+                              maxWidth: '140px',
+                              maxHeight: '140px',
+                              objectFit: 'cover',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1'
+                            }}
+                          />
+                        </a>
+                      </div>
+                    )}
 
                     <div className="summary-services-box">
                       <div className="availed-title">AVAILED SERVICES:</div>
