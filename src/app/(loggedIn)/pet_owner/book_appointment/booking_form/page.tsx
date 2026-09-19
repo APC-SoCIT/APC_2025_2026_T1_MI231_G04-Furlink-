@@ -30,6 +30,101 @@ import './booking_form.css';
 const POLLINATIONS_EDIT_ENDPOINT = '/api/generate-haircut-preview';
 const AI_PREVIEW_DIMENSION = 768;
 
+async function resizeImageFile(file: File, maxDimension = 1600, quality = 0.85): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl);
+          if (!blob) {
+            reject(new Error('Failed to compress image'));
+            return;
+          }
+          const compressedFile = new File(
+            [blob],
+            file.name.replace(/\.[^.]+$/, '.jpg'),
+            { type: 'image/jpeg' },
+          );
+          resolve(compressedFile);
+        },
+        'image/jpeg',
+        quality,
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image for compression'));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+async function compressBlobUnderLimit(
+  blob: Blob,
+  maxBytes = 900 * 1024, // stay safely under the 1 MB bucket limit
+  maxDimension = 1024,
+): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  let scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      throw new Error('Could not get canvas context');
+    }
+    ctx.fillStyle = '#fff'; // avoid a black background from transparent PNGs
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    for (const quality of [0.85, 0.75, 0.65, 0.5]) {
+      const out = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', quality),
+      );
+      if (out && out.size <= maxBytes) {
+        bitmap.close();
+        return out;
+      }
+    }
+    scale *= 0.8; // still too big: shrink the dimensions and retry
+  }
+
+  bitmap.close();
+  throw new Error('Could not compress the image under the size limit.');
+}
+
 function BookingFormContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -271,6 +366,7 @@ function BookingFormContent() {
     aiPreviewStatus: 'idle',
     aiPreviewError: null,
     aiHaircutUrl: null,
+    aiPreviewCache: {},
   });
 
   const [petForms, setPetForms] = useState<PetFormData[]>(() => {
@@ -519,18 +615,25 @@ function BookingFormContent() {
     setPetForms((prev) => prev.map((p) => (p.id === petId ? { ...p, ...patch } : p)));
   };
 
-  const handleUploadPetPhoto = (petId: string, file: File) => {
-    const previewUrl = URL.createObjectURL(file);
-    patchPetForm(petId, {
-      aiSourcePhotoFile: file,
-      aiSourcePhotoPreview: previewUrl,
-      aiUploadedSourceUrl: null,
-      aiPreviewBlob: null,
-      aiPreviewImageUrl: null,
-      aiPreviewStatus: 'idle',
-      aiPreviewError: null,
-      aiHaircutUrl: null,
-    });
+  const handleUploadPetPhoto = async (petId: string, file: File) => {
+    try {
+      const compressedFile = await resizeImageFile(file);
+      const previewUrl = URL.createObjectURL(compressedFile);
+      patchPetForm(petId, {
+        aiSourcePhotoFile: compressedFile,
+        aiSourcePhotoPreview: previewUrl,
+        aiUploadedSourceUrl: null,
+        aiPreviewBlob: null,
+        aiPreviewImageUrl: null,
+        aiPreviewStatus: 'idle',
+        aiPreviewError: null,
+        aiHaircutUrl: null,
+        aiPreviewCache: {},
+      });
+    } catch (err) {
+      console.error('Image compression failed:', err);
+      alert('That photo could not be processed. Please try a different image.');
+    }
   };
 
   const handleRemovePetPhoto = (petId: string) => {
@@ -543,6 +646,7 @@ function BookingFormContent() {
       aiPreviewStatus: 'idle',
       aiPreviewError: null,
       aiHaircutUrl: null,
+      aiPreviewCache: {},
     });
   };
 
@@ -554,7 +658,7 @@ function BookingFormContent() {
     const pet = petForms.find((p) => p.id === petId);
     if (!pet) return;
 
-    if (!pet.aiSourcePhotoFile && !pet.aiUploadedSourceUrl) {
+    if (!pet.aiSourcePhotoFile) {
       alert('Please upload a photo of your pet first.');
       return;
     }
@@ -563,18 +667,21 @@ function BookingFormContent() {
       return;
     }
 
+    const cached = pet.aiPreviewCache[pet.desiredStyle];
+    if (cached) {
+      patchPetForm(petId, {
+        aiPreviewBlob: cached.blob,
+        aiPreviewImageUrl: cached.url,
+        aiPreviewStatus: 'idle',
+        aiPreviewError: null,
+        aiHaircutUrl: null,
+      });
+      return; // skip the API call entirely
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('You must be logged in to use the AI haircut preview.');
-
-      let sourceUrl = pet.aiUploadedSourceUrl;
-
-      if (!sourceUrl) {
-        patchPetForm(petId, { aiPreviewStatus: 'uploading', aiPreviewError: null });
-        const filePath = `${user.id}/${Date.now()}_ai_source_${petId}_${pet.aiSourcePhotoFile!.name}`;
-        sourceUrl = await uploadFileToBucket(pet.aiSourcePhotoFile!, filePath);
-        patchPetForm(petId, { aiUploadedSourceUrl: sourceUrl });
-      }
 
       patchPetForm(petId, { aiPreviewStatus: 'generating', aiPreviewError: null });
 
@@ -582,8 +689,7 @@ function BookingFormContent() {
       const seed = Math.floor(Math.random() * 1_000_000);
 
       const formData = new FormData();
-      const sourceBlob = pet.aiSourcePhotoFile ?? (await (await fetch(sourceUrl)).blob());
-      formData.append('image', sourceBlob, 'source.jpg');
+      formData.append('image', pet.aiSourcePhotoFile, 'source.jpg');
       formData.append('prompt', prompt);
       formData.append('model', 'kontext');
       formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
@@ -624,6 +730,10 @@ function BookingFormContent() {
         aiPreviewStatus: 'idle',
         aiPreviewError: null,
         aiHaircutUrl: null,
+        aiPreviewCache: {
+          ...pet.aiPreviewCache,
+          [pet.desiredStyle]: { blob, url: previewObjectUrl },
+        },
       });
     } catch (err: any) {
       console.error('AI haircut generation error:', err);
@@ -650,8 +760,9 @@ function BookingFormContent() {
 
       const fileName = `${Date.now()}_ai_haircut_${petId}.jpg`;
       const filePath = `${user.id}/${fileName}`;
-      const fileToUpload = new File([pet.aiPreviewBlob], fileName, {
-        type: pet.aiPreviewBlob.type || 'image/jpeg',
+      const compressedBlob = await compressBlobUnderLimit(pet.aiPreviewBlob);
+      const fileToUpload = new File([compressedBlob], fileName, {
+        type: 'image/jpeg',
       });
 
       const uploadedUrl = await uploadFileToBucket(fileToUpload, filePath);

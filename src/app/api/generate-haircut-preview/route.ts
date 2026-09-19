@@ -1,22 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const OPENAI_FALLBACK_SIZE = '1024x1024';
+const OPENAI_FALLBACK_MODEL = 'gpt-image-1.5';
+
+async function generateWithPollinations(form: FormData, apiKey: string) {
+  return fetch('https://gen.pollinations.ai/v1/images/edits', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+    signal: AbortSignal.timeout(20_000),
+  });
+}
+
+async function generateWithOpenAI(imageFile: File, prompt: string, apiKey: string) {
+  const form = new FormData();
+  form.append('image', imageFile, 'source.jpg');
+  form.append('prompt', prompt);
+  form.append('model', OPENAI_FALLBACK_MODEL);
+  form.append('size', OPENAI_FALLBACK_SIZE);
+  form.append('n', '1');
+
+  return fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.POLLINATIONS_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Server is missing POLLINATIONS_API_KEY.' }, { status: 500 });
+  const pollinationsKey = process.env.POLLINATIONS_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  if (!pollinationsKey && !openaiKey) {
+    return NextResponse.json({ error: 'Server is missing image-generation API keys.' }, { status: 500 });
   }
 
   const incomingForm = await req.formData();
+  const imageFile = incomingForm.get('image') as File | null;
+  const prompt = (incomingForm.get('prompt') as string) || '';
 
-  const response = await fetch('https://gen.pollinations.ai/v1/images/edits', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: incomingForm,
-  });
+  let response: Response | null = null;
+  let usedFallback = false;
+
+  if (pollinationsKey) {
+    try {
+      response = await generateWithPollinations(incomingForm, pollinationsKey);
+      if (!response.ok) {
+        console.error('Pollinations returned an error, trying fallback:', response.status);
+        response = null;
+      }
+    } catch (err) {
+      console.error('Pollinations request failed, trying fallback:', err);
+      response = null;
+    }
+  }
+
+  if (!response && openaiKey && imageFile) {
+    usedFallback = true;
+    try {
+      response = await generateWithOpenAI(imageFile, prompt, openaiKey);
+    } catch (err) {
+      console.error('OpenAI fallback request failed:', err);
+      return NextResponse.json({ error: 'Both AI image services failed. Please try again shortly.' }, { status: 502 });
+    }
+  }
+
+  if (!response) {
+    return NextResponse.json({ error: 'AI service is currently unavailable.' }, { status: 502 });
+  }
 
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');
-    console.error('Pollinations API error:', response.status, response.statusText, bodyText);
+    console.error(`${usedFallback ? 'OpenAI' : 'Pollinations'} API error:`, response.status, response.statusText, bodyText);
     return NextResponse.json(
       { error: `AI service error (${response.status}): ${bodyText || response.statusText}` },
       { status: response.status },
@@ -29,7 +84,7 @@ export async function POST(req: NextRequest) {
     try {
       payload = await response.json();
     } catch (err) {
-      console.error('Failed to parse Pollinations JSON response:', err);
+      console.error('Failed to parse JSON response:', err);
       return NextResponse.json({ error: 'Unexpected response from AI service.' }, { status: 502 });
     }
 
@@ -55,11 +110,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.error('Pollinations JSON response had no image data:', payload);
+    console.error('JSON response had no image data:', payload);
     return NextResponse.json({ error: 'AI service returned no image.' }, { status: 502 });
   }
 
-  // Already raw image bytes.
   const arrayBuffer = await response.arrayBuffer();
   return new NextResponse(arrayBuffer, { headers: { 'Content-Type': responseContentType || 'image/jpeg' } });
 }
