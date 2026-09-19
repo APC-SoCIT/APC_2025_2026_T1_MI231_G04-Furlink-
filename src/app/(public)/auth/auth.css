@@ -613,6 +613,12 @@ input::-webkit-credentials-auto-fill-button {
   margin-bottom: 20px;
 }
 
+.confirmation-btn-group {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
 .confirmation-dialog .save-btn {
   background-color: #0a217a;
   color: #ffffff;
