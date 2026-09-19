@@ -1,6 +1,6 @@
 {
   "name": "furlink Workspace - LogiTeh",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "forwardPorts": [3000],
   "customizations": {
     "vscode": {
