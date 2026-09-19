@@ -16,6 +16,7 @@ import {
   FaTimes,
   FaFileAlt,
   FaExclamationCircle,
+  FaCommentAlt,
 } from 'react-icons/fa';
 import './manage_bookings.css';
 
@@ -54,6 +55,7 @@ type BookingRecord = {
   booking_timeslot: string;
   booking_status: string;
   booking_rejection_reason?: string | null;
+  booking_comment?: string | null;
   booking_total_amount: number;
   booking_pet_info?: PetInfoItem[];
 };
@@ -77,7 +79,7 @@ export default function ManageBookingsPage() {
       case 'to_pay':
         return ['to pay'];
       case 'upcoming':
-        return ['approved', 'paid'];
+        return ['approved'];
       case 'decline_cancelled':
         return ['rejected', 'cancelled'];
       case 'refund':
@@ -176,6 +178,7 @@ export default function ManageBookingsPage() {
             booking_timeslot,
             booking_status,
             booking_rejection_reason,
+            booking_comment,
             booking_total_amount,
             booking_pet_info (
               id,
@@ -447,6 +450,26 @@ export default function ManageBookingsPage() {
               {selectedBooking.booking_rejection_reason && (
                 <div className="rejection-reason-box">
                   <strong>Cancellation/Refund Reason:</strong> {selectedBooking.booking_rejection_reason}
+                </div>
+              )}
+
+              {/* Booking Comment Display Box */}
+              {selectedBooking.booking_comment && (
+                <div style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px'
+                }}>
+                  <FaCommentAlt style={{ marginTop: '2px', color: '#1e3a8a' }} />
+                  <div>
+                    <strong>Booking Comment/Notes:</strong> {selectedBooking.booking_comment}
+                  </div>
                 </div>
               )}
 
