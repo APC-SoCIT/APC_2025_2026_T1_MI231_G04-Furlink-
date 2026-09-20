@@ -725,6 +725,7 @@ function BookingFormContent() {
       formData.append('model', 'kontext');
       formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
       formData.append('seed', String(seed));
+      formData.append('petType', pet.petType.toLowerCase()); // 'dog' | 'cat' - lets the server verify the photo
 
       const response = await fetch(POLLINATIONS_EDIT_ENDPOINT, {
         method: 'POST',
@@ -733,6 +734,19 @@ function BookingFormContent() {
 
       if (!response.ok) {
         const bodyText = await response.text().catch(() => '');
+        
+        if (response.status === 422) {
+          let message = bodyText;
+          try {
+            message = JSON.parse(bodyText)?.error || bodyText;
+          } catch {
+            // not JSON, keep the raw text
+          }
+          const validationError: any = new Error(message || 'This photo cannot be used for a preview.');
+          validationError.expected = true;
+          throw validationError;
+        }
+
         console.error('AI preview error:', response.status, response.statusText, bodyText);
 
         if (response.status === 504) {
@@ -743,7 +757,14 @@ function BookingFormContent() {
           throw new Error('Unable to process your request at this moment. Please try again later.');
         }
 
-        throw new Error(bodyText || `AI service error (${response.status})`);
+        let serverMessage = bodyText;
+        try {
+          serverMessage = JSON.parse(bodyText)?.error || bodyText;
+        } catch {
+          // not JSON, keep the raw text
+        }
+
+        throw new Error(serverMessage || `AI service error (${response.status})`);
       }
 
       const blob = await response.blob();
@@ -767,7 +788,7 @@ function BookingFormContent() {
         },
       });
     } catch (err: any) {
-      console.error('AI haircut generation error:', err);
+      if (!err?.expected) console.error('AI haircut generation error:', err);
       patchPetForm(petId, {
         aiPreviewStatus: 'error',
         aiPreviewError: err.message || 'Something went wrong while generating the preview.',
