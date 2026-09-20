@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
-    const { amount, description, bookingId } = await req.json();
+    const { amount, description, bookingId, isPayNow } = await req.json();
 
     const secretKey = process.env.PAYMONGO_SECRET_KEY?.trim();
 
@@ -29,8 +29,14 @@ export async function POST(req: Request) {
     const proto = req.headers.get('x-forwarded-proto') || 'https';
     const baseUrl = `${proto}://${host}`;
 
-    const successUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=success&booking_id=${bookingId}`;
-    const cancelUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed&booking_id=${bookingId}`;
+    // Dynamically assign success and cancel URLs based on whether it's a Pay Now request
+    const successUrl = isPayNow
+      ? `${baseUrl}/pet_owner/manage_bookings?status=success&booking_id=${bookingId}`
+      : `${baseUrl}/pet_owner/book_appointment/booking_form?status=success&booking_id=${bookingId}`;
+
+    const cancelUrl = isPayNow
+      ? `${baseUrl}/pet_owner/manage_bookings?status=failed&booking_id=${bookingId}`
+      : `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed&booking_id=${bookingId}`;
 
     const amountInCentavos = Math.round(amount * 100);
 

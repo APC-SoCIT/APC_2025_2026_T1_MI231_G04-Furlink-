@@ -25,6 +25,8 @@ import {
 } from './utils/bookingFormatters';
 import BookingDetailsModal from './modals/BookingDetailsModal';
 import RescheduleModal from './modals/RescheduleModal';
+import PaymentSuccessModal from './modals/PaymentSuccessModal';
+import PaymentFailedModal from './modals/PaymentFailedModal'; // Import the failed modal
 
 export default function ManageBookingsPage() {
   const supabase = createClientComponentClient();
@@ -37,6 +39,55 @@ export default function ManageBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<boolean>(false);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [showFailedModal, setShowFailedModal] = useState<boolean>(false); // Failed modal visibility
+
+  // Payment attempts & cooldown tracking states
+  const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
+  const [failedBookingId, setFailedBookingId] = useState<string | null>(null);
+
+  // Load attempt limits & cooldowns from localStorage on mount
+  useEffect(() => {
+    const savedAttempts = localStorage.getItem('payment_attempts');
+    const savedCooldown = localStorage.getItem('payment_cooldown_until');
+    
+    if (savedAttempts) setPaymentAttempts(parseInt(savedAttempts, 10));
+    if (savedCooldown) {
+      const cooldownTime = parseInt(savedCooldown, 10);
+      if (Date.now() < cooldownTime) {
+        setCooldownUntil(cooldownTime);
+      } else {
+        localStorage.removeItem('payment_cooldown_until');
+        localStorage.setItem('payment_attempts', '0');
+        setPaymentAttempts(0);
+      }
+    }
+  }, []);
+
+  // Cooldown countdown interval ticker
+  useEffect(() => {
+    if (!cooldownUntil) return;
+
+    const interval = setInterval(() => {
+      const remaining = cooldownUntil - Date.now();
+      if (remaining <= 0) {
+        setCooldownUntil(null);
+        setPaymentAttempts(0);
+        localStorage.removeItem('payment_cooldown_until');
+        localStorage.setItem('payment_attempts', '0');
+        clearInterval(interval);
+      } else {
+        const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+        setTimeRemaining(`${minutes}m ${seconds}s`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
 
   // Mapped to exact status strings allowed by database constraints
   const getStatusesForTab = (tab: BookingTab): string[] => {
@@ -183,6 +234,47 @@ export default function ManageBookingsPage() {
     }
   }, [activeTab, supabase]);
 
+  // Handle successful or failed PayMongo redirection callbacks via URL parameters
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const status = queryParams.get('status');
+    const bookingId = queryParams.get('booking_id');
+
+    if (bookingId) {
+      setFailedBookingId(bookingId);
+    }
+
+    if (status === 'success' && bookingId) {
+      const verifyAndStorePayment = async () => {
+        try {
+          const response = await fetch(`/api/paymongo/verify?booking_id=${bookingId}`);
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to verify payment session.');
+          }
+
+          setShowSuccessModal(true);
+          localStorage.setItem('payment_attempts', '0');
+          setPaymentAttempts(0);
+
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setActiveTab('awaiting_approval');
+          fetchBookings();
+        } catch (err: any) {
+          console.error('Payment verification error:', err);
+          alert(`Error saving payment record: ${err.message || 'Unknown error'}`);
+        }
+      };
+
+      verifyAndStorePayment();
+    } else if ((status === 'failed' || status === 'cancelled') && bookingId) {
+      // Just show the failed modal; the attempt count was already incremented when clicking "Try Again"
+      setShowFailedModal(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [fetchBookings]);
+
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
@@ -213,14 +305,110 @@ export default function ManageBookingsPage() {
 
       alert('Booking successfully rescheduled!');
       setShowRescheduleModal(false);
-      fetchBookings(); // Refresh list
+      fetchBookings();
     } catch (err) {
       console.error('Unexpected error during rescheduling:', err);
     }
   };
 
-  const handlePayNow = (bookingId: string) => {
-    alert(`Redirecting to payment for booking ID: ${bookingId}`);
+  const handlePayNow = async (bookingId?: string) => {
+    if (cooldownUntil && Date.now() < cooldownUntil) {
+      alert('Payment attempts are temporarily locked due to multiple failed tries. Please wait for the cooldown or choose Pay Later.');
+      return;
+    }
+
+    const targetBookingId = bookingId || failedBookingId || selectedBooking?.id;
+
+    if (!targetBookingId) {
+      alert('Error: Could not identify the booking for payment. Please select "View Details" and try paying from there.');
+      return;
+    }
+
+    // Increment attempt count immediately upon initiating a payment attempt
+    const newAttempts = paymentAttempts + 1;
+    setPaymentAttempts(newAttempts);
+    localStorage.setItem('payment_attempts', newAttempts.toString());
+
+    if (newAttempts >= 3) {
+      const cooldownTime = Date.now() + 60 * 60 * 1000; // 1-hour cooldown limit
+      setCooldownUntil(cooldownTime);
+      localStorage.setItem('payment_cooldown_until', cooldownTime.toString());
+      setShowFailedModal(true);
+      return;
+    }
+
+    try {
+      let bookingToPay =
+        bookings.find((b) => b.id === targetBookingId) ||
+        (selectedBooking?.id === targetBookingId ? selectedBooking : null);
+
+      let amount = bookingToPay ? Number(bookingToPay.booking_total_amount || 0) : 0;
+
+      // Fallback: Fetch directly from Supabase if amount isn't in current state view
+      if (amount <= 0) {
+        const { data: fetchedBooking, error: fetchError } = await supabase
+          .from('booking_info')
+          .select('booking_total_amount')
+          .eq('id', targetBookingId)
+          .single();
+
+        if (!fetchError && fetchedBooking) {
+          amount = Number(fetchedBooking.booking_total_amount || 0);
+        }
+      }
+
+      if (amount <= 0) {
+        alert('Error: Invalid total amount for this booking.');
+        return;
+      }
+
+      const response = await fetch('/api/paymongo/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: targetBookingId,
+          amount: amount,
+          description: `Pet Grooming Session Payment`,
+          isPayNow: true, 
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.checkoutUrl) {
+        throw new Error(result.error || 'Failed to initialize payment session.');
+      }
+
+      window.location.href = result.checkoutUrl;
+    } catch (err: any) {
+      console.error('PayNow error:', err);
+      alert(`Error: ${err.message || 'Could not redirect to payment.'}`);
+    }
+  };
+
+  const handlePayLater = async () => {
+    if (!failedBookingId) {
+      setShowFailedModal(false);
+      return;
+    }
+
+    setIsSavingPayLater(true);
+    try {
+      const { error } = await supabase
+        .from('booking_info')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', failedBookingId);
+
+      if (error) throw error;
+
+      setShowFailedModal(false);
+      setActiveTab('to_pay');
+      fetchBookings();
+    } catch (err: any) {
+      console.error('Error saving pay later:', err);
+      alert('Failed to update status. Please try again.');
+    } finally {
+      setIsSavingPayLater(false);
+    }
   };
 
   const handleRequestRefund = (bookingId: string) => {
@@ -372,6 +560,26 @@ export default function ManageBookingsPage() {
           )}
         </div>
       </main>
+
+      {/* Payment Success Confirmation Modal */}
+      {showSuccessModal && (
+        <PaymentSuccessModal onClose={() => setShowSuccessModal(false)} />
+      )}
+
+      {/* Payment Failed / Cancelled Modal with Limits */}
+      {showFailedModal && (
+        <PaymentFailedModal
+          cooldownUntil={cooldownUntil}
+          timeRemaining={timeRemaining}
+          paymentAttempts={paymentAttempts}
+          isSavingPayLater={isSavingPayLater}
+          onRetry={() => {
+            setShowFailedModal(false);
+            handlePayNow(failedBookingId || undefined);
+          }}
+          onPayLater={handlePayLater}
+        />
+      )}
 
       {/* Booking Details Modal */}
       {showDetailsModal && selectedBooking && (
