@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
@@ -76,7 +78,21 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ checkoutUrl: data.data.attributes.checkout_url });
+    const checkoutSessionId = data.data.id;
+    const checkoutUrl = data.data.attributes.checkout_url;
+
+    // Save paymongo_session_id immediately into database
+    const supabase = createRouteHandlerClient({ cookies });
+    const { error: updateErr } = await supabase
+      .from('booking_info')
+      .update({ paymongo_session_id: checkoutSessionId })
+      .eq('id', bookingId);
+
+    if (updateErr) {
+      console.error('Failed to save paymongo_session_id:', updateErr.message);
+    }
+
+    return NextResponse.json({ checkoutUrl, sessionId: checkoutSessionId });
   } catch (error: any) {
     console.error('Checkout Route Exception:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

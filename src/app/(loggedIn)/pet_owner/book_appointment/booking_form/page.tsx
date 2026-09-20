@@ -90,15 +90,23 @@ function BookingFormContent() {
     return () => clearInterval(interval);
   }, [cooldownUntil]);
 
-  // Payment status redirect handlers
+  // Payment status redirect handlers & secure server-side verification syncing paymongo_session_id and paymongo_payment_id
   useEffect(() => {
     const handlePaymentSuccess = async () => {
       if (statusParam === 'success') {
         if (activeBookingId) {
-          await supabase
-            .from('booking_info')
-            .update({ booking_status: 'pending_sp_response' })
-            .eq('id', activeBookingId);
+          try {
+            const verifyRes = await fetch(`/api/paymongo/verify?booking_id=${activeBookingId}`);
+            if (!verifyRes.ok) {
+              // Fallback simple database status update if verification API errors out
+              await supabase
+                .from('booking_info')
+                .update({ booking_status: 'pending_sp_response' })
+                .eq('id', activeBookingId);
+            }
+          } catch (err) {
+            console.error('Error during payment success synchronization:', err);
+          }
         }
         setShowSuccessModal(true);
         setShowFailedModal(false);
@@ -599,7 +607,6 @@ function BookingFormContent() {
   };
 
   const handleConfirmBooking = async () => {
-    // Bypass the ₱0.00 block if an activeBookingId already exists from a prior attempt
     if (grandTotal <= 0 && !activeBookingId) {
       alert('Invalid Booking: Total amount cannot be ₱0.00.');
       return;
@@ -623,7 +630,7 @@ function BookingFormContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: grandTotal > 0 ? grandTotal : 1, // Fallback safety net if state is 0 temporarily on retry
+          amount: grandTotal > 0 ? grandTotal : 1, 
           description: `Pet Grooming Session on ${formattedDateDisplay}`,
           bookingId: bookingInfoId,
         }),
