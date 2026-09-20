@@ -130,6 +130,33 @@ function BookingFormContent() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
+  // Returns the current user, refreshing the session first if the access token is
+  // expired or about to expire (e.g. after the page sat idle in a background tab).
+  const getFreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const msLeft = session?.expires_at ? session.expires_at * 1000 - Date.now() : 0;
+
+    if (session && msLeft > 60_000) return session.user;
+
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      console.error('Session refresh failed:', error.message);
+      return null;
+    }
+    return data.session?.user ?? null;
+  };
+
+  // Refresh an expired token as soon as the user returns to this tab
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession(); // triggers a refresh if the token has expired
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [supabase]);
+
   const spId = searchParams.get('sp_id') || '';
   const dateStr = searchParams.get('date') || '2026-08-20';
   const timeSlot = searchParams.get('time') || '9:00 AM';
@@ -680,8 +707,12 @@ function BookingFormContent() {
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('You must be logged in to use the AI haircut preview.');
+      const user = await getFreshUser();
+      if (!user) {
+        throw new Error(
+          'Your session timed out while this page was idle. Please sign in again in a new tab, then come back here and click Generate. Your form details are still saved on this page.',
+        );
+      }
 
       patchPetForm(petId, { aiPreviewStatus: 'generating', aiPreviewError: null });
 
@@ -755,8 +786,12 @@ function BookingFormContent() {
     patchPetForm(petId, { aiPreviewStatus: 'uploading', aiPreviewError: null });
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('You must be logged in to confirm this preview.');
+      const user = await getFreshUser();
+      if (!user) {
+        throw new Error(
+          'Your session timed out while this page was idle. Please sign in again in a new tab, then click "Confirm this look" again.',
+        );
+      }
 
       const fileName = `${Date.now()}_ai_haircut_${petId}.jpg`;
       const filePath = `${user.id}/${fileName}`;
@@ -782,7 +817,7 @@ function BookingFormContent() {
   };
 
   const createBookingInDatabase = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getFreshUser();
     if (!user) throw new Error('User authentication failed. Please log in again.');
 
     let currentBookingId = activeBookingId;
