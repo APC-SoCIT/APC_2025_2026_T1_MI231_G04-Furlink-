@@ -1,3 +1,4 @@
+// src/components/HeaderLoggedIn.tsx
 'use client';
 
 import React, { useState, useEffect, useRef } from "react";
@@ -19,6 +20,8 @@ import brandIcon from "../app/icon.png";
 import { ROUTES } from "@/config/routes";
 import NotificationsDropdown from "./NotificationsDropdown";
 
+const SERVICE_PROVIDER_AREA = "/service_provider";
+
 type Profile = {
   first_name?: string;
   last_name?: string;
@@ -33,10 +36,10 @@ export default function HeaderLoggedIn() {
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // Modal state for SP -> Both role change
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [homeRoute, setHomeRoute] = useState<string>(ROUTES.HOME);
   const [registrationStatus, setRegistrationStatus] = useState<string | null | undefined>(undefined);
 
   const desktopNotifRef = useRef<HTMLDivElement>(null);
@@ -45,11 +48,18 @@ export default function HeaderLoggedIn() {
 
   useEffect(() => {
     document.body.classList.add("logged-in-page");
+    return () => {
+      document.body.classList.remove("logged-in-page");
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
 
     const fetchData = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) return;
+        if (error || !user || !isActive) return;
 
         const { data: profileData } = await supabase
           .from("profiles")
@@ -57,31 +67,36 @@ export default function HeaderLoggedIn() {
           .eq("id", user.id)
           .single();
 
-        setProfile(profileData);
+        if (!profileData || !isActive) return;
 
-        if (profileData?.role) {
-          const role = profileData.role;
-          if (role === 'service_provider' || role === 'both_sp_po') {
-            const { data: spInfo } = await supabase
-              .from("sp_general_info")
-              .select("registration_status")
-              .eq("profiles_id", user.id)
-              .maybeSingle();
+        let role: Profile['role'] = profileData.role;
+        let status: string | null | undefined = undefined;
 
-            const status = spInfo ? spInfo.registration_status : null;
-            setRegistrationStatus(status);
+        if (role === 'pet_owner' || role === 'service_provider' || role === 'both_sp_po') {
+          const { data: spInfo } = await supabase
+            .from("sp_general_info")
+            .select("registration_status")
+            .eq("profiles_id", user.id)
+            .maybeSingle();
 
-            if (status === 'approved') {
-              setHomeRoute(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
-            } else {
-              setHomeRoute(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+          status = spInfo?.registration_status ?? null;
+
+          // Promote pet_owner to both_sp_po only if admin approved their application
+          if (role === 'pet_owner' && status === 'approved') {
+            const { error: roleError } = await supabase
+              .from("profiles")
+              .update({ role: 'both_sp_po' })
+              .eq("id", user.id);
+
+            if (!roleError) {
+              role = 'both_sp_po';
             }
-          } else if (role === 'pet_owner') {
-            setHomeRoute(ROUTES.PET_OWNER.DASHBOARD);
-          } else if (role === 'admin') {
-            setHomeRoute(ROUTES.ADMIN.ADMIN_DASHBOARD);
           }
         }
+
+        if (!isActive) return;
+        setProfile({ ...profileData, role });
+        setRegistrationStatus(status);
       } catch (err) {
         console.error("Auth fetch error:", err);
       }
@@ -90,9 +105,9 @@ export default function HeaderLoggedIn() {
     fetchData();
 
     return () => {
-      document.body.classList.remove("logged-in-page");
+      isActive = false;
     };
-  }, [supabase]);
+  }, [supabase, pathname]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -188,11 +203,55 @@ export default function HeaderLoggedIn() {
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
 
-  const isCurrentlyServiceProvider =
-    pathname === ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD ||
-    pathname === ROUTES.SERVICE_PROVIDER.MANAGE_LISTING ||
-    pathname === ROUTES.SERVICE_PROVIDER.EDIT_LISTING ||
-    pathname === ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO;
+  const inServiceProviderArea =
+    pathname === SERVICE_PROVIDER_AREA || pathname.startsWith(`${SERVICE_PROVIDER_AREA}/`);
+
+  const hasApplication = registrationStatus !== null && registrationStatus !== undefined;
+  const isApproved = registrationStatus === 'approved';
+
+  const serviceProviderHome = isApproved
+    ? ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD
+    : ROUTES.SERVICE_PROVIDER.ONBOARDING;
+
+  // Logo destination rules
+  let homeRoute: string = ROUTES.HOME;
+  if (userRole === 'admin') {
+    homeRoute = ROUTES.ADMIN.ADMIN_DASHBOARD;
+  } else if (userRole === 'pet_owner') {
+    homeRoute = ROUTES.PET_OWNER.DASHBOARD;
+  } else if (userRole === 'service_provider') {
+    homeRoute = serviceProviderHome;
+  } else if (isBoth) {
+    if (inServiceProviderArea) {
+      homeRoute = serviceProviderHome;
+    } else {
+      homeRoute = ROUTES.PET_OWNER.DASHBOARD;
+    }
+  }
+
+  // Role Action Button Label Logic
+  const getRoleActionLabel = (): string | null => {
+    if (registrationStatus === undefined) return null;
+
+    if (userRole === 'pet_owner') {
+      if (!hasApplication) return "Become a Service Provider";
+      return isApproved ? null : "View Application";
+    }
+
+    if (userRole === 'service_provider') {
+      return hasApplication ? "Become a Pet Owner" : "Register Now!";
+    }
+
+    if (isBoth) {
+      if (!hasApplication) return "Register Now!";
+      if (!isApproved) return null;
+      return inServiceProviderArea ? "Switch to Pet Owner" : "Switch to Business";
+    }
+
+    return null;
+  };
+
+  const roleActionLabel = getRoleActionLabel();
 
   const handleLogout = async () => {
     document.body.classList.remove("logged-in-page");
@@ -207,141 +266,105 @@ export default function HeaderLoggedIn() {
     router.push(path);
   };
 
-  const handleActionClick = async () => {
+  const handleActionClick = () => {
     setShowMobileMenu(false);
     setShowMenu(false);
 
     if (userRole === 'pet_owner') {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-          return;
-        }
-
-        const { data: spInfo } = await supabase
-          .from("sp_general_info")
-          .select("registration_status")
-          .eq("profiles_id", user.id)
-          .maybeSingle();
-
-        if (!spInfo) {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else {
-          const status = spInfo.registration_status;
-          if (status === 'pending' || status === 'rejected') {
-            router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-          } else {
-            router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
-          }
-        }
-      } catch (err) {
-        console.error("Error checking sp status:", err);
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-      }
+      router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
       return;
     }
 
     if (userRole === 'service_provider') {
-      if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
-        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      if (hasApplication && isApproved) {
+        // Trigger modal confirmation to become 'both_sp_po'
+        setShowConfirmModal(true);
       } else {
-        router.push(ROUTES.AUTH.MANAGE_ACCOUNT);
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
       }
       return;
     }
 
     if (isBoth) {
-      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        return null;
+      if (!hasApplication) {
+        router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      } else if (isApproved) {
+        router.push(inServiceProviderArea ? ROUTES.PET_OWNER.DASHBOARD : ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
       }
+    }
+  };
 
-      if (isCurrentlyServiceProvider) {
+  // Confirm role change to both_sp_po for Service Provider
+  const confirmBecomePetOwner = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: 'both_sp_po' })
+        .eq("id", user.id);
+
+      if (!error) {
+        setProfile((prev) => prev ? { ...prev, role: 'both_sp_po' } : null);
+        setShowConfirmModal(false);
         router.push(ROUTES.PET_OWNER.DASHBOARD);
       } else {
-        if (registrationStatus === 'pending' || registrationStatus === 'rejected' || registrationStatus === null) {
-          router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
-        } else {
-          router.push(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
-        }
+        console.error("Error updating role to both_sp_po:", error);
       }
+    } catch (err) {
+      console.error("Confirmation action error:", err);
     }
   };
 
   const RoleActionButton = () => {
-    if (userRole === 'pet_owner') {
-      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        return null;
-      }
-      return (
-        <button className="header-action-btn-outline" onClick={handleActionClick}>
-          Become a Service Provider
-        </button>
-      );
-    }
+    if (!roleActionLabel) return null;
 
-    if (userRole === 'service_provider') {
-      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        return null;
-      }
-      let buttonText = registrationStatus === 'approved' ? "Become a Pet Owner" : "Register Now!";
-      return (
-        <button className="header-action-btn-outline" onClick={handleActionClick}>
-          {buttonText}
-        </button>
-      );
-    }
-
-    if (isBoth) {
-      if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-        return null;
-      }
-
-      let buttonText = isCurrentlyServiceProvider ? "Switch to Pet Owner" : "Switch to Business";
-      if (registrationStatus === null) {
-        buttonText = "Become a service provider";
-      }
-
-      return (
-        <button className="header-action-btn" onClick={handleActionClick}>
-          {buttonText}
-        </button>
-      );
-    }
-
-    return null;
+    return (
+      <button
+        className={isBoth ? "header-action-btn" : "header-action-btn-outline"}
+        onClick={handleActionClick}
+      >
+        {roleActionLabel}
+      </button>
+    );
   };
 
-  const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => (
-    <>
-      {pathname !== ROUTES.AUTH.MANAGE_ACCOUNT && (
-        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
-          <FaUser /> <span>Manage Account</span>
-        </button>
-      )}
+  const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => {
+    // Only show "Manage Listing" if user is an Approved SP or Approved both_sp_po
+    const canSeeManageListing = isServiceProvider && isApproved;
 
-      {isServiceProvider && pathname !== ROUTES.SERVICE_PROVIDER.MANAGE_LISTING && (
-        <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING)}>
-          <FaStore /> <span>Manage Listing</span>
-        </button>
-      )}
+    return (
+      <>
+        {pathname !== ROUTES.AUTH.MANAGE_ACCOUNT && (
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.AUTH.MANAGE_ACCOUNT)}>
+            <FaUser /> <span>Manage Account</span>
+          </button>
+        )}
 
-      {isPetOwner && (
-        <>
-          {pathname !== ROUTES.PET_OWNER.MANAGE_BOOKING && (
-            <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
-              <FaCalendarAlt /> <span>Manage Bookings</span>
-            </button>
-          )}
-          {pathname !== ROUTES.PET_OWNER.MANAGE_PET && (
-            <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
-              <FaPaw /> <span>Manage Pet</span>
-            </button>
-          )}
-        </>
-      )}
-    </>
-  );
+        {canSeeManageListing && pathname !== ROUTES.SERVICE_PROVIDER.MANAGE_LISTING && (
+          <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.SERVICE_PROVIDER.MANAGE_LISTING)}>
+            <FaStore /> <span>Manage Listing</span>
+          </button>
+        )}
+
+        {isPetOwner && (
+          <>
+            {pathname !== ROUTES.PET_OWNER.MANAGE_BOOKING && (
+              <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_BOOKING)}>
+                <FaCalendarAlt /> <span>Manage Bookings</span>
+              </button>
+            )}
+            {pathname !== ROUTES.PET_OWNER.MANAGE_PET && (
+              <button className="profile-dropdown-item" onClick={() => onNavigate(ROUTES.PET_OWNER.MANAGE_PET)}>
+                <FaPaw /> <span>Manage Pet</span>
+              </button>
+            )}
+          </>
+        )}
+      </>
+    );
+  };
 
   return (
     <>
@@ -407,6 +430,32 @@ export default function HeaderLoggedIn() {
         </div>
       </header>
 
+      {/* Confirmation Modal for Service Provider -> Both SP & PO Role Change */}
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div className="modal-content" style={{ background: 'white', padding: '24px', borderRadius: '8px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+            <h3>Confirm Role Change</h3>
+            <p style={{ margin: '16px 0', color: '#555' }}>
+              Are you sure you want to become a Pet Owner as well? This will update your account role to both Service Provider and Pet Owner.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{ padding: '8px 16px', background: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBecomePetOwner}
+                style={{ padding: '8px 16px', background: '#0a217a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Yes, Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`mobile-drawer-overlay ${showMobileMenu ? 'active' : ''}`} onClick={() => setShowMobileMenu(false)}></div>
       <div className={`mobile-drawer ${showMobileMenu ? 'active' : ''}`}>
         <div className="mobile-drawer-header">
@@ -425,7 +474,7 @@ export default function HeaderLoggedIn() {
             </div>
           </div>
 
-          {(userRole === 'pet_owner' || userRole === 'service_provider' || isBoth) && (
+          {roleActionLabel && (
             <div className="drawer-section">
               <RoleActionButton />
             </div>
