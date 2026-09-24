@@ -14,6 +14,59 @@ const OTP_VALIDITY_SECONDS = 120; // Exactly 2 minutes validity per code
 
 export default function AdminSignupPage() {
   const router = useRouter();
+  
+  const [accessGranted, setAccessGranted] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [showAccessCode, setShowAccessCode] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessRateLimited, setAccessRateLimited] = useState(false);
+  const [gateLockoutUntil, setGateLockoutUntil] = useState<number | null>(null);
+  const [gateCountdown, setGateCountdown] = useState(0);
+
+  const GATE_LOCKOUT_KEY = "admin_gate_attempts";
+
+  const getStoredGateBlock = (): number | null => {
+    const rawData = localStorage.getItem(GATE_LOCKOUT_KEY);
+    const data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+    if (data.blockedUntil && Date.now() < data.blockedUntil) {
+      return data.blockedUntil;
+    }
+    return null;
+  };
+
+  // On mount (including a refresh mid-lockout), immediately surface any
+  // still-active lockout instead of waiting for the user to submit again.
+  useEffect(() => {
+    const blockedUntil = getStoredGateBlock();
+    if (blockedUntil) {
+      setAccessRateLimited(true);
+      setGateLockoutUntil(blockedUntil);
+    }
+  }, []);
+
+  // Ticks the countdown every second while locked out, and clears the lock
+  // the moment it expires so the form re-enables itself automatically.
+  useEffect(() => {
+    if (!gateLockoutUntil) return;
+
+    const tick = () => {
+      const remainingMs = gateLockoutUntil - Date.now();
+      if (remainingMs <= 0) {
+        setAccessRateLimited(false);
+        setGateLockoutUntil(null);
+        setGateCountdown(0);
+        setAccessError(null);
+      } else {
+        setGateCountdown(Math.ceil(remainingMs / 1000));
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [gateLockoutUntil]);
+
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", username: "", email: "",
     mobile: "", dob: "", password: "", confirmPassword: ""
@@ -168,6 +221,99 @@ export default function AdminSignupPage() {
     }
 
     return { allowed: true };
+  };
+
+  // --- Admin access gate rate limiting (same pattern as the signup rate
+  // limiter below, but keyed on the gate itself since there's no email yet) ---
+  const checkGateRateLimit = () => {
+    const key = "admin_gate_attempts";
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const lockoutMs = 15 * 60 * 1000;
+
+    const rawData = localStorage.getItem(key);
+    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
+
+    if (data.blockedUntil && now < data.blockedUntil) {
+      const remainingMins = Math.ceil((data.blockedUntil - now) / 60000);
+      setAccessRateLimited(true);
+      setGateLockoutUntil(data.blockedUntil);
+      return {
+        allowed: false,
+        validAttempts: [] as number[],
+        message: `Too many incorrect attempts. Please try again in ${remainingMins} minute(s).`,
+      };
+    }
+
+    const validAttempts = (data?.attempts || []).filter((t) => now - t < windowMs);
+
+    if (validAttempts.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
+      setAccessRateLimited(true);
+      setGateLockoutUntil(blockedUntil);
+      return {
+        allowed: false,
+        validAttempts,
+        message: "Too many incorrect attempts. Please try again in 15 minutes.",
+      };
+    }
+
+    return { allowed: true, validAttempts, message: null as string | null };
+  };
+
+  const recordFailedGateAttempt = (validAttempts: number[]) => {
+    const key = "admin_gate_attempts";
+    const now = Date.now();
+    const updated = [...validAttempts, now];
+    const lockoutMs = 15 * 60 * 1000;
+
+    if (updated.length >= 5) {
+      const blockedUntil = now + lockoutMs;
+      localStorage.setItem(key, JSON.stringify({ attempts: updated, blockedUntil }));
+      setAccessRateLimited(true);
+      setGateLockoutUntil(blockedUntil);
+    } else {
+      localStorage.setItem(key, JSON.stringify({ attempts: updated, blockedUntil: undefined }));
+    }
+  };
+
+  const handleAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccessError(null);
+
+    const rateCheck = checkGateRateLimit();
+    if (!rateCheck.allowed) {
+      setAccessError(rateCheck.message);
+      return;
+    }
+
+    if (!accessCode.trim()) {
+      setAccessError("Please enter the admin signup code.");
+      return;
+    }
+
+    setAccessLoading(true);
+    try {
+      const res = await fetch("/api/admin_signup_auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: accessCode }),
+      });
+      const result = await res.json();
+
+      if (result.valid) {
+        setAccessGranted(true);
+        setAccessError(null);
+      } else {
+        recordFailedGateAttempt(rateCheck.validAttempts);
+        setAccessError(result.error || "Incorrect code. Please try again.");
+      }
+    } catch {
+      setAccessError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setAccessLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -328,6 +474,58 @@ export default function AdminSignupPage() {
       setResendLoading(false);
     }
   };
+
+  if (!accessGranted) {
+    return (
+      <div className="signup-wrapper">
+        <form className="signup-card" onSubmit={handleAccessSubmit} noValidate>
+          <h1>Admin Access Required</h1>
+          <p className="otp-instructions">
+            This page is restricted. Enter the admin signup code provided by the Furlink team to continue.
+          </p>
+
+          {accessError && <p className="form-error-banner">{accessError}</p>}
+
+          <div className="input-group" style={{ marginBottom: "20px" }}>
+            <div className="password-container">
+              <input
+                type={showAccessCode ? "text" : "password"}
+                placeholder="Admin Signup Code"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                disabled={accessRateLimited}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="toggle-btn"
+                onClick={() => setShowAccessCode(!showAccessCode)}
+              >
+                {showAccessCode ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="register-btn"
+            disabled={accessLoading || accessRateLimited}
+          >
+            {accessLoading
+              ? "Checking..."
+              : accessRateLimited
+                ? `Try again in ${formatTimer(gateCountdown)}`
+                : "Continue"}
+          </button>
+
+          <p className="auth-redirect-text">
+            Not an admin?{" "}
+            <Link href="/auth/login" className="login-link">Log In</Link>
+          </p>
+        </form>
+      </div>
+    );
+  }
 
   if (pendingVerification) {
     return (

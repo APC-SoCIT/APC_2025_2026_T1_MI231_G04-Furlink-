@@ -411,6 +411,92 @@ input[type="password"]::-webkit-caps-lock-indicator {
   border: none;
 }
 
+/* ==========================================================================
+   WARNING HISTORY CARDS
+   ========================================================================== */
+
+.warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.warning-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #fffdf9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.warning-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  row-gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.severity-badge {
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.severity-badge.severity-high {
+  background-color: #fce8e6;
+  color: #c5221f;
+}
+
+.severity-badge.severity-medium {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.severity-badge.severity-normal {
+  background-color: #e6f4ea;
+  color: #137333;
+}
+
+.warning-date {
+  font-size: 12px;
+  color: #666666;
+  text-align: right;
+}
+
+.warning-message {
+  font-size: 14px;
+  color: #333333;
+  line-height: 1.5;
+  margin: 8px 0 0 0;
+}
+
+.warning-footer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #888888;
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.warning-status-active {
+  text-transform: capitalize;
+  color: #d9534f;
+}
+
+.warning-status-default {
+  text-transform: capitalize;
+  color: #555555;
+}
+
 .cancel-btn {
   background-color: #e0ded6;
   color: #333333;
@@ -420,4 +506,127 @@ input[type="password"]::-webkit-caps-lock-indicator {
   font-weight: bold;
   cursor: pointer;
   border: none;
+}
+
+/* ==========================================================================
+   RESPONSIVE / MOBILE STYLES
+   Everything above stays exactly as-is for tablet/desktop. These overrides
+   only kick in below the breakpoints, so the visual design is unchanged
+   above 768px.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .manage-account-container {
+    padding: 24px 16px;
+  }
+
+  /* Stack sidebar above content instead of side-by-side */
+  .manage-account-split-grid {
+    flex-direction: column;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .manage-account-sidebar {
+    width: 100%;
+  }
+
+  /* Keep tabs as a full-width, equal-size vertical stack rather than
+     wrapping into an uneven row */
+  .manage-account-nav-list {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .manage-account-nav-btn {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  /* Vertical divider doesn't make sense once stacked; turn it into a
+     horizontal rule instead of removing it, so it still visually separates
+     the sections */
+  .manage-account-divider {
+    width: 100%;
+    height: 1px;
+    align-self: stretch;
+  }
+
+  .manage-account-content-pane {
+    padding: 20px;
+  }
+
+  /* Badge + date no longer fight for the same row: badge sits on its own
+     line, date drops below it, both left-aligned and readable */
+  .warning-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .warning-date {
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .manage-account-container {
+    padding: 16px 12px;
+  }
+
+  .manage-account-sidebar h2 {
+    font-size: 19px;
+    margin-bottom: 16px;
+  }
+
+  .manage-account-nav-btn {
+    font-size: 12px;
+    padding: 9px 10px;
+    gap: 8px;
+  }
+
+  .manage-account-content-pane {
+    padding: 14px;
+    border-radius: 8px;
+  }
+
+  .manage-account-content-pane h3 {
+    font-size: 18px;
+  }
+
+  .account-field-group {
+    padding: 12px;
+  }
+
+  .input-prefix-box {
+    padding: 10px 10px;
+  }
+
+  .account-field-group input {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .confirmation-dialog {
+    padding: 20px;
+  }
+
+  .manage-account-card {
+    padding: 20px;
+  }
+
+  /* Badge + date already stacked at 768px; just tighten spacing further
+     for very small phones */
+  .warning-card {
+    padding: 14px;
+  }
+
+  .warning-message {
+    font-size: 13px;
+  }
+
+  .warning-footer {
+    gap: 10px;
+  }
 }

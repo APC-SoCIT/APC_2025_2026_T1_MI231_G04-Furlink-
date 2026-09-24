@@ -1,13 +1,22 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function Footer() {
+  const pathname = usePathname();
+
   return (
     <footer className="site-footer">
       <div className="footer-container">
         <div className="footer-left">
           <span>© 2026 furlink</span>
-          <Link href="/terms_and_conditions">Terms and Conditions</Link>
-          <Link href="/privacy_policy">Privacy Policy</Link>
+          {pathname !== '/terms_and_conditions' && (
+            <Link href="/terms_and_conditions">Terms and Conditions</Link>
+          )}
+          {pathname !== '/privacy_policy' && (
+            <Link href="/privacy_policy">Privacy Policy</Link>
+          )}
         </div>
         
         <div className="footer-right">
