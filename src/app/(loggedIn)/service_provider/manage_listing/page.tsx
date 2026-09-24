@@ -131,7 +131,7 @@ export default function ManageListingPage() {
               <div>
                 <div className="manage-listing-header">
                   <h3>Business Information</h3>
-                  <Link href={ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO} className="edit-action-btn">
+                  <Link href="/service_provider/manage_listing/edit_business_info" className="edit-action-btn">
                     <FaEdit /> Edit Info
                   </Link>
                 </div>
@@ -174,7 +174,7 @@ export default function ManageListingPage() {
                 <div className="manage-listing-header">
                   <h3>Operating Hours & Staff</h3>
                   {/* Assuming editing hours/staff falls under Business Info or Listing edits */}
-                  <Link href={ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO} className="edit-action-btn">
+                  <Link href="/service_provider/manage_listing/edit_hours_staff" className="edit-action-btn">
                     <FaEdit /> Edit Hours/Staff
                   </Link>
                 </div>
@@ -257,7 +257,7 @@ export default function ManageListingPage() {
               <div>
                 <div className="manage-listing-header">
                   <h3>Documents & Media</h3>
-                  <Link href={ROUTES.SERVICE_PROVIDER.EDIT_BUSINESS_INFO} className="edit-action-btn">
+                  <Link href="/service_provider/manage_listing/edit_media" className="edit-action-btn">
                     <FaEdit /> Edit Media
                   </Link>
                 </div>

@@ -27,9 +27,10 @@ export default function BookingDetailsModal({
   const [approvalNote, setApprovalNote] = useState('');
   const [showApproveInput, setShowApproveInput] = useState(false);
 
-  // Employee Assignment State
+  // Employee Assignment State (Per Pet)
   const [employees, setEmployees] = useState<any[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  // Store selections as a map: { petId: employeeId }
+  const [petEmployeeAssignments, setPetEmployeeAssignments] = useState<Record<string, string>>({});
   const [showCompleteInput, setShowCompleteInput] = useState(false);
 
   // Fetch employees only when a 'paid' booking is opened
@@ -76,23 +77,41 @@ export default function BookingDetailsModal({
     }
   };
 
-  // Handles linking an employee ID to the booking_info before completion
+  // Helper to update specific pet assignment in state
+  const handleEmployeeSelection = (petId: string, employeeId: string) => {
+    setPetEmployeeAssignments(prev => ({
+      ...prev,
+      [petId]: employeeId
+    }));
+  };
+
+  // Handles linking an employee ID to each pet before completion
   const handleComplete = async () => {
-    if (!selectedEmployeeId) {
-      alert('Please select an employee who handled this booking.');
+    const pets = selectedBooking.booking_pet_info || [];
+    
+    // Ensure every pet has an assigned employee before proceeding
+    const missingAssignments = pets.some(pet => !petEmployeeAssignments[pet.id]);
+    if (missingAssignments) {
+      alert('Please assign an employee for every pet in this booking.');
       return;
     }
+
     setIsUpdating(true);
     try {
-      const { error } = await supabase
-        .from('booking_info')
-        .update({ assigned_employee_id: selectedEmployeeId })
-        .eq('id', selectedBooking.id);
+      // Execute all pet updates concurrently using Promise.all
+      const updatePromises = pets.map(pet => 
+        supabase
+          .from('booking_pet_info')
+          .update({ assigned_employee_id: petEmployeeAssignments[pet.id] })
+          .eq('id', pet.id)
+      );
+      
+      await Promise.all(updatePromises);
 
-      if (error) throw error;
+      // Update the main booking status once pets are assigned
       handleUpdateStatus(selectedBooking.id, 'to_rate');
     } catch (err: any) {
-      alert('Failed to assign employee: ' + err.message);
+      alert('Failed to assign employees: ' + err.message);
     } finally {
       setIsUpdating(false);
     }
@@ -106,7 +125,7 @@ export default function BookingDetailsModal({
     setShowCompleteInput(false);
     setRejectionReason('');
     setApprovalNote('');
-    setSelectedEmployeeId('');
+    setPetEmployeeAssignments({}); // Clear pet assignments
   };
 
   return (
@@ -230,30 +249,38 @@ export default function BookingDetailsModal({
             </>
           )}
 
-          {/* Action: For Upcoming (Paid) Bookings */}
+          {/* Action: For Upcoming (Paid) Bookings - Per Pet Assignment */}
           {selectedBooking.booking_status === 'paid' && (
             <>
               {showCompleteInput ? (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Assign Staff / Employee:</label>
-                  <select
-                    value={selectedEmployeeId}
-                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', marginBottom: '1rem' }}
-                  >
-                    <option value="">-- Select an employee --</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.employee_first_name} {emp.employee_last_name} ({emp.employee_position.replace('_', ' ')})
-                      </option>
-                    ))}
-                  </select>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '1rem' }}>Assign Staff / Employee per Pet:</label>
                   
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  {selectedBooking.booking_pet_info?.map(pet => (
+                    <div key={pet.id} style={{ marginBottom: '1rem' }}>
+                      <p style={{ fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.25rem' }}>
+                        {pet.booking_pet_name} ({pet.booking_pet_type})
+                      </p>
+                      <select
+                        value={petEmployeeAssignments[pet.id] || ''}
+                        onChange={(e) => handleEmployeeSelection(pet.id, e.target.value)}
+                        style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem' }}
+                      >
+                        <option value="">-- Select an employee --</option>
+                        {employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.employee_first_name} {emp.employee_last_name} ({emp.employee_position.replace('_', ' ')})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
                     <button onClick={handleComplete} disabled={isUpdating} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}>
                       {isUpdating ? 'Saving...' : 'Confirm Completion'}
                     </button>
-                    <button onClick={() => { setShowCompleteInput(false); setSelectedEmployeeId(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <button onClick={() => { setShowCompleteInput(false); setPetEmployeeAssignments({}); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
                       Cancel
                     </button>
                   </div>

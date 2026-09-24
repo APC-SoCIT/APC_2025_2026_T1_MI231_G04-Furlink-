@@ -10,7 +10,6 @@ interface StatusTabsProps {
 // Grouped tabs for the UI cards based on your image and schema
 const TAB_CARDS: { label: string; value: BookingStatus | 'all'; countFilter: BookingStatus[] }[] = [
   { label: 'New Requests', value: 'pending_sp_response', countFilter: ['pending_sp_response'] },
-  { label: 'Verify Payment', value: 'approved', countFilter: ['approved'] },
   { label: 'Upcoming', value: 'paid', countFilter: ['paid'] },
   { label: 'Completed', value: 'rated', countFilter: ['to_rate', 'rated'] },
   { label: 'Cancelled', value: 'cancelled', countFilter: ['rejected', 'cancelled'] },
