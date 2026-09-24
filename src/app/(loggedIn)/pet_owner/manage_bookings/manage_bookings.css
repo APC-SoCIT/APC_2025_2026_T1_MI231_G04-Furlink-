@@ -612,6 +612,311 @@
   opacity: 0.9;
 }
 
+/* Reschedule Custom Modal Styles */
+.reschedule-modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalScaleUp 0.25s ease-out;
+}
+
+.reschedule-modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.reschedule-modal-body .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reschedule-modal-body label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reschedule-date-input {
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.reschedule-date-input:focus {
+  border-color: #1e3a8a;
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.timeslot-chip {
+  padding: 10px 8px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.timeslot-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.timeslot-chip.selected {
+  background: #1e3a8a;
+  color: #ffffff;
+  border-color: #1e3a8a;
+  box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
+}
+
+.reschedule-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.timeslot-chip {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timeslot-chip .slot-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.timeslot-chip .slot-remaining {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.timeslot-chip:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.timeslot-chip.selected {
+  background: #1e3a8a;
+  color: #ffffff;
+  border-color: #1e3a8a;
+  box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
+}
+
+.timeslot-chip.selected .slot-time,
+.timeslot-chip.selected .slot-remaining {
+  color: #ffffff;
+}
+
+.timeslot-chip.fully-booked {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.timeslot-chip.fully-booked .slot-time,
+.timeslot-chip.fully-booked .slot-remaining {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.closed-day-banner {
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.slots-loading-text {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  padding: 16px;
+}
+
+.custom-calendar-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px; /* Reduced from 16px */
+  max-width: 300px; /* Restricts overall width */
+  margin: 0 auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.calendar-header-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px; /* Tighter spacing */
+}
+
+.calendar-month-title {
+  font-size: 13px; /* Smaller font */
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.calendar-nav-buttons {
+  display: flex;
+  gap: 3px;
+}
+
+.cal-nav-btn {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  width: 24px; /* Smaller buttons */
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #475569;
+  font-size: 10px;
+}
+
+.cal-nav-btn:hover {
+  background: #f1f5f9;
+}
+
+.calendar-weekdays-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px; /* Smaller weekday headers */
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px; /* Tighter gap between day cells */
+}
+
+.cal-day-cell {
+  aspect-ratio: 1;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px; /* Smaller text for day numbers */
+  font-weight: 500;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  height: 28px; /* Fixed compact cell height */
+}
+
+.cal-day-cell:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.cal-day-cell.selected {
+  background: #1e3a8a !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border-color: #1e3a8a !important;
+}
+
+.cal-day-cell.disabled-closed {
+  background: #f8fafc !important;
+  color: #cbd5e1 !important;
+  border-color: transparent !important;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.calendar-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cal-footer-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 12px; /* Smaller footer links */
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.cal-footer-link:hover {
+  text-decoration: underline;
+}
+
+.modal-content h2 {
+  color: #111 !important;
+}
+
+@keyframes modalScaleUp {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 1024px) {
   .booking-tabs-grid.six-categories {
     grid-template-columns: repeat(3, 1fr);

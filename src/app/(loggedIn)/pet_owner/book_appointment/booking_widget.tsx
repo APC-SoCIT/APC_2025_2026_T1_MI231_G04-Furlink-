@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 
@@ -37,23 +37,30 @@ export default function BookingWidget({
 }: BookingWidgetProps) {
   const router = useRouter();
 
-  const today = useMemo(() => new Date(), []);
-  const nowTime = today.getTime();
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [nowTime, setNowTime] = useState<number>(0);
   const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-  const [currentDate, setCurrentDate] = useState<Date>(
-    new Date(today.getFullYear(), today.getMonth(), 1)
-  );
-
-  const defaultSelectedDate = useMemo(() => {
-    const minBookingTime = new Date(nowTime + TWENTY_FOUR_HOURS_MS);
-    return new Date(minBookingTime.getFullYear(), minBookingTime.getMonth(), minBookingTime.getDate());
-  }, [nowTime]);
-
-  const [selectedDate, setSelectedDate] = useState<Date | null>(defaultSelectedDate);
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [numPets, setNumPets] = useState<number>(1);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
+
+  useEffect(() => {
+    const clientNow = new Date();
+    const clientNowTime = clientNow.getTime();
+    setNowTime(clientNowTime);
+
+    setCurrentDate(new Date(clientNow.getFullYear(), clientNow.getMonth(), 1));
+
+    const minBookingTime = new Date(clientNowTime + TWENTY_FOUR_HOURS_MS);
+    setSelectedDate(
+      new Date(minBookingTime.getFullYear(), minBookingTime.getMonth(), minBookingTime.getDate())
+    );
+
+    setIsMounted(true);
+  }, [TWENTY_FOUR_HOURS_MS]);
 
   const hoursByDay = useMemo(() => {
     const map = new Map<string, OperatingHour>();
@@ -65,7 +72,7 @@ export default function BookingWidget({
   const currentOperatingHour = selectedDayName ? hoursByDay.get(selectedDayName) : null;
 
   const generatedSlots = useMemo(() => {
-    if (!currentOperatingHour || !selectedDate) return [];
+    if (!isMounted || !currentOperatingHour || !selectedDate) return [];
 
     const slots: string[] = [];
     const [openH, openM] = currentOperatingHour.opening_time.split(':').map(Number);
@@ -98,9 +105,9 @@ export default function BookingWidget({
     }
 
     return slots;
-  }, [currentOperatingHour, selectedDate, nowTime]);
+  }, [currentOperatingHour, selectedDate, nowTime, isMounted]);
 
-  // Helper to compute remaining capacity for a specific slot
+  // Helper to compute remaining capacity factoring in exact pet counts per booking
   const getRemainingCapacity = (slot: string): number => {
     if (!selectedDate || !currentOperatingHour) return 0;
 
@@ -109,7 +116,7 @@ export default function BookingWidget({
     const dd = String(selectedDate.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
-    const activeStatuses = ['pending_sp_response', 'confirmed', 'to pay', 'paid'];
+    const activeStatuses = ['pending_sp_response', 'approved', 'to pay', 'paid'];
     
     const slotBookings = existingBookings.filter(
       (b) =>
@@ -118,7 +125,7 @@ export default function BookingWidget({
         activeStatuses.includes(b.booking_status.toLowerCase())
     );
 
-    const bookedPets = slotBookings.reduce((sum, b) => sum + (b.pet_count || 1), 0);
+    const bookedPets = slotBookings.reduce((sum, b) => sum + (Number(b.pet_count) || 1), 0);
     return Math.max(0, currentOperatingHour.slot_capacity - bookedPets);
   };
 
@@ -138,9 +145,12 @@ export default function BookingWidget({
     return existingBookings.find((b) => b.booking_date === dateStr) || null;
   }, [selectedDate, existingBookings]);
 
+  const todayYear = isMounted ? new Date().getFullYear() : 2026;
+  const todayMonth = isMounted ? new Date().getMonth() : 0;
+
   const isMinMonth =
-    currentDate.getFullYear() < today.getFullYear() ||
-    (currentDate.getFullYear() === today.getFullYear() && currentDate.getMonth() <= today.getMonth());
+    currentDate.getFullYear() < todayYear ||
+    (currentDate.getFullYear() === todayYear && currentDate.getMonth() <= todayMonth);
 
   const handlePrevMonth = () => {
     if (isMinMonth) return;
@@ -179,6 +189,7 @@ export default function BookingWidget({
   };
 
   const isBookingValid =
+    isMounted &&
     selectedDate !== null &&
     selectedTimeSlot !== '' &&
     numPets >= 1 &&
@@ -203,6 +214,15 @@ export default function BookingWidget({
 
     router.push(`/pet_owner/book_appointment/booking_form?${query.toString()}`);
   };
+
+  if (!isMounted) {
+    return (
+      <div className="widget-card">
+        <h2 className="widget-title">Book Appointment</h2>
+        <p style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>Loading calendar...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="widget-card">
