@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
-    const { amount, description, bookingId } = await req.json();
+    const { amount, description, bookingId, isPayNow } = await req.json();
 
     const secretKey = process.env.PAYMONGO_SECRET_KEY?.trim();
 
@@ -27,8 +29,14 @@ export async function POST(req: Request) {
     const proto = req.headers.get('x-forwarded-proto') || 'https';
     const baseUrl = `${proto}://${host}`;
 
-    const successUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=success`;
-    const cancelUrl = `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed`;
+    // Dynamically assign success and cancel URLs based on whether it's a Pay Now request
+    const successUrl = isPayNow
+      ? `${baseUrl}/pet_owner/manage_bookings?status=success&booking_id=${bookingId}`
+      : `${baseUrl}/pet_owner/book_appointment/booking_form?status=success&booking_id=${bookingId}`;
+
+    const cancelUrl = isPayNow
+      ? `${baseUrl}/pet_owner/manage_bookings?status=failed&booking_id=${bookingId}`
+      : `${baseUrl}/pet_owner/book_appointment/booking_form?status=failed&booking_id=${bookingId}`;
 
     const amountInCentavos = Math.round(amount * 100);
 
@@ -76,7 +84,21 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ checkoutUrl: data.data.attributes.checkout_url });
+    const checkoutSessionId = data.data.id;
+    const checkoutUrl = data.data.attributes.checkout_url;
+
+    // Save paymongo_session_id immediately into database
+    const supabase = createRouteHandlerClient({ cookies });
+    const { error: updateErr } = await supabase
+      .from('booking_info')
+      .update({ paymongo_session_id: checkoutSessionId })
+      .eq('id', bookingId);
+
+    if (updateErr) {
+      console.error('Failed to save paymongo_session_id:', updateErr.message);
+    }
+
+    return NextResponse.json({ checkoutUrl, sessionId: checkoutSessionId });
   } catch (error: any) {
     console.error('Checkout Route Exception:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

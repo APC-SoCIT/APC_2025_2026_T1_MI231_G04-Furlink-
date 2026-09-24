@@ -40,6 +40,7 @@ function BookingFormContent() {
   const timeSlot = searchParams.get('time') || '9:00 AM';
   const queryPetsCount = parseInt(searchParams.get('pets') || '1', 10);
   const statusParam = searchParams.get('status');
+  const bookingIdParam = searchParams.get('booking_id');
 
   const [slotCapacity, setSlotCapacity] = useState<number>(queryPetsCount || 1);
   const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
@@ -65,6 +66,13 @@ function BookingFormContent() {
   const [catBreeds, setCatBreeds] = useState<string[]>([]);
   const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
 
+  // Synchronize activeBookingId from URL search parameters if redirected back from PayMongo
+  useEffect(() => {
+    if (bookingIdParam && !activeBookingId) {
+      setActiveBookingId(bookingIdParam);
+    }
+  }, [bookingIdParam, activeBookingId]);
+
   // Cooldown interval timer
   useEffect(() => {
     if (!cooldownUntil) return;
@@ -85,20 +93,32 @@ function BookingFormContent() {
     return () => clearInterval(interval);
   }, [cooldownUntil]);
 
-  // Payment status redirect handlers
+  // Payment status redirect handlers & secure server-side verification syncing paymongo_session_id and paymongo_payment_id
   useEffect(() => {
     const handlePaymentSuccess = async () => {
       if (statusParam === 'success') {
         if (activeBookingId) {
-          await supabase
-            .from('booking_info')
-            .update({ booking_status: 'pending_sp_response' })
-            .eq('id', activeBookingId);
+          try {
+            const verifyRes = await fetch(`/api/paymongo/verify?booking_id=${activeBookingId}`);
+            if (!verifyRes.ok) {
+              // Fallback simple database status update if verification API errors out
+              await supabase
+                .from('booking_info')
+                .update({ booking_status: 'pending_sp_response' })
+                .eq('id', activeBookingId);
+            }
+          } catch (err) {
+            console.error('Error during payment success synchronization:', err);
+          }
         }
         setShowSuccessModal(true);
         setShowFailedModal(false);
         setShowSummaryModal(false);
-      } else if (statusParam === 'failed' || statusParam === 'cancelled') {
+      } else if (
+        statusParam === 'failed' || 
+        statusParam === 'cancelled' || 
+        statusParam === 'expired'
+      ) {
         setShowFailedModal(true);
         setShowSuccessModal(false);
         setShowSummaryModal(false);
@@ -819,7 +839,7 @@ function BookingFormContent() {
   };
 
   const handleConfirmBooking = async () => {
-    if (grandTotal <= 0) {
+    if (grandTotal <= 0 && !activeBookingId) {
       alert('Invalid Booking: Total amount cannot be ₱0.00.');
       return;
     }
@@ -832,12 +852,17 @@ function BookingFormContent() {
     setShowFailedModal(false);
 
     try {
-      const { bookingInfoId } = await createBookingInDatabase();
+      let bookingInfoId = activeBookingId;
+      if (!bookingInfoId) {
+        const res = await createBookingInDatabase();
+        bookingInfoId = res.bookingInfoId;
+      }
+
       const response = await fetch('/api/paymongo/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: grandTotal,
+          amount: grandTotal > 0 ? grandTotal : 1, 
           description: `Pet Grooming Session on ${formattedDateDisplay}`,
           bookingId: bookingInfoId,
         }),
@@ -850,7 +875,7 @@ function BookingFormContent() {
       setPaymentAttempts(nextAttempts);
       if (nextAttempts >= 3) setCooldownUntil(Date.now() + 60 * 60 * 1000);
 
-      window.open(result.checkoutUrl, '_blank');
+      window.location.href = result.checkoutUrl;
       setShowSummaryModal(false);
       setIsSubmitting(false);
     } catch (err: any) {
@@ -861,14 +886,19 @@ function BookingFormContent() {
   };
 
   const handlePayLater = async () => {
-    if (grandTotal <= 0) {
+    if (grandTotal <= 0 && !activeBookingId) {
       alert('Invalid Booking: Total amount cannot be ₱0.00.');
       return;
     }
 
     setIsSavingPayLater(true);
     try {
-      const { bookingInfoId } = await createBookingInDatabase();
+      let bookingInfoId = activeBookingId;
+      if (!bookingInfoId) {
+        const res = await createBookingInDatabase();
+        bookingInfoId = res.bookingInfoId;
+      }
+
       const { error: updateErr } = await supabase
         .from('booking_info')
         .update({ booking_status: 'to pay' })
