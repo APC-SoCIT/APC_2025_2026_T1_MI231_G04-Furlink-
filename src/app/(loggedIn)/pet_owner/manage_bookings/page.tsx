@@ -35,7 +35,7 @@ export default function ManageBookingsPage() {
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Modal states
+  // Modal statess
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<boolean>(false);
