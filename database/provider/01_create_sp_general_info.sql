@@ -65,3 +65,12 @@ ALTER TABLE public.sp_general_info
     ADD COLUMN IF NOT EXISTS business_permit_url TEXT,
     ADD COLUMN IF NOT EXISTS business_payment_qr_url TEXT,
     ADD COLUMN IF NOT EXISTS business_region TEXT;
+
+-- 1. Drop the existing constraint (prevents errors if it already exists)
+ALTER TABLE public.sp_general_info 
+DROP CONSTRAINT IF EXISTS sp_general_info_registration_status_check;
+
+-- 2. Create the new constraint including 're-applied'
+ALTER TABLE public.sp_general_info 
+ADD CONSTRAINT sp_general_info_registration_status_check 
+CHECK (registration_status IN ('pending', 'approved', 'rejected', 're-applied'));

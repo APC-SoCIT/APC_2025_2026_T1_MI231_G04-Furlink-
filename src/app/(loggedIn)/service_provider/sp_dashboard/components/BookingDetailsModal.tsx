@@ -16,17 +16,24 @@ export default function BookingDetailsModal({
 }: BookingDetailsModalProps) {
   const supabase = createClientComponentClient();
 
+  // Common UI State
+  const [isUpdating, setIsUpdating] = useState(false);
+
   // Rejection State
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
 
-  // Employee Assignment State (New Feature)
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const [showCompleteInput, setShowCompleteInput] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  // Approval Note State
+  const [approvalNote, setApprovalNote] = useState('');
+  const [showApproveInput, setShowApproveInput] = useState(false);
 
-  // Fetch employees when the modal opens for a 'paid' (Upcoming) booking
+  // Employee Assignment State (Per Pet)
+  const [employees, setEmployees] = useState<any[]>([]);
+  // Store selections as a map: { petId: employeeId }
+  const [petEmployeeAssignments, setPetEmployeeAssignments] = useState<Record<string, string>>({});
+  const [showCompleteInput, setShowCompleteInput] = useState(false);
+
+  // Fetch employees only when a 'paid' booking is opened
   useEffect(() => {
     if (selectedBooking.booking_status === 'paid' && selectedBooking.sp_id) {
       const fetchEmployees = async () => {
@@ -35,9 +42,7 @@ export default function BookingDetailsModal({
           .select('id, employee_first_name, employee_last_name, employee_position')
           .eq('sp_id', selectedBooking.sp_id);
           
-        if (data && !error) {
-          setEmployees(data);
-        }
+        if (data && !error) setEmployees(data);
       };
       fetchEmployees();
     }
@@ -53,30 +58,74 @@ export default function BookingDetailsModal({
     setRejectionReason('');
   };
 
-  // New function to handle marking as completed with an assigned employee
+  // Handles adding an optional note to the booking_comment before approval
+  const handleApprove = async () => {
+    setIsUpdating(true);
+    try {
+      if (approvalNote.trim()) {
+        const { error } = await supabase
+          .from('booking_info')
+          .update({ booking_comment: approvalNote.trim() })
+          .eq('id', selectedBooking.id);
+        if (error) throw error;
+      }
+      handleUpdateStatus(selectedBooking.id, 'approved');
+    } catch (err: any) {
+      alert('Failed to approve booking: ' + err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Helper to update specific pet assignment in state
+  const handleEmployeeSelection = (petId: string, employeeId: string) => {
+    setPetEmployeeAssignments(prev => ({
+      ...prev,
+      [petId]: employeeId
+    }));
+  };
+
+  // Handles linking an employee ID to each pet before completion
   const handleComplete = async () => {
-    if (!selectedEmployeeId) {
-      alert('Please select an employee who handled this booking.');
+    const pets = selectedBooking.booking_pet_info || [];
+    
+    // Ensure every pet has an assigned employee before proceeding
+    const missingAssignments = pets.some(pet => !petEmployeeAssignments[pet.id]);
+    if (missingAssignments) {
+      alert('Please assign an employee for every pet in this booking.');
       return;
     }
 
     setIsUpdating(true);
     try {
-      // 1. Save the assigned employee ID to the booking_info table first
-      const { error } = await supabase
-        .from('booking_info')
-        .update({ assigned_employee_id: selectedEmployeeId })
-        .eq('id', selectedBooking.id);
+      // Execute all pet updates concurrently using Promise.all
+      const updatePromises = pets.map(pet => 
+        supabase
+          .from('booking_pet_info')
+          .update({ assigned_employee_id: petEmployeeAssignments[pet.id] })
+          .eq('id', pet.id)
+      );
+      
+      await Promise.all(updatePromises);
 
-      if (error) throw error;
-
-      // 2. Trigger the parent function to update the status to 'to_rate' and close modal
+      // Update the main booking status once pets are assigned
       handleUpdateStatus(selectedBooking.id, 'to_rate');
     } catch (err: any) {
-      alert('Failed to assign employee: ' + err.message);
+      alert('Failed to assign employees: ' + err.message);
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  // Reset modal state
+  const resetModal = () => {
+    setSelectedBooking(null);
+    setShowRejectInput(false);
+    setShowApproveInput(false);
+    setShowCompleteInput(false);
+    setRejectionReason('');
+    setApprovalNote('');
+    setPetEmployeeAssignments({}); // Clear pet assignments
   };
 
   return (
@@ -139,9 +188,10 @@ export default function BookingDetailsModal({
         {/* Action Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
           
-          {/* Action: For Pending Bookings */}
+          {/* Action: For Pending Bookings (New Requests) */}
           {selectedBooking.booking_status === 'pending_sp_response' && (
             <>
+              {/* Reject Input */}
               {showRejectInput && (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason:</label>
@@ -153,36 +203,45 @@ export default function BookingDetailsModal({
                     rows={3}
                   />
                   <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
-                    <button
-                      onClick={handleReject}
-                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-                    >
+                    <button onClick={handleReject} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
                       Confirm Reject
                     </button>
-                    <button
-                      onClick={() => {
-                        setShowRejectInput(false);
-                        setRejectionReason('');
-                      }}
-                      style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-                    >
+                    <button onClick={() => { setShowRejectInput(false); setRejectionReason(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
                       Cancel
                     </button>
                   </div>
                 </div>
               )}
-              {!showRejectInput && (
+
+              {/* Approve Input with Note */}
+              {showApproveInput && (
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Note to Pet Owner (Optional):</label>
+                  <textarea
+                    value={approvalNote}
+                    onChange={(e) => setApprovalNote(e.target.value)}
+                    placeholder="E.g., Please ensure your pet hasn't eaten 2 hours prior..."
+                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', marginBottom: '1rem' }}
+                    rows={3}
+                  />
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={handleApprove} disabled={isUpdating} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}>
+                      {isUpdating ? 'Saving...' : 'Confirm Approval'}
+                    </button>
+                    <button onClick={() => { setShowApproveInput(false); setApprovalNote(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Default Initial Buttons */}
+              {!showRejectInput && !showApproveInput && (
                 <>
-                  <button
-                    onClick={() => setShowRejectInput(true)}
-                    style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-                  >
+                  <button onClick={() => setShowRejectInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
                     Reject Booking
                   </button>
-                  <button
-                    onClick={() => handleUpdateStatus(selectedBooking.id, 'approved')}
-                    style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-                  >
+                  <button onClick={() => setShowApproveInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
                     Approve Booking
                   </button>
                 </>
@@ -190,65 +249,51 @@ export default function BookingDetailsModal({
             </>
           )}
 
-          {/* Action: For Upcoming (Paid) Bookings - NEW EMPLOYEE DROPDOWN */}
+          {/* Action: For Upcoming (Paid) Bookings - Per Pet Assignment */}
           {selectedBooking.booking_status === 'paid' && (
             <>
               {showCompleteInput ? (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Assign Staff / Employee:</label>
-                  <select
-                    value={selectedEmployeeId}
-                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', marginBottom: '1rem' }}
-                  >
-                    <option value="">-- Select an employee --</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.employee_first_name} {emp.employee_last_name} ({emp.employee_position.replace('_', ' ')})
-                      </option>
-                    ))}
-                  </select>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '1rem' }}>Assign Staff / Employee per Pet:</label>
                   
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button
-                      onClick={handleComplete}
-                      disabled={isUpdating}
-                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}
-                    >
+                  {selectedBooking.booking_pet_info?.map(pet => (
+                    <div key={pet.id} style={{ marginBottom: '1rem' }}>
+                      <p style={{ fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.25rem' }}>
+                        {pet.booking_pet_name} ({pet.booking_pet_type})
+                      </p>
+                      <select
+                        value={petEmployeeAssignments[pet.id] || ''}
+                        onChange={(e) => handleEmployeeSelection(pet.id, e.target.value)}
+                        style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem' }}
+                      >
+                        <option value="">-- Select an employee --</option>
+                        {employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.employee_first_name} {emp.employee_last_name} ({emp.employee_position.replace('_', ' ')})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                    <button onClick={handleComplete} disabled={isUpdating} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}>
                       {isUpdating ? 'Saving...' : 'Confirm Completion'}
                     </button>
-                    <button
-                      onClick={() => { 
-                        setShowCompleteInput(false); 
-                        setSelectedEmployeeId(''); 
-                      }}
-                      style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}
-                    >
+                    <button onClick={() => { setShowCompleteInput(false); setPetEmployeeAssignments({}); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowCompleteInput(true)}
-                  style={{ padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-                >
+                <button onClick={() => setShowCompleteInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
                   Mark as Completed
                 </button>
               )}
             </>
           )}
 
-          <button
-            onClick={() => {
-              setSelectedBooking(null);
-              setShowRejectInput(false);
-              setShowCompleteInput(false);
-              setRejectionReason('');
-              setSelectedEmployeeId('');
-            }}
-            style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}
-          >
+          <button onClick={resetModal} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
             Close
           </button>
         </div>

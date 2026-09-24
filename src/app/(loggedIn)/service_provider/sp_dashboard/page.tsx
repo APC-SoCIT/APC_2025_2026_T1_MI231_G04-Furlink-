@@ -102,7 +102,6 @@ export default function ServiceProviderDashboardPage() {
   // Tab configuration for filtering bookings by status (Cancelled strictly tracks client-side cancellations)
   const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: BookingStatus[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
-    { label: 'Verify Payment', value: 'approved', filter: ['approved'] },
     { label: 'Upcoming', value: 'paid', filter: ['paid'] },
     { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated'] },
     { label: 'Cancelled', value: 'cancelled', filter: ['cancelled'] },
@@ -118,7 +117,11 @@ export default function ServiceProviderDashboardPage() {
 
   // Get active tab configuration and filter bookings
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
-  const filteredBookings = filterBookingsByStatus(bookings, activeTab);
+  
+  // Use the TAB_CARDS filter array instead of the strict utils function
+  const filteredBookings = activeTab === 'all' 
+    ? bookings 
+    : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status));
 
   // Show loading state
   if (loading) {

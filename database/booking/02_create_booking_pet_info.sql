@@ -41,3 +41,10 @@ CREATE POLICY "Booking pets follow parent booking access" ON public.booking_pet_
               AND (b.profiles_id = auth.uid() OR sp.profiles_id = auth.uid())
         )
     );
+-- 1. Add the column to the pet information table
+ALTER TABLE public.booking_pet_info
+ADD COLUMN IF NOT EXISTS assigned_employee_id UUID REFERENCES public.sp_employees_info(id) ON DELETE SET NULL;
+
+-- 2. Remove the old column from the main booking table to keep things clean
+ALTER TABLE public.booking_info
+DROP COLUMN IF EXISTS assigned_employee_id;

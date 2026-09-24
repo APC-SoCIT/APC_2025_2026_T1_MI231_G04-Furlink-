@@ -57,7 +57,8 @@
 /* Status Cards Grid */
 .tabsGrid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr); /* Fits all 6 tabs nicely */
+  /* Updated from 6 to 5 to evenly distribute the remaining tabs */
+  grid-template-columns: repeat(5, 1fr); 
   gap: 1rem;
   margin-bottom: 2rem;
 }
