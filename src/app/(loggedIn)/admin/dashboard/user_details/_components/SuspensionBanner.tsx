@@ -29,6 +29,14 @@ export const SuspensionBanner = ({ currentSuspension, autoSuspended, isSuspended
         )}
         This user is suspended until <strong>{formatDateTime(currentSuspension.suspended_until)}</strong>.
         {" "}Reason: {currentSuspension.reason}
+        {currentSuspension.suspended_by_admin && !autoSuspended && (
+          <>
+            {" "}Suspended by{" "}
+            <strong>
+              {currentSuspension.suspended_by_admin.first_name} {currentSuspension.suspended_by_admin.last_name}
+            </strong>.
+          </>
+        )}
       </span>
     </div>
   );

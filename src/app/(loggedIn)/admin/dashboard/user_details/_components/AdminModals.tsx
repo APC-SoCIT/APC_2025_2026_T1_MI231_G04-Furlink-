@@ -1,8 +1,16 @@
 "use client";
 
 import { FaTimes } from "react-icons/fa";
-import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
+import { UserProfile, SUSPENSION_DAYS, WARNING_THRESHOLD, SuspensionRow, SEVERITY_LEVELS } from "../_types";
 import styles from "../page.module.css";
+import { WarningRow } from "../_types";
+
+const formatDateTime = (dateString: string | null | undefined) => {
+  if (!dateString) return "-";
+  return new Date(dateString).toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+};
 
 interface Props {
   user: UserProfile;
@@ -13,6 +21,7 @@ interface Props {
   showSendWarningConfirm: boolean;
   setShowSendWarningConfirm: (val: boolean) => void;
   confirmSendWarning: () => void;
+  warningSeverity: string;
 
   showSuspendConfirm: boolean;
   setShowSuspendConfirm: (val: boolean) => void;
@@ -26,13 +35,46 @@ interface Props {
 
   autoSuspendNotice: string | null;
   setAutoSuspendNotice: (val: string | null) => void;
+
+  warnings: WarningRow[];
+  warningsLoading: boolean;
+  showHistoryModal: boolean;
+  setShowHistoryModal: (val: boolean) => void;
+
+  suspensionHistory: SuspensionRow[];
+  suspensionHistoryLoading: boolean;
+  showSuspensionHistoryModal: boolean;
+  setShowSuspensionHistoryModal: (val: boolean) => void;
 }
 
 export const AdminModals = ({
-  user, warningMessage, activeWarningCount, isSuspended, sendingWarning, showSendWarningConfirm, setShowSendWarningConfirm, confirmSendWarning,
-  showSuspendConfirm, setShowSuspendConfirm, suspending, confirmSuspend,
-  showLiftConfirm, setShowLiftConfirm, liftingSuspension, confirmLiftSuspension,
-  autoSuspendNotice, setAutoSuspendNotice
+  user, 
+  warningMessage, 
+  activeWarningCount, 
+  isSuspended, 
+  sendingWarning, 
+  showSendWarningConfirm, 
+  setShowSendWarningConfirm, 
+  confirmSendWarning,
+  warningSeverity,
+  showSuspendConfirm, 
+  setShowSuspendConfirm, 
+  suspending, 
+  confirmSuspend,
+  showLiftConfirm, 
+  setShowLiftConfirm, 
+  liftingSuspension, 
+  confirmLiftSuspension,
+  autoSuspendNotice, 
+  setAutoSuspendNotice,
+  warnings,
+  warningsLoading,
+  showHistoryModal,
+  setShowHistoryModal,
+  suspensionHistory,
+  suspensionHistoryLoading,
+  showSuspensionHistoryModal,
+  setShowSuspensionHistoryModal
 }: Props) => {
   return (
     <>
@@ -55,6 +97,9 @@ export const AdminModals = ({
                   active warning, which will automatically suspend the user for {SUSPENSION_DAYS} days.
                 </>
               )}
+            </p>
+            <p className={styles["confirm-modal-message"]}>
+              Severity: <strong>{SEVERITY_LEVELS.find((l) => l.value === warningSeverity)?.label}</strong>
             </p>
             <p className={styles["confirm-modal-message"]}>
               <em>&ldquo;{warningMessage.trim()}&rdquo;</em>
@@ -116,6 +161,92 @@ export const AdminModals = ({
               <button className={styles["btn-confirm-proceed"]} onClick={confirmLiftSuspension} disabled={liftingSuspension}>
                 {liftingSuspension ? "Lifting..." : "Lift Suspension"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WARNING HISTORY MODAL */}
+      {showHistoryModal && (
+        <div className={styles["modal-overlay"]} onClick={() => setShowHistoryModal(false)}>
+          <div className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Warning History</h3>
+              <button className={styles["btn-close-modal"]} onClick={() => setShowHistoryModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <div className={styles["warning-history-list"]}>
+              {warningsLoading ? (
+                <p className={styles["warning-history-empty"]}>Loading...</p>
+              ) : warnings.length === 0 ? (
+                <p className={styles["warning-history-empty"]}>No warnings issued yet.</p>
+              ) : (
+                warnings.map((w) => (
+                  <div key={w.id} className={styles["warning-history-item"]}>
+                    <div className={styles["warning-history-top"]}>
+                      <span className={styles["severity-tag"]}>{w.severity}</span>
+                      <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${w.status}`] || ""}`}>
+                        {w.status}
+                      </span>
+                    </div>
+                    <p className={styles["warning-history-message"]}>{w.warning_message}</p>
+                    <p className={styles["warning-history-meta"]}>
+                      {formatDateTime(w.created_at)}
+                      {w.issued_by_admin && (
+                        <> · issued by <strong>{w.issued_by_admin.first_name} {w.issued_by_admin.last_name}</strong></>
+                      )}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUSPENSION HISTORY MODAL */}
+      {showSuspensionHistoryModal && (
+        <div className={styles["modal-overlay"]} onClick={() => setShowSuspensionHistoryModal(false)}>
+          <div className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Suspension History</h3>
+              <button className={styles["btn-close-modal"]} onClick={() => setShowSuspensionHistoryModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <div className={styles["warning-history-list"]}>
+              {suspensionHistoryLoading ? (
+                <p className={styles["warning-history-empty"]}>Loading...</p>
+              ) : suspensionHistory.length === 0 ? (
+                <p className={styles["warning-history-empty"]}>No suspensions on record.</p>
+              ) : (
+                suspensionHistory.map((s) => (
+                  <div key={s.id} className={styles["warning-history-item"]}>
+                    <div className={styles["warning-history-top"]}>
+                      <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${s.status}`] || ""}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    <p className={styles["warning-history-message"]}>{s.reason}</p>
+                    <p className={styles["warning-history-meta"]}>
+                      {formatDateTime(s.suspended_at)}
+                      {s.suspended_by_admin && (
+                        <> · by <strong>{s.suspended_by_admin.first_name} {s.suspended_by_admin.last_name}</strong></>
+                      )}
+                    </p>
+                    <p className={styles["warning-history-meta"]}>
+                      Until {formatDateTime(s.suspended_until)}
+                      {s.status === "lifted" && s.lifted_at && (
+                        <>
+                          {" "}— lifted {formatDateTime(s.lifted_at)}
+                          {s.lifted_by_admin && <> by <strong>{s.lifted_by_admin.first_name} {s.lifted_by_admin.last_name}</strong></>}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

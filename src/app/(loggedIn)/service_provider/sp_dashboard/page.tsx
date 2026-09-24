@@ -1,108 +1,266 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
+// Supabase client component helper for session management
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import Link from "next/link";
+import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
+import { Booking, BookingStatus } from "./type";
+import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
+import BookingDetailsModal from './components/BookingDetailsModal';
+import CalendarModal from './components/CalendarModal';
+import Footer from '@/components/Footer'; // Import global Footer component
+import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
   const supabase = createClientComponentClient();
+  
+  // State management
   const [loading, setLoading] = useState(true);
-  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
-  const [hasEntry, setHasEntry] = useState(false);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
 
+  // Fetch bookings on component mount
   useEffect(() => {
-    const checkRegistrationStatus = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setLoading(false);
-          return;
-        }
+    fetchBookings();
+  }, []);
 
-        const { data: spInfo, error } = await supabase
-          .from("sp_general_info")
-          .select("registration_status")
-          .eq("profiles_id", user.id)
-          .maybeSingle();
+  // Fetch filtered bookings from Supabase for the logged-in service provider
+  const fetchBookings = async () => {
+    try {
+      setLoading(true);
 
-        if (error) {
-          console.error("Error fetching service provider info:", error);
-        }
+      // 1. Get the currently logged-in auth user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("No authenticated user session found.");
 
-        if (!spInfo) {
-          setHasEntry(false);
-        } else {
-          setHasEntry(true);
-          setRegistrationStatus(spInfo.registration_status);
-        }
-      } catch (err) {
-        console.error("Unexpected error:", err);
-      } finally {
-        setLoading(false);
+      // 2. Find the service provider record belonging to this user using profiles_id
+      const { data: providerData, error: providerError } = await supabase
+        .from("sp_general_info")
+        .select("id")
+        .eq("profiles_id", user.id)
+        .single();
+
+      if (providerError || !providerData) {
+        console.warn("Current user is not registered as a service provider.");
+        setBookings([]);
+        return;
       }
-    };
 
-    checkRegistrationStatus();
-  }, [supabase]);
+      // 3. Fetch ONLY bookings assigned to this service provider's business ID
+      const { data, error } = await supabase
+        .from("booking_info")
+        .select(`
+          *,
+          booking_pet_info (
+            *,
+            booking_service_info (*)
+          )
+        `)
+        .eq("sp_id", providerData.id) // Filters out pet owner bookings, keeping only those sent to this provider
+        .order("booking_date", { ascending: false });
 
+      if (error) throw error;
+      
+      console.log("Fetched filtered provider bookings:", data);
+      setBookings(data || []);
+    } catch (err: any) {
+      console.error("Error fetching bookings:", err?.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update booking status and rejection reason (if applicable)
+  const handleUpdateStatus = async (id: string, newStatus: BookingStatus, reason?: string) => {
+    try {
+      const updatePayload: any = { 
+        booking_status: newStatus, 
+        updated_at: new Date().toISOString() 
+      };
+      if (reason) updatePayload.booking_rejection_reason = reason;
+
+      const { error } = await supabase
+        .from("booking_info")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state to reflect changes
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, ...updatePayload } : b))
+      );
+      setSelectedBooking(null);
+    } catch (err: any) {
+      alert("Failed to update status: " + (err.message || JSON.stringify(err)));
+    }
+  };
+
+  // Tab configuration for filtering bookings by status (Cancelled strictly tracks client-side cancellations)
+  const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: BookingStatus[] }[] = [
+    { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
+    { label: 'Verify Payment', value: 'approved', filter: ['approved'] },
+    { label: 'Upcoming', value: 'paid', filter: ['paid'] },
+    { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated'] },
+    { label: 'Cancelled', value: 'cancelled', filter: ['cancelled'] },
+  ];
+
+  // Calculate revenue metrics
+  const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  
+  // Total revenue strictly includes paid and completed bookings (excludes 'approved' as it is not yet paid)
+  const totalRevenue = bookings
+    .filter(b => ['paid', 'to_rate', 'rated'].includes(b.booking_status))
+    .reduce((sum, b) => sum + Number(b.booking_total_amount || 0), 0);
+
+  // Get active tab configuration and filter bookings
+  const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
+  const filteredBookings = filterBookingsByStatus(bookings, activeTab);
+
+  // Show loading state
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[50vh]">
-        <p className="text-gray-500">Loading service provider listings...</p>
-      </div>
-    );
+    return <div className={styles.container}>Loading Dashboard...</div>;
   }
 
-  // If the user has no entry in sp_general_info table, show the form/onboarding view
-  if (!hasEntry) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h1 className="text-2xl font-bold mb-4">Service Provider Onboarding Form</h1>
-          <p className="text-gray-600 mb-4">
-            Please fill out your business details to complete your registration.
-          </p>
-          {/* Insert your onboarding form component or JSX here */}
-          <div className="p-4 border border-dashed border-gray-300 rounded-md bg-gray-50 text-center text-gray-500">
-            [Onboarding Form Fields Go Here]
+  return (
+    <div>
+      <div className={styles.container}>
+        {/* Header - Revenue Card & Action Buttons */}
+        <div className={styles.headerRow}>
+          <div className={styles.revenueCard}>
+            <div>
+              <h2>Total Revenue</h2>
+              <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.25rem' }}>For the month of {currentMonth}</p>
+            </div>
+            <div className={styles.revenueAmount}>{formatCurrency(totalRevenue)}</div>
+          </div>
+
+          <div className={styles.actionButtons}>
+            <Link href="/service_provider/business-dashboard" style={{ minWidth: '120px' }}>
+              <button className={styles.actionBtn} style={{ minWidth: '120px' }}>
+                <FaChartLine size={24} /> Dashboard
+              </button>
+            </Link>
+            <button 
+              className={styles.actionBtn}
+              onClick={() => setShowCalendar(true)}
+              style={{ minWidth: '120px' }}
+            >
+              <FaCalendarAlt size={24} /> Calendar
+            </button>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  // If status is pending or rejected, print the onboarding status notice
-  if (registrationStatus === 'pending' || registrationStatus === 'rejected') {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white shadow-md rounded-lg p-6 text-center">
-          <h1 className="text-2xl font-bold mb-2 capitalize">
-            Registration Status: <span className={registrationStatus === 'rejected' ? 'text-red-600' : 'text-yellow-600'}>{registrationStatus}</span>
-          </h1>
-          <p className="text-gray-600">
-            {registrationStatus === 'pending' 
-              ? "Your application is currently under review by our administrators. Please check back later."
-              : "Unfortunately, your registration was rejected. Please review your details or contact support."}
-          </p>
+        {/* Booking Status Tabs */}
+        <div className={styles.tabsGrid}>
+          <div
+            onClick={() => setActiveTab('all')}
+            className={`${styles.tabCard} ${activeTab === 'all' ? styles.tabCardActive : ''}`}
+          >
+            <h3 style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>All Bookings</h3>
+            <p className={styles.tabCount}>{bookings.length}</p>
+          </div>
+
+          {TAB_CARDS.map((tab) => {
+            const count = bookings.filter(b => tab.filter.includes(b.booking_status)).length;
+            const isActive = activeTab === tab.value;
+            return (
+              <div
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`${styles.tabCard} ${isActive ? styles.tabCardActive : ''}`}
+              >
+                <h3 style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>{tab.label}</h3>
+                <p className={`${styles.tabCount} ${tab.value === 'cancelled' && !isActive ? styles.cancelledCount : ''}`}>
+                  {count}
+                </p>
+              </div>
+            );
+          })}
         </div>
-      </div>
-    );
-  }
 
-  // Default dashboard view for approved service providers
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manage Listing</h1>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
-          Add New Listing
-        </button>
+        {/* Bookings Table */}
+        <div className={styles.tableContainer}>
+          <div className={styles.tableHeaderBar}>
+            <h3 style={{ fontWeight: 'extrabold', textTransform: 'uppercase' }}>
+              {activeTab === 'all' ? 'All Bookings' : activeTabConfig?.label}
+            </h3>
+          </div>
+
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Date & Time</th>
+                <th style={{ textAlign: 'center' }}>No. of Pets</th>
+                <th>Service to Avail</th>
+                <th>Total Amt</th>
+                <th style={{ textAlign: 'center' }}>Status</th>
+                <th style={{ textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBookings.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>
+                    No bookings found for this category.
+                  </td>
+                </tr>
+              ) : (
+                filteredBookings.map((booking) => {
+                  const petCount = booking.booking_pet_info?.length || 0;
+                  const services = booking.booking_pet_info
+                    ?.flatMap(pet => pet.booking_service_info?.map(s => s.booking_service_name))
+                    .filter(Boolean)
+                    .join(', ') || 'N/A';
+
+                  return (
+                    <tr key={booking.id}>
+                      <td>
+                        <strong>{booking.booking_date}</strong>
+                        <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{booking.booking_timeslot}</div>
+                      </td>
+                      <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{petCount}</td>
+                      <td style={{ fontSize: '0.875rem', maxWidth: '200px' }}>{services}</td>
+                      <td><strong>{formatCurrency(booking.booking_total_amount)}</strong></td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={styles.statusBadge}>{formatStatus(booking.booking_status)}</span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button onClick={() => setSelectedBooking(booking)} className={styles.viewBtn}>
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Booking Details Modal - for viewing and managing individual bookings */}
+        {selectedBooking && (
+          <BookingDetailsModal
+            selectedBooking={selectedBooking}
+            setSelectedBooking={setSelectedBooking}
+            handleUpdateStatus={handleUpdateStatus}
+          />
+        )}
+
+        {/* Calendar Modal - for viewing appointments by date */}
+        {showCalendar && (
+          <CalendarModal
+            bookings={bookings}
+            setShowCalendar={setShowCalendar}
+          />
+        )}
       </div>
-      
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <p className="text-gray-600">
-          Your service provider dashboard is ready. FOR APPOINTMENTS GANERN
-        </p>
-      </div>
+
+      {/* Footer component placed outside the container */}
+      <Footer />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 -- File: database/provider/01_create_sp_general_info.sql
--- Latest Update: July 27, 2026
+-- Latest Update: August 03, 2026
 
 -- Setup Service Provider Business Profile Table
 -- Depends on: auth_module.profiles (database/auth/01_create_profiles.sql)
@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.sp_general_info (
     business_barangay TEXT NOT NULL,
     business_city TEXT NOT NULL,
     business_province TEXT NOT NULL,
+    -- removed business_region from here so we can alter it below
     business_country TEXT NOT NULL DEFAULT 'Philippines' CHECK (business_country = 'Philippines'),
     business_postal_code TEXT NOT NULL CHECK (business_postal_code ~ '^\d{4}$'),
  
@@ -62,4 +63,5 @@ CREATE POLICY "Service providers can update their own business" ON public.sp_gen
 ALTER TABLE public.sp_general_info
     ADD COLUMN IF NOT EXISTS business_waiver_url TEXT,
     ADD COLUMN IF NOT EXISTS business_permit_url TEXT,
-    ADD COLUMN IF NOT EXISTS business_payment_qr_url TEXT;
+    ADD COLUMN IF NOT EXISTS business_payment_qr_url TEXT,
+    ADD COLUMN IF NOT EXISTS business_region TEXT;

@@ -24,26 +24,31 @@ function UserDetailsContent() {
     user, businessEmail, bookings, loading, bookingsLoading, error,
     warnings, warningsLoading, sendingWarning,
     currentSuspension, suspensionLoading, suspending, liftingSuspension, autoSuspended,
+    suspensionHistory, suspensionHistoryLoading,
     actionError, actionSuccess, autoSuspendNotice, setAutoSuspendNotice,
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   } = useUserDetails(userId);
 
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
+  const [warningSeverity, setWarningSeverity] = useState("normal"); 
 
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showSuspensionHistoryModal, setShowSuspensionHistoryModal] = useState(false);
 
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
   const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
 
   // Handlers to link the UI Modals to the hook logic
   const handleSendWarningConfirm = async () => {
-    const success = await confirmSendWarning(warningMessage);
+    const success = await confirmSendWarning(warningMessage, warningSeverity);
     if (success) {
       setShowSendWarningConfirm(false);
       setWarningMessage("");
+      setWarningSeverity("normal");
     }
   };
 
@@ -94,6 +99,8 @@ function UserDetailsContent() {
               activeWarningCount={activeWarningCount}
               warningMessage={warningMessage}
               setWarningMessage={setWarningMessage}
+              warningSeverity={warningSeverity}              
+              setWarningSeverity={setWarningSeverity}        
               sendingWarning={sendingWarning}
               onSendWarningClick={() => setShowSendWarningConfirm(true)}
               isSuspended={isSuspended}
@@ -103,6 +110,10 @@ function UserDetailsContent() {
               liftingSuspension={liftingSuspension}
               onSuspendClick={() => setShowSuspendConfirm(true)}
               onLiftSuspensionClick={() => setShowLiftConfirm(true)}
+              onViewHistoryClick={() => setShowHistoryModal(true)}
+              suspensionHistory={suspensionHistory}
+              suspensionHistoryLoading={suspensionHistoryLoading}
+              onViewSuspensionHistoryClick={() => setShowSuspensionHistoryModal(true)}
             />
           </div>
 
@@ -121,6 +132,7 @@ function UserDetailsContent() {
       <AdminModals 
         user={user}
         warningMessage={warningMessage}
+        warningSeverity={warningSeverity}
         activeWarningCount={activeWarningCount}
         isSuspended={isSuspended}
         sendingWarning={sendingWarning}
@@ -137,6 +149,14 @@ function UserDetailsContent() {
         confirmLiftSuspension={handleLiftSuspensionConfirm}
         autoSuspendNotice={autoSuspendNotice}
         setAutoSuspendNotice={setAutoSuspendNotice}
+        warnings={warnings}
+        warningsLoading={warningsLoading}
+        showHistoryModal={showHistoryModal}
+        setShowHistoryModal={setShowHistoryModal}
+        suspensionHistory={suspensionHistory}
+        suspensionHistoryLoading={suspensionHistoryLoading}
+        showSuspensionHistoryModal={showSuspensionHistoryModal}
+        setShowSuspensionHistoryModal={setShowSuspensionHistoryModal}
       />
     </div>
   );

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { FaExclamationTriangle, FaPaperPlane, FaChevronDown, FaChevronUp, FaUserSlash, FaUserCheck } from "react-icons/fa";
-import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD } from "../_types";
+import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory, FaChevronDown } from "react-icons/fa";
+import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD, SEVERITY_LEVELS } from "../_types";
 import styles from "../page.module.css";
 
 interface Props {
@@ -11,6 +10,8 @@ interface Props {
   activeWarningCount: number;
   warningMessage: string;
   setWarningMessage: (msg: string) => void;
+  warningSeverity: string;
+  setWarningSeverity: (val: string) => void;
   sendingWarning: boolean;
   onSendWarningClick: () => void;
   isSuspended: boolean;
@@ -20,14 +21,19 @@ interface Props {
   liftingSuspension: boolean;
   onSuspendClick: () => void;
   onLiftSuspensionClick: () => void;
+  onViewHistoryClick: () => void;
+  suspensionHistory: SuspensionRow[];
+  suspensionHistoryLoading: boolean;
+  onViewSuspensionHistoryClick: () => void;
 }
 
 export const AdminActionsCard = ({
   warnings, warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
+  warningSeverity, setWarningSeverity,
   onSendWarningClick, isSuspended, currentSuspension, suspensionLoading, suspending, liftingSuspension,
-  onSuspendClick, onLiftSuspensionClick
+  onSuspendClick, onLiftSuspensionClick, onViewHistoryClick,
+  suspensionHistory, suspensionHistoryLoading, onViewSuspensionHistoryClick
 }: Props) => {
-  const [showHistory, setShowHistory] = useState(false);
 
   const formatDateTime = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
@@ -51,6 +57,23 @@ export const AdminActionsCard = ({
             Count: {warningsLoading ? "…" : activeWarningCount}
           </span>
         </div>
+
+        <select
+          className={styles["severity-select"]}
+          value={warningSeverity}
+          onChange={(e) => setWarningSeverity(e.target.value)}
+          disabled={sendingWarning}
+        >
+          {SEVERITY_LEVELS.map((level) => (
+            <option key={level.value} value={level.value}>
+              {level.label}
+            </option>
+          ))}
+        </select>
+        <p className={styles["severity-description"]}>
+          {SEVERITY_LEVELS.find((l) => l.value === warningSeverity)?.description}
+        </p>
+
         <textarea
           className={styles["warning-textarea"]}
           placeholder="Type warning message here..."
@@ -67,6 +90,8 @@ export const AdminActionsCard = ({
           <FaPaperPlane />
           {sendingWarning ? "Sending..." : "Send Warning"}
         </button>
+        
+        {/* Threshold Note */}
         {activeWarningCount >= WARNING_THRESHOLD - 1 && !isSuspended && (
           <p className={styles["threshold-note"]}>
             {activeWarningCount + 1 >= WARNING_THRESHOLD
@@ -78,33 +103,11 @@ export const AdminActionsCard = ({
 
       <hr className={styles["admin-divider"]} />
 
-      {/* View History */}
-      <button className={styles["btn-view-history"]} onClick={() => setShowHistory((prev) => !prev)}>
-        {showHistory ? <FaChevronUp /> : <FaChevronDown />}
-        View History ({warningsLoading ? "…" : warnings.length})
+      {/* View Warning History */}
+      <button className={styles["btn-view-history"]} onClick={onViewHistoryClick}>
+        <FaHistory /> 
+        View Warning History ({warningsLoading ? "…" : warnings.length})
       </button>
-
-      {showHistory && (
-        <div className={styles["warning-history-list"]}>
-          {warningsLoading ? (
-            <p className={styles["warning-history-empty"]}>Loading...</p>
-          ) : warnings.length === 0 ? (
-            <p className={styles["warning-history-empty"]}>No warnings issued yet.</p>
-          ) : (
-            warnings.map((w) => (
-              <div key={w.id} className={styles["warning-history-item"]}>
-                <div className={styles["warning-history-top"]}>
-                  <span className={`${styles["warning-status-tag"]} ${styles[`warning-status-${w.status}`] || ""}`}>
-                    {w.status}
-                  </span>
-                  <span className={styles["warning-history-date"]}>{formatDateTime(w.created_at)}</span>
-                </div>
-                <p className={styles["warning-history-message"]}>{w.warning_message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      )}
 
       <hr className={styles["admin-divider"]} />
 
@@ -127,6 +130,14 @@ export const AdminActionsCard = ({
             {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
           </button>
         )}
+
+      <hr className={styles["admin-divider"]} />
+
+        {/* View Suspension History */}
+        <button className={styles["btn-view-history"]} onClick={onViewSuspensionHistoryClick}>
+          <FaHistory />
+          View Suspension History ({suspensionHistoryLoading ? "…" : suspensionHistory.length})
+        </button>
       </div>
     </section>
   );

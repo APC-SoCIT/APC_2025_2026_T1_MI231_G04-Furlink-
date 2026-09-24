@@ -7,6 +7,12 @@ export const REJECTION_REASONS = [
   "Others",
 ];
 
+export interface AdminResponder {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
 export interface OperatingHour {
   id: string;
   day_of_week: string;
@@ -56,6 +62,9 @@ export interface ProviderDetails {
   business_waiver_url: string | null;
   registration_status: string;
   registration_rejection_reason: string | null;
+  registration_approved_at: string | null;
+  updated_at: string;
+  responder: AdminResponder | null;
   sp_operating_hours: OperatingHour[];
   sp_employees_info: Employee[];
   sp_services: Service[];
