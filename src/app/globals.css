@@ -287,6 +287,24 @@ body.logged-in-page {
     pointer-events: auto;
   }
 
+  @media screen and (max-width: 768px) {
+  .notif-dropdown {
+    position: fixed !important;
+    top: 70px !important;
+    left: 4% !important;
+    right: 4% !important;
+    width: 92% !important;
+    max-width: none !important;
+    max-height: 75vh !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25) !important;
+    border-radius: 16px !important;
+  }
+
+  .notif-list {
+    max-height: calc(75vh - 60px) !important;
+  }
+}
+
   .view-toggle-wrapper {
     width: 100%;
     justify-content: center;
