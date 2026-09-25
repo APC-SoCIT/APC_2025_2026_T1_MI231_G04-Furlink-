@@ -36,7 +36,7 @@ export default function HeaderLoggedIn() {
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // Modal state for SP -> Both role change
+  const [showConfirmModal, setShowConfirmModal] = useState(false); 
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -81,7 +81,6 @@ export default function HeaderLoggedIn() {
 
           status = spInfo?.registration_status ?? null;
 
-          // Promote pet_owner to both_sp_po only if admin approved their application
           if (role === 'pet_owner' && status === 'approved') {
             const { error: roleError } = await supabase
               .from("profiles")
@@ -205,9 +204,11 @@ export default function HeaderLoggedIn() {
 
   const inServiceProviderArea =
     pathname === SERVICE_PROVIDER_AREA || pathname.startsWith(`${SERVICE_PROVIDER_AREA}/`);
+  const isOnboardingPage = pathname.includes("onboarding");
 
   const hasApplication = registrationStatus !== null && registrationStatus !== undefined;
   const isApproved = registrationStatus === 'approved';
+  const isPendingOrRejected = registrationStatus && ['pending', 're-applied', 'rejected'].includes(registrationStatus);
 
   const serviceProviderHome = isApproved
     ? ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD
@@ -231,20 +232,21 @@ export default function HeaderLoggedIn() {
 
   // Role Action Button Label Logic
   const getRoleActionLabel = (): string | null => {
-    if (registrationStatus === undefined) return null;
+    if (registrationStatus === undefined || isOnboardingPage) return null;
 
     if (userRole === 'pet_owner') {
       if (!hasApplication) return "Become a Service Provider";
-      return isApproved ? null : "View Application";
+      return isPendingOrRejected ? "View Application" : null;
     }
 
     if (userRole === 'service_provider') {
-      return hasApplication ? "Become a Pet Owner" : "Register Now!";
+      if (isPendingOrRejected) return "View Application";
+      return isApproved ? "Become a Pet Owner" : "Register Now!";
     }
 
     if (isBoth) {
+      if (isPendingOrRejected) return "View Application";
       if (!hasApplication) return "Register Now!";
-      if (!isApproved) return null;
       return inServiceProviderArea ? "Switch to Pet Owner" : "Switch to Business";
     }
 
@@ -270,13 +272,13 @@ export default function HeaderLoggedIn() {
     setShowMobileMenu(false);
     setShowMenu(false);
 
-    if (userRole === 'pet_owner') {
+    if (isPendingOrRejected || userRole === 'pet_owner' && !hasApplication) {
       router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
       return;
     }
 
     if (userRole === 'service_provider') {
-      if (hasApplication && isApproved) {
+      if (isApproved) {
         // Trigger modal confirmation to become 'both_sp_po'
         setShowConfirmModal(true);
       } else {
@@ -294,7 +296,7 @@ export default function HeaderLoggedIn() {
     }
   };
 
-  // Confirm role change to both_sp_po for Service Provider
+  // Confirm role change to both_sp_po and redirect straight to Manage Account page
   const confirmBecomePetOwner = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -308,7 +310,7 @@ export default function HeaderLoggedIn() {
       if (!error) {
         setProfile((prev) => prev ? { ...prev, role: 'both_sp_po' } : null);
         setShowConfirmModal(false);
-        router.push(ROUTES.PET_OWNER.DASHBOARD);
+        router.push(ROUTES.AUTH.MANAGE_ACCOUNT);
       } else {
         console.error("Error updating role to both_sp_po:", error);
       }
@@ -331,8 +333,8 @@ export default function HeaderLoggedIn() {
   };
 
   const ProfileMenuItems = ({ onNavigate }: { onNavigate: (path: string) => void }) => {
-    // Only show "Manage Listing" if user is an Approved SP or Approved both_sp_po
-    const canSeeManageListing = isServiceProvider && isApproved;
+    // Only show "Manage Listing" if user is an Approved SP or Approved both_sp_po and NOT pending/rejected
+    const canSeeManageListing = isServiceProvider && isApproved && !isPendingOrRejected;
 
     return (
       <>
@@ -432,22 +434,22 @@ export default function HeaderLoggedIn() {
 
       {/* Confirmation Modal for Service Provider -> Both SP & PO Role Change */}
       {showConfirmModal && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div className="modal-content" style={{ background: 'white', padding: '24px', borderRadius: '8px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-            <h3>Confirm Role Change</h3>
-            <p style={{ margin: '16px 0', color: '#555' }}>
+        <div className="header-modal-overlay">
+          <div className="header-modal-card">
+            <h3 className="header-modal-title">Confirm Role Change</h3>
+            <p className="header-modal-text">
               Are you sure you want to become a Pet Owner as well? This will update your account role to both Service Provider and Pet Owner.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <div className="header-modal-actions">
               <button
+                className="header-modal-btn-cancel"
                 onClick={() => setShowConfirmModal(false)}
-                style={{ padding: '8px 16px', background: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
               <button
+                className="header-modal-btn-confirm"
                 onClick={confirmBecomePetOwner}
-                style={{ padding: '8px 16px', background: '#0a217a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Yes, Confirm
               </button>

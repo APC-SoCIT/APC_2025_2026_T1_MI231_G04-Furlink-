@@ -49,7 +49,12 @@ export default function ProtectedRoute({ children, allowedRoles = [] }: Protecte
           } else if (pathname.startsWith("/pet_owner")) {
             rolesToCheck = ["pet_owner", "both_sp_po"];
           } else if (pathname.startsWith("/service_provider")) {
-            rolesToCheck = ["service_provider", "both_sp_po"];
+            // FIX: Explicitly allow pet_owner to access the onboarding form page
+            if (pathname.includes("/manage_listing/onboarding")) {
+              rolesToCheck = ["pet_owner", "service_provider", "both_sp_po"];
+            } else {
+              rolesToCheck = ["service_provider", "both_sp_po"];
+            }
           }
         }
 
