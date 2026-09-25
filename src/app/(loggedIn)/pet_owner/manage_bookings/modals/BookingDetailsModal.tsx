@@ -6,6 +6,7 @@ import {
   FaCommentAlt,
   FaMagic,
   FaExclamationCircle,
+  FaStar,
 } from 'react-icons/fa';
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
@@ -55,6 +56,41 @@ export default function BookingDetailsModal({
           {selectedBooking.booking_rejection_reason && (
             <div className="rejection-reason-box">
               <strong>Cancellation/Refund Reason:</strong> {selectedBooking.booking_rejection_reason}
+            </div>
+          )}
+
+          {/* Conditional Rating & Review Section */}
+          {(selectedBooking.booking_overall_rating || selectedBooking.booking_staff_rating || selectedBooking.booking_review) && (
+            <div style={{
+              backgroundColor: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              padding: '16px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e3a8a', fontWeight: 600 }}>
+                <FaStar style={{ color: '#f59e0b' }} /> Customer Rating & Review
+              </div>
+              <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b' }}>
+                {selectedBooking.booking_overall_rating && (
+                  <span>Overall Rating: <strong style={{ color: '#1e293b' }}>{selectedBooking.booking_overall_rating} / 5 ★</strong></span>
+                )}
+                {selectedBooking.booking_staff_rating && (
+                  <span>Staff Rating: <strong style={{ color: '#1e293b' }}>{selectedBooking.booking_staff_rating} / 5 ★</strong></span>
+                )}
+              </div>
+              {selectedBooking.booking_review && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '4px' }}>
+                  <FaCommentAlt style={{ marginTop: '2px', color: '#1e3a8a', flexShrink: 0 }} />
+                  <div>
+                    <strong>Review:</strong> "{selectedBooking.booking_review}"
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
