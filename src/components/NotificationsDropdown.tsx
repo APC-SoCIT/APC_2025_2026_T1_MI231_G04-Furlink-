@@ -82,12 +82,18 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
           .from("notifications")
           .select("*")
           .eq("user_id", user.id)
-          .neq("channel", "email_only") // Excludes email-only notifications (like deactivations) from the UI bell
-          .order("created_at", { ascending: false })
-          .limit(10);
+          .neq("channel", "email_only")
+          .order("created_at", { ascending: false });
 
-        if (isActive) {
-          setNotifications(notifData || []);
+        if (isActive && notifData) {
+          const unreadList = notifData.filter(n => !n.read);
+          const readList = notifData.filter(n => n.read).slice(0, 10);
+          
+          const combined = Array.from(
+            new Map([...unreadList, ...readList].map(item => [item.id, item])).values()
+          ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+          setNotifications(combined);
         }
       } catch (err) {
         console.error("Error fetching notifications:", err);
@@ -130,15 +136,28 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
           (payload) => {
             const newNotif = payload.new as Notification;
             
-            // Ignore updates or inserts meant purely for background emails
             if (newNotif.channel === 'email_only') return;
 
             if (payload.eventType === "INSERT") {
-              setNotifications((prev) => [newNotif, ...prev].slice(0, 10));
+              setNotifications((prev) => {
+                const updated = [newNotif, ...prev];
+                const unreadList = updated.filter(n => !n.read);
+                const readList = updated.filter(n => n.read).slice(0, 10);
+                
+                return Array.from(
+                  new Map([...unreadList, ...readList].map(item => [item.id, item])).values()
+                ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              });
             } else if (payload.eventType === "UPDATE") {
-              setNotifications((prev) =>
-                prev.map((n) => (n.id === newNotif.id ? newNotif : n))
-              );
+              setNotifications((prev) => {
+                const updated = prev.map((n) => (n.id === newNotif.id ? newNotif : n));
+                const unreadList = updated.filter(n => !n.read);
+                const readList = updated.filter(n => n.read).slice(0, 10);
+                
+                return Array.from(
+                  new Map([...unreadList, ...readList].map(item => [item.id, item])).values()
+                ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              });
             } else if (payload.eventType === "DELETE") {
               const deletedId = (payload.old as Notification).id;
               setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
@@ -159,7 +178,17 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
   const handleNotifClick = async (notif: Notification) => {
     try {
       await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
-      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
+      
+      setNotifications((prev) => {
+        const updated = prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n));
+        const unreadList = updated.filter(n => !n.read);
+        const readList = updated.filter(n => n.read).slice(0, 10);
+        
+        return Array.from(
+          new Map([...unreadList, ...readList].map(item => [item.id, item])).values()
+        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      });
+
       if (onClose) onClose();
 
       const destination = getNotificationRoute(notif.type);
@@ -174,7 +203,11 @@ export default function NotificationsDropdown({ onClose }: { onClose?: () => voi
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      
+      setNotifications((prev) => {
+        const updated = prev.map((n) => ({ ...n, read: true }));
+        return updated.slice(0, 10);
+      });
     } catch (err) {
       console.error("Error marking all as read:", err);
     }
