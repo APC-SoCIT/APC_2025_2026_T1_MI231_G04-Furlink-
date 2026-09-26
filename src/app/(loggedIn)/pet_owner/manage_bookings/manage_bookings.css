@@ -221,7 +221,8 @@
 }
 
 .status-pill.rejected,
-.status-pill.cancelled {
+.status-pill.cancelled,
+.status-pill.cancelled_by_po {
   background-color: #fee2e2;
   color: #991b1b;
 }
@@ -610,6 +611,85 @@
 
 .btn-primary-action:hover {
   opacity: 0.9;
+}
+
+.btn-cancel-booking {
+  background-color: #ffffff;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel-booking:hover {
+  background-color: #fef2f2;
+}
+
+/* Cancel Booking Confirmation Modal */
+.cancel-modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 440px;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalScaleUp 0.25s ease-out;
+}
+
+.cancel-modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cancel-modal-warning-icon {
+  font-size: 32px;
+  color: #dc2626;
+}
+
+.cancel-refund-breakdown {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #7f1d1d;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cancel-refund-breakdown .breakdown-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.btn-danger-action {
+  background-color: #dc2626;
+  border: none;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn-danger-action:hover {
+  opacity: 0.9;
+}
+
+.btn-danger-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Reschedule Custom Modal Styles */

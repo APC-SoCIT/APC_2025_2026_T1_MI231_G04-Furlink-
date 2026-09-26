@@ -30,6 +30,7 @@ export const formatTimeDisplay = (timeStr: string) => {
 
 export const formatStatusLabel = (status: string) => {
   if (status === 'to_refund') return 'TO REFUND';
+  if (status === 'cancelled_by_po') return 'CANCELLED BY YOU';
   return status.replace(/_/g, ' ').toUpperCase();
 };
 

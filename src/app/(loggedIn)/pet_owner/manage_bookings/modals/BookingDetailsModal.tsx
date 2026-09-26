@@ -11,6 +11,9 @@ import {
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
 
+// Tabs from which the pet owner is still allowed to cancel the booking
+const CANCELLABLE_TABS: BookingTab[] = ['awaiting_approval', 'to_pay', 'upcoming'];
+
 interface BookingDetailsModalProps {
   selectedBooking: BookingRecord;
   activeTab: BookingTab;
@@ -18,6 +21,7 @@ interface BookingDetailsModalProps {
   onPayNow: (bookingId: string) => void;
   onRequestRefund: (bookingId: string) => void;
   onReschedule: () => void;
+  onCancelBooking: () => void;
 }
 
 export default function BookingDetailsModal({
@@ -27,6 +31,7 @@ export default function BookingDetailsModal({
   onPayNow,
   onRequestRefund,
   onReschedule,
+  onCancelBooking,
 }: BookingDetailsModalProps) {
   return (
     <div className="modal-backdrop">
@@ -259,6 +264,13 @@ export default function BookingDetailsModal({
               onClick={onReschedule}
             >
               Reschedule
+            </button>
+          )}
+
+          {/* Pet owner can self-cancel while awaiting approval, unpaid, or already approved */}
+          {CANCELLABLE_TABS.includes(activeTab) && (
+            <button className="btn-cancel-booking" onClick={onCancelBooking}>
+              Cancel Booking
             </button>
           )}
 

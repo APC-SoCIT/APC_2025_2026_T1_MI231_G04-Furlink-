@@ -28,6 +28,7 @@ import RescheduleModal from './modals/RescheduleModal';
 import PaymentSuccessModal from './modals/PaymentSuccessModal';
 import PaymentFailedModal from './modals/PaymentFailedModal';
 import SubmitRatingModal from './modals/SubmitRatingModal';
+import CancelBookingModal from './modals/CancelBookingModal';
 
 export default function ManageBookingsPage() {
   const supabase = createClientComponentClient();
@@ -46,6 +47,10 @@ export default function ManageBookingsPage() {
   // Rating Modal States
   const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
   const [ratingBooking, setRatingBooking] = useState<BookingRecord | null>(null);
+
+  // Cancel Booking Modal States
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   // Payment attempts & cooldown tracking states
   const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
@@ -103,8 +108,8 @@ export default function ManageBookingsPage() {
         return ['to pay'];
       case 'upcoming':
         return ['approved'];
-      case 'decline_cancelled':
-        return ['rejected', 'cancelled'];
+      case 'cancelled':
+        return ['rejected', 'cancelled', 'cancelled_by_po'];
       case 'refund':
         return ['to_refund', 'refunded'];
       case 'completed':
@@ -448,6 +453,50 @@ export default function ManageBookingsPage() {
     alert(`Initiating refund request for booking ID: ${bookingId}`);
   };
 
+  // Opens the confirmation modal for cancelling the currently selected booking.
+  const handleOpenCancelModal = () => {
+    setShowDetailsModal(false);
+    setShowCancelModal(true);
+  };
+
+  // Confirms cancellation: this is a pure status change, done directly via
+  // Supabase like the other handlers below. No PayMongo call is made here —
+  // the 80%/20% split for already-approved bookings is handled manually
+  // outside the app; this just flips booking_status accordingly.
+  const confirmCancelBooking = async () => {
+    if (!selectedBooking) return;
+
+    const currentStatus = selectedBooking.booking_status;
+    const nextStatus =
+      currentStatus === 'approved' ? 'cancelled_by_po' : 'cancelled';
+
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase
+        .from('booking_info')
+        .update({
+          booking_status: nextStatus,
+          cancelled_by: 'pet_owner',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedBooking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setShowCancelModal(false);
+      setSelectedBooking(null);
+      setActiveTab('cancelled');
+      fetchBookings();
+    } catch (err: any) {
+      console.error('Cancel booking error:', err);
+      alert(`Error: ${err.message || 'Could not cancel booking.'}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <div className="manage-bookings-container">
       <main className="manage-bookings-main">
@@ -494,8 +543,8 @@ export default function ManageBookingsPage() {
           </button>
 
           <button
-            className={`tab-card ${activeTab === 'decline_cancelled' ? 'active' : ''}`}
-            onClick={() => setActiveTab('decline_cancelled')}
+            className={`tab-card ${activeTab === 'cancelled' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cancelled')}
           >
             <div className="tab-icon-circle"><FaTimesCircle /></div>
             <span className="tab-label">Decline/Cancelled</span>
@@ -636,6 +685,17 @@ export default function ManageBookingsPage() {
             setShowDetailsModal(false);
             setShowRescheduleModal(true);
           }}
+          onCancelBooking={handleOpenCancelModal}
+        />
+      )}
+
+      {/* Cancel Booking Confirmation Modal */}
+      {showCancelModal && selectedBooking && (
+        <CancelBookingModal
+          bookingStatus={selectedBooking.booking_status}
+          isSubmitting={isCancelling}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={confirmCancelBooking}
         />
       )}
 

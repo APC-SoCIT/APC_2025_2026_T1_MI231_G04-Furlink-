@@ -2,7 +2,7 @@ export type BookingTab =
   | 'awaiting_approval'
   | 'to_pay'
   | 'upcoming'
-  | 'decline_cancelled'
+  | 'cancelled'
   | 'refund'
   | 'completed';
 
