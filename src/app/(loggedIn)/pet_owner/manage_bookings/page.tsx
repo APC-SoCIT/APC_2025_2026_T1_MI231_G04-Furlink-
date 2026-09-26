@@ -26,7 +26,9 @@ import {
 import BookingDetailsModal from './modals/BookingDetailsModal';
 import RescheduleModal from './modals/RescheduleModal';
 import PaymentSuccessModal from './modals/PaymentSuccessModal';
-import PaymentFailedModal from './modals/PaymentFailedModal'; // Import the failed modal
+import PaymentFailedModal from './modals/PaymentFailedModal';
+import SubmitRatingModal from './modals/SubmitRatingModal';
+import CancelBookingModal from './modals/CancelBookingModal';
 
 export default function ManageBookingsPage() {
   const supabase = createClientComponentClient();
@@ -35,12 +37,20 @@ export default function ManageBookingsPage() {
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Modal statess
+  // Modal states
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
-  const [showFailedModal, setShowFailedModal] = useState<boolean>(false); // Failed modal visibility
+  const [showFailedModal, setShowFailedModal] = useState<boolean>(false);
+  
+  // Rating Modal States
+  const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
+  const [ratingBooking, setRatingBooking] = useState<BookingRecord | null>(null);
+
+  // Cancel Booking Modal States
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   // Payment attempts & cooldown tracking states
   const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
@@ -98,8 +108,8 @@ export default function ManageBookingsPage() {
         return ['to pay'];
       case 'upcoming':
         return ['approved'];
-      case 'decline_cancelled':
-        return ['rejected', 'cancelled'];
+      case 'cancelled':
+        return ['rejected', 'cancelled', 'cancelled_by_po'];
       case 'refund':
         return ['to_refund', 'refunded'];
       case 'completed':
@@ -196,6 +206,9 @@ export default function ManageBookingsPage() {
           booking_status,
           booking_rejection_reason,
           booking_comment,
+          booking_review,
+          booking_overall_rating,
+          booking_staff_rating,
           booking_total_amount,
           booking_pet_info (
             id,
@@ -269,7 +282,6 @@ export default function ManageBookingsPage() {
 
       verifyAndStorePayment();
     } else if ((status === 'failed' || status === 'cancelled') && bookingId) {
-      // Just show the failed modal; the attempt count was already incremented when clicking "Try Again"
       setShowFailedModal(true);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -282,6 +294,34 @@ export default function ManageBookingsPage() {
   const handleOpenDetails = (booking: BookingRecord) => {
     setSelectedBooking(booking);
     setShowDetailsModal(true);
+  };
+
+  const handleOpenRatingModal = (booking: BookingRecord) => {
+    setRatingBooking(booking);
+    setShowRatingModal(true);
+  };
+
+  const handleRatingSubmit = async (overallRating: number, staffRating: number, comment: string) => {
+    if (!ratingBooking) return;
+
+    const { error } = await supabase
+      .from('booking_info')
+      .update({
+        booking_overall_rating: overallRating,
+        booking_staff_rating: staffRating,
+        booking_review: comment || null,
+        booking_status: 'rated',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', ratingBooking.id);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    setShowRatingModal(false);
+    setRatingBooking(null);
+    fetchBookings();
   };
 
   const handleReschedule = async (newDate: string, newTimeslot: string) => {
@@ -324,13 +364,12 @@ export default function ManageBookingsPage() {
       return;
     }
 
-    // Increment attempt count immediately upon initiating a payment attempt
     const newAttempts = paymentAttempts + 1;
     setPaymentAttempts(newAttempts);
     localStorage.setItem('payment_attempts', newAttempts.toString());
 
     if (newAttempts >= 3) {
-      const cooldownTime = Date.now() + 60 * 60 * 1000; // 1-hour cooldown limit
+      const cooldownTime = Date.now() + 60 * 60 * 1000;
       setCooldownUntil(cooldownTime);
       localStorage.setItem('payment_cooldown_until', cooldownTime.toString());
       setShowFailedModal(true);
@@ -344,7 +383,6 @@ export default function ManageBookingsPage() {
 
       let amount = bookingToPay ? Number(bookingToPay.booking_total_amount || 0) : 0;
 
-      // Fallback: Fetch directly from Supabase if amount isn't in current state view
       if (amount <= 0) {
         const { data: fetchedBooking, error: fetchError } = await supabase
           .from('booking_info')
@@ -415,6 +453,50 @@ export default function ManageBookingsPage() {
     alert(`Initiating refund request for booking ID: ${bookingId}`);
   };
 
+  // Opens the confirmation modal for cancelling the currently selected booking.
+  const handleOpenCancelModal = () => {
+    setShowDetailsModal(false);
+    setShowCancelModal(true);
+  };
+
+  // Confirms cancellation: this is a pure status change, done directly via
+  // Supabase like the other handlers below. No PayMongo call is made here —
+  // the 80%/20% split for already-approved bookings is handled manually
+  // outside the app; this just flips booking_status accordingly.
+  const confirmCancelBooking = async () => {
+    if (!selectedBooking) return;
+
+    const currentStatus = selectedBooking.booking_status;
+    const nextStatus =
+      currentStatus === 'approved' ? 'cancelled_by_po' : 'cancelled';
+
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase
+        .from('booking_info')
+        .update({
+          booking_status: nextStatus,
+          cancelled_by: 'pet_owner',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedBooking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setShowCancelModal(false);
+      setSelectedBooking(null);
+      setActiveTab('cancelled');
+      fetchBookings();
+    } catch (err: any) {
+      console.error('Cancel booking error:', err);
+      alert(`Error: ${err.message || 'Could not cancel booking.'}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <div className="manage-bookings-container">
       <main className="manage-bookings-main">
@@ -461,8 +543,8 @@ export default function ManageBookingsPage() {
           </button>
 
           <button
-            className={`tab-card ${activeTab === 'decline_cancelled' ? 'active' : ''}`}
-            onClick={() => setActiveTab('decline_cancelled')}
+            className={`tab-card ${activeTab === 'cancelled' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cancelled')}
           >
             <div className="tab-icon-circle"><FaTimesCircle /></div>
             <span className="tab-label">Decline/Cancelled</span>
@@ -546,12 +628,22 @@ export default function ManageBookingsPage() {
                     </div>
 
                     <div className="col-cell col-action">
-                      <button
-                        className="row-action-btn secondary"
-                        onClick={() => handleOpenDetails(item)}
-                      >
-                        View Details
-                      </button>
+                      {activeTab === 'completed' && !item.booking_overall_rating ? (
+                        <button
+                          className="row-action-btn"
+                          style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}
+                          onClick={() => handleOpenRatingModal(item)}
+                        >
+                          Rate Service
+                        </button>
+                      ) : (
+                        <button
+                          className="row-action-btn secondary"
+                          onClick={() => handleOpenDetails(item)}
+                        >
+                          View Details
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -593,6 +685,17 @@ export default function ManageBookingsPage() {
             setShowDetailsModal(false);
             setShowRescheduleModal(true);
           }}
+          onCancelBooking={handleOpenCancelModal}
+        />
+      )}
+
+      {/* Cancel Booking Confirmation Modal */}
+      {showCancelModal && selectedBooking && (
+        <CancelBookingModal
+          bookingStatus={selectedBooking.booking_status}
+          isSubmitting={isCancelling}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={confirmCancelBooking}
         />
       )}
 
@@ -606,6 +709,15 @@ export default function ManageBookingsPage() {
           onSubmit={(newDate, newTimeslot) => {
             handleReschedule(newDate, newTimeslot);
           }}
+        />
+      )}
+
+      {/* Submit Rating Modal */}
+      {showRatingModal && ratingBooking && (
+        <SubmitRatingModal
+          bookingId={ratingBooking.id}
+          onClose={() => setShowRatingModal(false)}
+          onSubmitRating={handleRatingSubmit}
         />
       )}
 
