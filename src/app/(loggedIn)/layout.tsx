@@ -20,7 +20,7 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-          router.replace(ROUTES.HOME); // Redirects to public landing page if logged out
+          router.replace(ROUTES.HOME); 
           return;
         }
 
@@ -33,11 +33,11 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
 
         if (error || !profile || profile.status !== "active") {
           await supabase.auth.signOut();
-          router.replace(ROUTES.HOME); //[cite: 8]
+          router.replace(ROUTES.HOME);
           return;
         }
 
-        const role = profile.role; // e.g., 'admin', 'pet_owner', 'service_provider', 'both_sp_po'
+        const role = profile.role; 
 
         // 3. Admin-only pages check
         if (pathname.startsWith("/admin")) {
@@ -47,7 +47,7 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
           }
         }
 
-        // 4. Pet Owner pages check (Strictly for pet_owner and both_sp_po)
+        // 4. Pet Owner pages check 
         if (pathname.startsWith("/pet_owner")) {
           if (role !== "pet_owner" && role !== "both_sp_po") {
             if (role === "admin") {
@@ -61,9 +61,16 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
 
         // 5. Service Provider pages check
         if (pathname.startsWith("/service_provider")) {
-          // Must be service_provider or both_sp_po
-          if (role !== "service_provider" && role !== "both_sp_po") {
+          const isOnboarding = pathname.includes("onboarding");
+
+          // Allow pet_owner to access the onboarding page to apply
+          if (!isOnboarding && role !== "service_provider" && role !== "both_sp_po") {
             router.replace(ROUTES.PET_OWNER.DASHBOARD);
+            return;
+          }
+
+          if (isOnboarding && role === "pet_owner") {
+            setIsLoading(false);
             return;
           }
 
@@ -74,10 +81,9 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
             .eq("profiles_id", session.user.id)
             .maybeSingle();
 
-          const regStatus = spInfo?.registration_status; // e.g., 'pending', 'approved', 'denied'
+          const regStatus = spInfo?.registration_status;
 
-          // If path is onboarding (Only for pending or denied applications)
-          if (pathname.includes("onboarding")) {
+          if (isOnboarding) {
             if (regStatus === "approved") {
               // Approved SPs shouldn't be on onboarding, push to summary dashboard
               router.replace(ROUTES.SERVICE_PROVIDER.SUMMARY_DASHBOARD);
@@ -95,7 +101,7 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
         setIsLoading(false);
       } catch (err) {
         console.error("Route protection validation error:", err);
-        router.replace(ROUTES.HOME); //[cite: 8]
+        router.replace(ROUTES.HOME);
       }
     };
 

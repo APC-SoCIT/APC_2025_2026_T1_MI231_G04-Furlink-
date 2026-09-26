@@ -169,6 +169,84 @@ body.logged-in-page {
   transition: all 0.3s ease;
 }
 
+.header-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(10, 33, 122, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.header-modal-card {
+  background: var(--bg-white);
+  padding: 32px;
+  border-radius: 20px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  color: #0f172a;
+}
+
+.header-modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--btn-dark-blue);
+  margin-bottom: 12px;
+}
+
+.header-modal-text {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.header-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.header-modal-btn-cancel {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.header-modal-btn-cancel:hover {
+  background-color: #e2e8f0;
+}
+
+.header-modal-btn-confirm {
+  background-color: var(--btn-dark-blue);
+  color: var(--text-white);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.header-modal-btn-confirm:hover {
+  background-color: #071966;
+  color: var(--accent-yellow);
+}
+
 /* ==========================================================================
    RESPONSIVE TABLET & MOBILE BREAKS (< 768px)
    ========================================================================== */
@@ -208,6 +286,24 @@ body.logged-in-page {
     transform: translateY(0);
     pointer-events: auto;
   }
+
+  @media screen and (max-width: 768px) {
+  .notif-dropdown {
+    position: fixed !important;
+    top: 70px !important;
+    left: 4% !important;
+    right: 4% !important;
+    width: 92% !important;
+    max-width: none !important;
+    max-height: 75vh !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25) !important;
+    border-radius: 16px !important;
+  }
+
+  .notif-list {
+    max-height: calc(75vh - 60px) !important;
+  }
+}
 
   .view-toggle-wrapper {
     width: 100%;
