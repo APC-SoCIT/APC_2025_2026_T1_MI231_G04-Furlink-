@@ -62,3 +62,49 @@ CREATE POLICY "Pet owner or provider can update a booking" ON public.booking_inf
 
 ALTER TABLE public.booking_info
 ADD COLUMN IF NOT EXISTS assigned_employee_id UUID REFERENCES public.sp_employees_info(id) ON DELETE SET NULL;
+
+ALTER TABLE public.booking_info
+
+ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10, 2) DEFAULT NULL,
+
+ADD COLUMN IF NOT EXISTS refund_reason TEXT DEFAULT NULL CHECK (
+
+  refund_reason IS NULL OR refund_reason IN ('sp_cancellation', 'no_response_timeout')
+
+),
+
+ADD COLUMN IF NOT EXISTS paymongo_refund_id TEXT UNIQUE DEFAULT NULL,
+
+ADD COLUMN IF NOT EXISTS refund_initiated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+
+ALTER TABLE public.booking_info 
+DROP CONSTRAINT IF EXISTS booking_info_booking_status_check,
+DROP CONSTRAINT IF EXISTS booking_info_cancelled_by_check;
+
+ALTER TABLE public.booking_info 
+ADD CONSTRAINT booking_info_booking_status_check CHECK (
+  booking_status = ANY (ARRAY[
+    'pending_sp_response'::text, 
+    'to pay'::text, 
+    'approved'::text,
+    'rejected'::text, 
+    'paid'::text,           -- Keeps existing 'paid' rows safe from errors
+    'cancelled'::text, 
+    'cancelled_by_po'::text,
+    'processing'::text,     -- Added for our new flow
+    'to_refund'::text, 
+    'refunded'::text,
+    'to_rate'::text, 
+    'rated'::text, 
+    'completed'::text
+  ])
+),
+ADD CONSTRAINT booking_info_cancelled_by_check CHECK (
+  cancelled_by = ANY (ARRAY[
+    'pet_owner'::text, 
+    'service_provider'::text, 
+    'system'::text          -- Added for the 24-hr timeout
+  ])
+);
+
+alter table public.booking_info drop constraint booking_info_refund_reason_check;

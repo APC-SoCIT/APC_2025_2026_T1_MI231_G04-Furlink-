@@ -35,8 +35,10 @@ export default function CancelBookingModal({
             </p>
           ) : (
             <p style={{ fontSize: '15px', color: '#64748b' }}>
-              The refund is initiated automatically once you confirm and typically reflects
-              within a few business days.
+              {/* Updated to explicitly state the 70% PO cancellation policy */}
+              Are you sure you want to cancel this booking? As per the cancellation policy, 
+              you will receive a 70% refund. The refund is initiated automatically once you confirm 
+              and typically reflects within a few business days.
             </p>
           )}
         </div>

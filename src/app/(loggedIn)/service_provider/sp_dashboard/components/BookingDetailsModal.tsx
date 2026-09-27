@@ -4,7 +4,7 @@ import { Booking, BookingStatus } from '../type';
 import { formatCurrency, formatStatus } from '../utils';
 
 interface BookingDetailsModalProps {
-  selectedBooking: Booking;
+  selectedBooking: Booking | null; // Make sure it formally accepts null
   setSelectedBooking: (booking: Booking | null) => void;
   handleUpdateStatus: (id: string, newStatus: BookingStatus, reason?: string) => void;
 }
@@ -14,14 +14,22 @@ export default function BookingDetailsModal({
   setSelectedBooking, 
   handleUpdateStatus 
 }: BookingDetailsModalProps) {
+  
+  // FAILSAFE: Instantly return nothing if selectedBooking somehow becomes null during transition
+  if (!selectedBooking) return null;
+
   const supabase = createClientComponentClient();
 
   // Common UI State
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Rejection State
+  // Rejection State (For New Requests)
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
+
+  // Cancellation State (For Upcoming Bookings)
+  const [cancelReason, setCancelReason] = useState('');
+  const [showCancelInput, setShowCancelInput] = useState(false);
 
   // Approval Note State
   const [approvalNote, setApprovalNote] = useState('');
@@ -29,13 +37,12 @@ export default function BookingDetailsModal({
 
   // Employee Assignment State (Per Pet)
   const [employees, setEmployees] = useState<any[]>([]);
-  // Store selections as a map: { petId: employeeId }
   const [petEmployeeAssignments, setPetEmployeeAssignments] = useState<Record<string, string>>({});
   const [showCompleteInput, setShowCompleteInput] = useState(false);
 
-  // Fetch employees only when a 'paid' booking is opened
+  // Fetch employees for approved or paid upcoming bookings
   useEffect(() => {
-    if (selectedBooking.booking_status === 'paid' && selectedBooking.sp_id) {
+    if ((selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') && selectedBooking.sp_id) {
       const fetchEmployees = async () => {
         const { data, error } = await supabase
           .from('sp_employees_info')
@@ -48,17 +55,36 @@ export default function BookingDetailsModal({
     }
   }, [selectedBooking, supabase]);
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!rejectionReason.trim()) {
       alert('Please enter a rejection reason');
       return;
     }
-    handleUpdateStatus(selectedBooking.id, 'rejected', rejectionReason);
-    setShowRejectInput(false);
-    setRejectionReason('');
+    setIsUpdating(true);
+    try {
+      await handleUpdateStatus(selectedBooking.id, 'rejected', rejectionReason);
+      setShowRejectInput(false);
+      setRejectionReason('');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  // Handles adding an optional note to the booking_comment before approval
+  const handleCancel = async () => {
+    if (!cancelReason.trim()) {
+      alert('Please enter a cancellation reason');
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      await handleUpdateStatus(selectedBooking.id, 'cancelled', cancelReason);
+      setShowCancelInput(false);
+      setCancelReason('');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const handleApprove = async () => {
     setIsUpdating(true);
     try {
@@ -77,7 +103,6 @@ export default function BookingDetailsModal({
     }
   };
 
-  // Helper to update specific pet assignment in state
   const handleEmployeeSelection = (petId: string, employeeId: string) => {
     setPetEmployeeAssignments(prev => ({
       ...prev,
@@ -85,12 +110,10 @@ export default function BookingDetailsModal({
     }));
   };
 
-  // Handles linking an employee ID to each pet before completion
   const handleComplete = async () => {
     const pets = selectedBooking.booking_pet_info || [];
+    const missingAssignments = pets.some((pet: any) => !petEmployeeAssignments[pet.id]);
     
-    // Ensure every pet has an assigned employee before proceeding
-    const missingAssignments = pets.some(pet => !petEmployeeAssignments[pet.id]);
     if (missingAssignments) {
       alert('Please assign an employee for every pet in this booking.');
       return;
@@ -98,8 +121,7 @@ export default function BookingDetailsModal({
 
     setIsUpdating(true);
     try {
-      // Execute all pet updates concurrently using Promise.all
-      const updatePromises = pets.map(pet => 
+      const updatePromises = pets.map((pet: any) => 
         supabase
           .from('booking_pet_info')
           .update({ assigned_employee_id: petEmployeeAssignments[pet.id] })
@@ -107,8 +129,6 @@ export default function BookingDetailsModal({
       );
       
       await Promise.all(updatePromises);
-
-      // Update the main booking status once pets are assigned
       handleUpdateStatus(selectedBooking.id, 'to_rate');
     } catch (err: any) {
       alert('Failed to assign employees: ' + err.message);
@@ -117,15 +137,16 @@ export default function BookingDetailsModal({
     }
   };
 
-  // Reset modal state
   const resetModal = () => {
     setSelectedBooking(null);
     setShowRejectInput(false);
+    setShowCancelInput(false);
     setShowApproveInput(false);
     setShowCompleteInput(false);
     setRejectionReason('');
+    setCancelReason('');
     setApprovalNote('');
-    setPetEmployeeAssignments({}); // Clear pet assignments
+    setPetEmployeeAssignments({});
   };
 
   return (
@@ -143,11 +164,13 @@ export default function BookingDetailsModal({
           <div><span style={{ color: '#64748b', display: 'block' }}>Created At</span><strong>{new Date(selectedBooking.created_at).toLocaleString()}</strong></div>
         </div>
 
-        {/* Rejection Reason (if exists) */}
-        {selectedBooking.booking_rejection_reason && (
+        {/* Rejection / Cancellation Reason */}
+        {(selectedBooking.booking_rejection_reason || selectedBooking.refund_reason) && (
           <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '0.75rem', color: '#dc2626', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason</p>
-            <p style={{ fontSize: '0.875rem', color: '#991b1b' }}>{selectedBooking.booking_rejection_reason}</p>
+            <p style={{ fontSize: '0.75rem', color: '#dc2626', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '0.5rem' }}>Reason Provided</p>
+            <p style={{ fontSize: '0.875rem', color: '#991b1b' }}>
+              {selectedBooking.refund_reason || selectedBooking.booking_rejection_reason}
+            </p>
           </div>
         )}
 
@@ -155,7 +178,7 @@ export default function BookingDetailsModal({
         <div style={{ marginBottom: '1.5rem' }}>
           <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Pet(s) & Services</h4>
           {selectedBooking.booking_pet_info && selectedBooking.booking_pet_info.length > 0 ? (
-            selectedBooking.booking_pet_info.map((pet) => (
+            selectedBooking.booking_pet_info.map((pet: any) => (
               <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
                 <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
@@ -165,15 +188,12 @@ export default function BookingDetailsModal({
                   <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
                 </div>
 
-                {/* Nested Services List */}
                 {pet.booking_service_info && pet.booking_service_info.length > 0 && (
                   <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
                     <p style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Services:</p>
                     <ul style={{ listStyleType: 'disc', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#475569' }}>
-                      {pet.booking_service_info.map((srv) => (
-                        <li key={srv.id}>
-                          {srv.booking_service_name} - {formatCurrency(srv.booking_price)}
-                        </li>
+                      {pet.booking_service_info.map((srv: any) => (
+                        <li key={srv.id}>{srv.booking_service_name} - {formatCurrency(srv.booking_price)}</li>
                       ))}
                     </ul>
                   </div>
@@ -188,12 +208,14 @@ export default function BookingDetailsModal({
         {/* Action Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
           
-          {/* Action: For Pending Bookings (New Requests) */}
           {selectedBooking.booking_status === 'pending_sp_response' && (
             <>
-              {/* Reject Input */}
-              {showRejectInput && (
+              {showRejectInput ? (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '0.75rem', background: '#fee2e2', color: '#991b1b', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                    <strong>Note:</strong> Rejecting this request will automatically initiate a <strong>100% refund</strong> back to the pet owner.
+                  </div>
+                  
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason:</label>
                   <textarea
                     value={rejectionReason}
@@ -203,18 +225,15 @@ export default function BookingDetailsModal({
                     rows={3}
                   />
                   <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
-                    <button onClick={handleReject} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      Confirm Reject
+                    <button onClick={handleReject} disabled={isUpdating} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}>
+                      {isUpdating ? 'Rejecting...' : 'Confirm Reject'}
                     </button>
-                    <button onClick={() => { setShowRejectInput(false); setRejectionReason(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      Cancel
+                    <button onClick={() => { setShowRejectInput(false); setRejectionReason(''); }} disabled={isUpdating} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      Back
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Approve Input with Note */}
-              {showApproveInput && (
+              ) : showApproveInput ? (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Note to Pet Owner (Optional):</label>
                   <textarea
@@ -229,34 +248,54 @@ export default function BookingDetailsModal({
                       {isUpdating ? 'Saving...' : 'Confirm Approval'}
                     </button>
                     <button onClick={() => { setShowApproveInput(false); setApprovalNote(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      Cancel
+                      Back
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Default Initial Buttons */}
-              {!showRejectInput && !showApproveInput && (
-                <>
-                  <button onClick={() => setShowRejectInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
-                    Reject Booking
+              ) : (
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button onClick={() => setShowRejectInput(true)} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                    Reject Request
                   </button>
-                  <button onClick={() => setShowApproveInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
-                    Approve Booking
+                  <button onClick={() => setShowApproveInput(true)} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                    Approve Request
                   </button>
-                </>
+                </div>
               )}
             </>
           )}
 
-          {/* Action: For Upcoming (Paid) Bookings - Per Pet Assignment */}
-          {selectedBooking.booking_status === 'paid' && (
+          {(selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') && (
             <>
-              {showCompleteInput ? (
+              {showCancelInput ? (
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  {(selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') && (
+                    <div style={{ padding: '0.75rem', background: '#fee2e2', color: '#991b1b', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                      <strong>Note:</strong> Cancelling this paid booking will automatically initiate a <strong>100% refund</strong> back to the pet owner.
+                    </div>
+                  )}
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Cancellation Reason:</label>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Enter reason for cancelling..."
+                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical' }}
+                    rows={3}
+                  />
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                    <button onClick={handleCancel} disabled={isUpdating} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isUpdating ? 0.7 : 1 }}>
+                      {isUpdating ? 'Processing...' : 'Confirm Cancel'}
+                    </button>
+                    <button onClick={() => { setShowCancelInput(false); setCancelReason(''); }} disabled={isUpdating} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      Back
+                    </button>
+                  </div>
+                </div>
+              ) : showCompleteInput ? (
                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '1rem' }}>Assign Staff / Employee per Pet:</label>
                   
-                  {selectedBooking.booking_pet_info?.map(pet => (
+                  {selectedBooking.booking_pet_info?.map((pet: any) => (
                     <div key={pet.id} style={{ marginBottom: '1rem' }}>
                       <p style={{ fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.25rem' }}>
                         {pet.booking_pet_name} ({pet.booking_pet_type})
@@ -281,14 +320,19 @@ export default function BookingDetailsModal({
                       {isUpdating ? 'Saving...' : 'Confirm Completion'}
                     </button>
                     <button onClick={() => { setShowCompleteInput(false); setPetEmployeeAssignments({}); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      Cancel
+                      Back
                     </button>
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowCompleteInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
-                  Mark as Completed
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button onClick={() => setShowCancelInput(true)} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                    {(selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') ? 'Cancel & Refund' : 'Cancel Booking'}
+                  </button>
+                  <button onClick={() => setShowCompleteInput(true)} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                    Mark as Completed
+                  </button>
+                </div>
               )}
             </>
           )}
