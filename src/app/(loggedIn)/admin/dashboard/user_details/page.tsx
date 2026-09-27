@@ -120,7 +120,9 @@ function UserDetailsContent() {
           <BookingHistoryTable 
             bookings={bookings} 
             bookingsLoading={bookingsLoading}
-            onViewDetails={setSelectedBooking} 
+            onViewDetails={setSelectedBooking}
+            userId={userId ?? undefined}
+            limit={5}
           />
         </div>
       </main>

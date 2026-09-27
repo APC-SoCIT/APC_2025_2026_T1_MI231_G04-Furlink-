@@ -94,6 +94,14 @@
   padding: 22px;
 }
 
+/* Only prevent stretch/height-matching when used inside the two-column details grid
+   (Personal Info + Admin Actions vs. Booking History). On its own, e.g. the standalone
+   full booking history page, .info-card should still stretch to full container width. */
+.details-grid .info-card {
+  align-self: start;
+  height: fit-content;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -154,7 +162,7 @@
   background: #ffffff;
   border: 1px solid #fecaca;
   border-radius: 12px;
-  padding: 22px;
+  padding: 26px 24px;
 }
 
 .admin-card-header {
@@ -162,9 +170,9 @@
   align-items: center;
   gap: 10px;
   color: #dc2626;
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   border-bottom: 1px solid #fecaca;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 .admin-card-header svg {
@@ -181,13 +189,14 @@
 .admin-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .admin-block-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 2px;
 }
 
 .admin-block-label {
@@ -199,7 +208,8 @@
 .admin-block-desc {
   font-size: 0.82rem;
   color: #6b7280;
-  margin: -4px 0 4px 0;
+  line-height: 1.5;
+  margin: -6px 0 6px 0;
 }
 
 .count-pill {
@@ -213,11 +223,12 @@
 
 .warning-textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
   font-family: inherit;
   font-size: 0.85rem;
+  line-height: 1.5;
   resize: vertical;
   box-sizing: border-box;
 }
@@ -236,7 +247,7 @@
   color: #ffffff;
   border: none;
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -250,7 +261,7 @@
 .admin-divider {
   border: none;
   border-top: 1px solid #f3f4f6;
-  margin: 16px 0;
+  margin: 20px 0;
 }
 
 .btn-view-history {
@@ -279,7 +290,7 @@
   color: #dc2626;
   border: none;
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -399,6 +410,33 @@
 
 .btn-view-details:hover {
   background-color: #0c1b47;
+}
+
+.view-full-history-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.btn-view-full-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid #d1d5db;
+  color: #10245c;
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-view-full-history:hover {
+  background: #f3f4f6;
+  border-color: #10245c;
 }
 
 /* Status pills (used inside modal) */
@@ -768,7 +806,7 @@
 }
 
 .severity-select {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
   font-family: inherit;
@@ -833,7 +871,7 @@
   color: #047857;
   border: none;
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
