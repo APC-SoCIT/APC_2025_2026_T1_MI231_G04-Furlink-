@@ -10,6 +10,16 @@ interface Props {
 }
 
 export const BookingDetailsModal = ({ booking, onClose }: Props) => {
+  const serviceTypes = Array.from(
+    new Set(
+      booking.booking_pet_info?.flatMap((pet) =>
+        pet.booking_service_info?.map((svc) =>
+          svc.booking_service_type.replace(/_/g, " ")
+        ) || []
+      ) || []
+    )
+  );
+
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -34,6 +44,12 @@ export const BookingDetailsModal = ({ booking, onClose }: Props) => {
             <div className={styles["info-item"]}>
               <span className={styles["info-label"]}>Service Provider</span>
               <span className={styles["info-value"]}>{booking.sp_general_info?.business_name || "-"}</span>
+            </div>
+            <div className={styles["info-item"]}>
+              <span className={styles["info-label"]}>Service Type</span>
+              <span className={styles["info-value"]} style={{ textTransform: "capitalize" }}>
+                {serviceTypes.length > 0 ? serviceTypes.join(", ") : "-"}
+              </span>
             </div>
             <div className={styles["info-item"]}>
               <span className={styles["info-label"]}>Date</span>
@@ -61,7 +77,7 @@ export const BookingDetailsModal = ({ booking, onClose }: Props) => {
             </div>
           )}
 
-          {(booking.booking_overall_rating || booking.booking_comment) && (
+          {(booking.booking_overall_rating || booking.booking_review) && (
             <div className={styles["rating-note"]}>
               {booking.booking_overall_rating && (
                 <p><strong>Overall Rating:</strong> {booking.booking_overall_rating} / 5</p>
@@ -69,8 +85,8 @@ export const BookingDetailsModal = ({ booking, onClose }: Props) => {
               {booking.booking_staff_rating && (
                 <p><strong>Staff Rating:</strong> {booking.booking_staff_rating} / 5</p>
               )}
-              {booking.booking_comment && (
-                <p><strong>Comment:</strong> {booking.booking_comment}</p>
+              {booking.booking_review && (
+                <p><strong>Review:</strong> {booking.booking_review}</p>
               )}
             </div>
           )}

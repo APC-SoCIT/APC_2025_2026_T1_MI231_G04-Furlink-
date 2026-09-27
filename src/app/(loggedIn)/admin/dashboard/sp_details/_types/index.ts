@@ -62,7 +62,9 @@ export interface ProviderDetails {
   business_waiver_url: string | null;
   registration_status: string;
   registration_rejection_reason: string | null;
+  previous_rejection_reason: string | null;
   registration_approved_at: string | null;
+  created_at: string;
   updated_at: string;
   responder: AdminResponder | null;
   sp_operating_hours: OperatingHour[];

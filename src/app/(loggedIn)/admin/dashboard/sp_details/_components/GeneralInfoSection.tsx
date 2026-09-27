@@ -16,6 +16,20 @@ export const GeneralInfoSection = ({ provider }: { provider: ProviderDetails }) 
       <p><strong>Service Type:</strong> {provider.business_service_type}</p>
       <p><strong>Bio:</strong> {provider.business_bio}</p>
 
+      {provider.registration_status === "re-applied" && (
+        <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#eef2ff", borderRadius: "4px" }}>
+          <p style={{ margin: 0, color: "#3730a3" }}>
+            <strong>Re-application:</strong> Originally submitted on{" "}
+            {new Date(provider.created_at).toLocaleDateString("en-US", {
+              month: "long", day: "numeric", year: "numeric",
+            })}
+            {provider.previous_rejection_reason && (
+              <>. Previously rejected for — {provider.previous_rejection_reason}</>
+            )}
+          </p>
+        </div>
+      )}
+
       {provider.registration_status === "rejected" && provider.registration_rejection_reason && (
         <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444", borderRadius: "4px" }}>
           <p style={{ margin: 0, color: "#991b1b" }}>

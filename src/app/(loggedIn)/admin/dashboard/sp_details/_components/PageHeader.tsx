@@ -12,6 +12,9 @@ interface Props {
 }
 
 export const PageHeader = ({ provider, isUpdating, onApproveClick, onRejectClick }: Props) => {
+  const isActionable =
+    provider.registration_status === "pending" || provider.registration_status === "re-applied";
+
   return (
     <div className={styles["list-header"]} style={{ alignItems: "flex-start" }}>
       <div>
@@ -20,10 +23,10 @@ export const PageHeader = ({ provider, isUpdating, onApproveClick, onRejectClick
           className={`${styles["status-pill"]} ${styles[provider.registration_status]}`}
           style={{ display: "inline-block", marginTop: "10px" }}
         >
-          {provider.registration_status}
+          {provider.registration_status === "re-applied" ? "Re-applied" : provider.registration_status}
         </span>
 
-        {provider.registration_status !== "pending" && provider.responder && (
+        {!isActionable && provider.responder && (
           <p style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "8px" }}>
             {provider.registration_status === "approved" ? "Approved" : "Rejected"} by{" "}
             <strong>{provider.responder.first_name} {provider.responder.last_name}</strong>
@@ -37,7 +40,7 @@ export const PageHeader = ({ provider, isUpdating, onApproveClick, onRejectClick
         )}
       </div>
 
-      {provider.registration_status === "pending" && (
+      {isActionable && (
         <div className={styles["action-buttons-container"]}>
           <button
             className={styles["btn-approve"]}

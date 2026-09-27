@@ -294,6 +294,11 @@
   color: #1d4ed8;
 }
 
+.status-pill.re-applied {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
 /* MODAL OVERLAY */
 .modal-overlay {
   position: fixed;
