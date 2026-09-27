@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
 import { FaArrowLeft } from "react-icons/fa";
-import { BookingRow } from "./_types";
+import { BookingRow, HistoryEntry } from "./_types";
 import { useUserDetails } from "./_hooks/useUserDetails";
 import { PageHeader } from "./_components/PageHeader";
 import { SuspensionBanner } from "./_components/SuspensionBanner";
@@ -12,6 +12,8 @@ import { PersonalInfoCard } from "./_components/PersonalInfoCard";
 import { AdminActionsCard } from "./_components/AdminActionsCard";
 import { BookingHistoryTable } from "./_components/BookingHistoryTable";
 import { BookingDetailsModal } from "./_components/BookingDetailsModal";
+import { WarningSuspensionHistoryTable } from "./_components/WarningSuspensionHistoryTable";
+import { HistoryDetailsModal } from "./_components/HistoryDetailsModal";
 import { AdminModals } from "./_components/AdminModals";
 import styles from "./page.module.css";
 
@@ -30,14 +32,13 @@ function UserDetailsContent() {
   } = useUserDetails(userId);
 
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
   const [warningSeverity, setWarningSeverity] = useState("normal"); 
 
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showSuspensionHistoryModal, setShowSuspensionHistoryModal] = useState(false);
 
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
   const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
@@ -94,7 +95,6 @@ function UserDetailsContent() {
           <div className={styles["left-column"]}>
             <PersonalInfoCard user={user} businessEmail={businessEmail} />
             <AdminActionsCard 
-              warnings={warnings}
               warningsLoading={warningsLoading}
               activeWarningCount={activeWarningCount}
               warningMessage={warningMessage}
@@ -110,25 +110,36 @@ function UserDetailsContent() {
               liftingSuspension={liftingSuspension}
               onSuspendClick={() => setShowSuspendConfirm(true)}
               onLiftSuspensionClick={() => setShowLiftConfirm(true)}
-              onViewHistoryClick={() => setShowHistoryModal(true)}
-              suspensionHistory={suspensionHistory}
-              suspensionHistoryLoading={suspensionHistoryLoading}
-              onViewSuspensionHistoryClick={() => setShowSuspensionHistoryModal(true)}
             />
           </div>
 
-          <BookingHistoryTable 
-            bookings={bookings} 
-            bookingsLoading={bookingsLoading}
-            onViewDetails={setSelectedBooking}
-            userId={userId ?? undefined}
-            limit={5}
-          />
+          <div className={styles["right-column"]}>
+            <BookingHistoryTable 
+              bookings={bookings} 
+              bookingsLoading={bookingsLoading}
+              onViewDetails={setSelectedBooking}
+              userId={userId ?? undefined}
+              limit={5}
+            />
+
+            <WarningSuspensionHistoryTable
+              warnings={warnings}
+              suspensions={suspensionHistory}
+              loading={warningsLoading || suspensionHistoryLoading}
+              onViewDetails={setSelectedHistoryEntry}
+              userId={userId ?? undefined}
+              limit={5}
+            />
+          </div>
         </div>
       </main>
 
       {selectedBooking && (
         <BookingDetailsModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
+      )}
+
+      {selectedHistoryEntry && (
+        <HistoryDetailsModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />
       )}
 
       <AdminModals 
@@ -151,14 +162,6 @@ function UserDetailsContent() {
         confirmLiftSuspension={handleLiftSuspensionConfirm}
         autoSuspendNotice={autoSuspendNotice}
         setAutoSuspendNotice={setAutoSuspendNotice}
-        warnings={warnings}
-        warningsLoading={warningsLoading}
-        showHistoryModal={showHistoryModal}
-        setShowHistoryModal={setShowHistoryModal}
-        suspensionHistory={suspensionHistory}
-        suspensionHistoryLoading={suspensionHistoryLoading}
-        showSuspensionHistoryModal={showSuspensionHistoryModal}
-        setShowSuspensionHistoryModal={setShowSuspensionHistoryModal}
       />
     </div>
   );

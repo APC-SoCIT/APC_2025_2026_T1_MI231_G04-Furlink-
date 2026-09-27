@@ -74,6 +74,21 @@ export interface AdminInfo {
   last_name: string | null;
 }
 
+export type HistoryEntryType = "warning" | "suspension";
+
+// Normalized shape used by the combined Warning & Suspension History table/page,
+// so warnings (which have severity) and suspensions (which have suspended_until/lifted_at)
+// can share one row/column layout. `original` retains the full source row for the details modal.
+export interface HistoryEntry {
+  id: string;
+  type: HistoryEntryType;
+  date: string;
+  issued_by_admin?: AdminInfo;
+  status: string;
+  severity?: string;
+  original: WarningRow | SuspensionRow;
+}
+
 export interface SeverityLevel {
   value: string;
   label: string;

@@ -86,20 +86,27 @@
   gap: 20px;
 }
 
+/* Right column stack (Booking History + Warning & Suspension History) */
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* align-self only affects the block (height) axis for grid items, never width,
+   so this prevents either column from stretching to match the other's height
+   without ever shrinking their width. */
+.details-grid > .left-column,
+.details-grid > .right-column {
+  align-self: start;
+}
+
 /* Cards */
 .info-card {
   background: #f8f9fc;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 22px;
-}
-
-/* Only prevent stretch/height-matching when used inside the two-column details grid
-   (Personal Info + Admin Actions vs. Booking History). On its own, e.g. the standalone
-   full booking history page, .info-card should still stretch to full container width. */
-.details-grid .info-card {
-  align-self: start;
-  height: fit-content;
 }
 
 .card-header {
@@ -803,6 +810,25 @@
 .warning-status-lifted {
   background: #d1fae5;
   color: #047857;
+}
+
+.type-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.type-tag-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.type-tag-suspension {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .severity-select {

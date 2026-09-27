@@ -1,11 +1,10 @@
 "use client";
 
-import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck, FaHistory, FaChevronDown } from "react-icons/fa";
-import { WarningRow, SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD, SEVERITY_LEVELS } from "../_types";
+import { FaExclamationTriangle, FaPaperPlane, FaUserSlash, FaUserCheck } from "react-icons/fa";
+import { SuspensionRow, SUSPENSION_DAYS, WARNING_THRESHOLD, SEVERITY_LEVELS } from "../_types";
 import styles from "../page.module.css";
 
 interface Props {
-  warnings: WarningRow[];
   warningsLoading: boolean;
   activeWarningCount: number;
   warningMessage: string;
@@ -21,18 +20,13 @@ interface Props {
   liftingSuspension: boolean;
   onSuspendClick: () => void;
   onLiftSuspensionClick: () => void;
-  onViewHistoryClick: () => void;
-  suspensionHistory: SuspensionRow[];
-  suspensionHistoryLoading: boolean;
-  onViewSuspensionHistoryClick: () => void;
 }
 
 export const AdminActionsCard = ({
-  warnings, warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
+  warningsLoading, activeWarningCount, warningMessage, setWarningMessage, sendingWarning,
   warningSeverity, setWarningSeverity,
   onSendWarningClick, isSuspended, currentSuspension, suspensionLoading, suspending, liftingSuspension,
-  onSuspendClick, onLiftSuspensionClick, onViewHistoryClick,
-  suspensionHistory, suspensionHistoryLoading, onViewSuspensionHistoryClick
+  onSuspendClick, onLiftSuspensionClick
 }: Props) => {
 
   const formatDateTime = (dateString: string | null | undefined) => {
@@ -103,14 +97,6 @@ export const AdminActionsCard = ({
 
       <hr className={styles["admin-divider"]} />
 
-      {/* View Warning History */}
-      <button className={styles["btn-view-history"]} onClick={onViewHistoryClick}>
-        <FaHistory /> 
-        View Warning History ({warningsLoading ? "…" : warnings.length})
-      </button>
-
-      <hr className={styles["admin-divider"]} />
-
       {/* Account Suspension */}
       <div className={styles["admin-block"]}>
         <span className={styles["admin-block-label"]}>Account Suspension</span>
@@ -130,14 +116,6 @@ export const AdminActionsCard = ({
             {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
           </button>
         )}
-
-      <hr className={styles["admin-divider"]} />
-
-        {/* View Suspension History */}
-        <button className={styles["btn-view-history"]} onClick={onViewSuspensionHistoryClick}>
-          <FaHistory />
-          View Suspension History ({suspensionHistoryLoading ? "…" : suspensionHistory.length})
-        </button>
       </div>
     </section>
   );
