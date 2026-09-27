@@ -26,6 +26,7 @@ export interface BookingRow {
   booking_total_amount: number;
   booking_rejection_reason: string | null;
   booking_comment: string | null;
+  booking_review: string | null;
   booking_overall_rating: number | null;
   booking_staff_rating: number | null;
   created_at: string | null;
@@ -76,9 +77,6 @@ export interface AdminInfo {
 
 export type HistoryEntryType = "warning" | "suspension";
 
-// Normalized shape used by the combined Warning & Suspension History table/page,
-// so warnings (which have severity) and suspensions (which have suspended_until/lifted_at)
-// can share one row/column layout. `original` retains the full source row for the details modal.
 export interface HistoryEntry {
   id: string;
   type: HistoryEntryType;

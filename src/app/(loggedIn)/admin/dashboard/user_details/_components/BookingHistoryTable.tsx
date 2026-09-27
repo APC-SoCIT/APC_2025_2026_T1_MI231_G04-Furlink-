@@ -79,6 +79,9 @@ export const BookingHistoryTable = ({ bookings, bookingsLoading, onViewDetails, 
                         {formatStatusLabel(booking.booking_status)}
                       </span>
                     </div>
+                    <div className={styles["date-cell-status"]}>
+                      Feedback: {booking.booking_review || "-"}
+                    </div>
                   </td>
                   <td>{booking.booking_pet_info?.length || 0} Pet/s</td>
                   <td>{getServiceSummary(booking)}</td>

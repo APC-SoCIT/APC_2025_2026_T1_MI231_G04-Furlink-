@@ -98,7 +98,7 @@ export const useUserDetails = (userId: string | null) => {
         .from("booking_info")
         .select(`
           id, booking_date, booking_timeslot, booking_status, booking_total_amount,
-          booking_rejection_reason, booking_comment, booking_overall_rating, booking_staff_rating, created_at,
+          booking_rejection_reason, booking_review, booking_overall_rating, booking_staff_rating, created_at,
           sp_general_info ( business_name ),
           booking_pet_info (
             id, booking_pet_name, booking_pet_type, booking_breed, booking_gender,

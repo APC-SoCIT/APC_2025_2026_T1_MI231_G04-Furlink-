@@ -61,7 +61,7 @@ export const BookingDetailsModal = ({ booking, onClose }: Props) => {
             </div>
           )}
 
-          {(booking.booking_overall_rating || booking.booking_comment) && (
+          {(booking.booking_overall_rating || booking.booking_review) && (
             <div className={styles["rating-note"]}>
               {booking.booking_overall_rating && (
                 <p><strong>Overall Rating:</strong> {booking.booking_overall_rating} / 5</p>
@@ -69,8 +69,8 @@ export const BookingDetailsModal = ({ booking, onClose }: Props) => {
               {booking.booking_staff_rating && (
                 <p><strong>Staff Rating:</strong> {booking.booking_staff_rating} / 5</p>
               )}
-              {booking.booking_comment && (
-                <p><strong>Comment:</strong> {booking.booking_comment}</p>
+              {booking.booking_review && (
+                <p><strong>Review:</strong> {booking.booking_review}</p>
               )}
             </div>
           )}
