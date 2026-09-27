@@ -10,9 +10,9 @@ interface Props {
   bookings: BookingRow[];
   bookingsLoading: boolean;
   onViewDetails: (booking: BookingRow) => void;
-  /** Pass the profile id to enable the "View Full History" link when the list is capped. */
+  /** Pass the profile id to enable the "View Full History" link when the list is capped */
   userId?: string;
-  /** Cap the number of rows rendered. Omit to render every booking (used on the full-history page). */
+  /** Cap the number of rows rendered */
   limit?: number;
 }
 
@@ -26,14 +26,6 @@ export const BookingHistoryTable = ({ bookings, bookingsLoading, onViewDetails, 
   };
 
   const formatStatusLabel = (status: string) => STATUS_LABELS[status] || status.replace(/_/g, " ");
-
-  const getServiceSummary = (booking: BookingRow) => {
-    const names = new Set<string>();
-    booking.booking_pet_info?.forEach((pet) =>
-      pet.booking_service_info?.forEach((svc) => names.add(svc.booking_service_name))
-    );
-    return names.size > 0 ? Array.from(names).join(", ") : "-";
-  };
 
   const displayedBookings = limit ? bookings.slice(0, limit) : bookings;
   const hasMore = !!limit && bookings.length > limit;
@@ -61,7 +53,7 @@ export const BookingHistoryTable = ({ bookings, bookingsLoading, onViewDetails, 
               <tr>
                 <th>Date</th>
                 <th>Pets</th>
-                <th>Service</th>
+                <th>Service Provider</th>
                 <th>Total</th>
                 <th>Action</th>
               </tr>
@@ -84,7 +76,7 @@ export const BookingHistoryTable = ({ bookings, bookingsLoading, onViewDetails, 
                     </div>
                   </td>
                   <td>{booking.booking_pet_info?.length || 0} Pet/s</td>
-                  <td>{getServiceSummary(booking)}</td>
+                  <td>{booking.sp_general_info?.business_name || "-"}</td>
                   <td>₱{Number(booking.booking_total_amount).toFixed(2)}</td>
                   <td>
                     <button className={styles["btn-view-details"]} onClick={() => onViewDetails(booking)}>
