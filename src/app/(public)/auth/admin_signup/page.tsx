@@ -16,13 +16,16 @@ export default function AdminSignupPage() {
   const router = useRouter();
   
   const [accessGranted, setAccessGranted] = useState(false);
-  const [accessCode, setAccessCode] = useState("");
-  const [showAccessCode, setShowAccessCode] = useState(false);
+  const [adminEmailInput, setAdminEmailInput] = useState("");
+  const [gateStep, setGateStep] = useState<"email" | "otp">("email");
+  const [gateOtpToken, setGateOtpToken] = useState("");
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessRateLimited, setAccessRateLimited] = useState(false);
   const [gateLockoutUntil, setGateLockoutUntil] = useState<number | null>(null);
   const [gateCountdown, setGateCountdown] = useState(0);
+  const [gateOtpTimer, setGateOtpTimer] = useState(OTP_VALIDITY_SECONDS);
+  const [gateResendLoading, setGateResendLoading] = useState(false);
 
   const GATE_LOCKOUT_KEY = "admin_gate_attempts";
 
@@ -35,8 +38,6 @@ export default function AdminSignupPage() {
     return null;
   };
 
-  // On mount (including a refresh mid-lockout), immediately surface any
-  // still-active lockout instead of waiting for the user to submit again.
   useEffect(() => {
     const blockedUntil = getStoredGateBlock();
     if (blockedUntil) {
@@ -45,8 +46,6 @@ export default function AdminSignupPage() {
     }
   }, []);
 
-  // Ticks the countdown every second while locked out, and clears the lock
-  // the moment it expires so the form re-enables itself automatically.
   useEffect(() => {
     if (!gateLockoutUntil) return;
 
@@ -66,6 +65,14 @@ export default function AdminSignupPage() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [gateLockoutUntil]);
+
+  useEffect(() => {
+    if (gateStep !== "otp" || gateOtpTimer <= 0) return;
+    const interval = setInterval(() => {
+      setGateOtpTimer((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [gateStep, gateOtpTimer]);
 
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", username: "", email: "",
@@ -107,13 +114,13 @@ export default function AdminSignupPage() {
 
   const getMaxDob = () => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 18); // Must be at least 18 years old
+    d.setFullYear(d.getFullYear() - 18);
     return d.toISOString().split("T")[0];
   };
 
   const getMinDob = () => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 65); // Must be 65 years old or younger
+    d.setFullYear(d.getFullYear() - 65);
     return d.toISOString().split("T")[0];
   };
 
@@ -155,7 +162,7 @@ export default function AdminSignupPage() {
 
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setOtpToken(digitsOnly);
+    setGateOtpToken(digitsOnly);
   };
 
   const isFormValid = () => {
@@ -211,20 +218,11 @@ export default function AdminSignupPage() {
       validAttempts.push(now);
     }
 
-    if (validAttempts.length > 5) {
-      const blockedUntil = now + lockoutMs;
-      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
-      setIsRateLimited(true);
-    } else {
-      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
-      setIsRateLimited(false);
-    }
-
+    localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
+    setIsRateLimited(false);
     return { allowed: true };
   };
 
-  // --- Admin access gate rate limiting (same pattern as the signup rate
-  // limiter below, but keyed on the gate itself since there's no email yet) ---
   const checkGateRateLimit = () => {
     const key = "admin_gate_attempts";
     const now = Date.now();
@@ -241,7 +239,7 @@ export default function AdminSignupPage() {
       return {
         allowed: false,
         validAttempts: [] as number[],
-        message: `Too many incorrect attempts. Please try again in ${remainingMins} minute(s).`,
+        message: `You have reached the maximum requests. Please try again in ${remainingMins} minute(s).`,
       };
     }
 
@@ -255,7 +253,7 @@ export default function AdminSignupPage() {
       return {
         allowed: false,
         validAttempts,
-        message: "Too many incorrect attempts. Please try again in 15 minutes.",
+        message: "You have reached the maximum requests. Please try again in 15 minutes.",
       };
     }
 
@@ -278,7 +276,7 @@ export default function AdminSignupPage() {
     }
   };
 
-  const handleAccessSubmit = async (e: React.FormEvent) => {
+  const handleRequestGateOtp = async (e: React.FormEvent, isResend = false) => {
     e.preventDefault();
     setAccessError(null);
 
@@ -288,29 +286,71 @@ export default function AdminSignupPage() {
       return;
     }
 
-    if (!accessCode.trim()) {
-      setAccessError("Please enter the admin signup code.");
+    if (!adminEmailInput.trim() || !adminEmailInput.includes("@")) {
+      setAccessError("Please enter a valid email address.");
       return;
     }
 
-    setAccessLoading(true);
+    if (isResend) {
+      setGateResendLoading(true);
+    } else {
+      setAccessLoading(true);
+    }
+
     try {
       const res = await fetch("/api/admin_signup_auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: accessCode }),
+        body: JSON.stringify({ email: adminEmailInput }),
       });
-      const result = await res.json();
+      const data = await res.json();
 
-      if (result.valid) {
-        setAccessGranted(true);
-        setAccessError(null);
+      setAccessError("If this account is an admin account you will receive an email");
+
+      if (data.isAdmin) {
+        if (data.error) {
+          const errorMessage: string = data.error;
+          setAccessError(errorMessage);
+          setAccessLoading(false);
+          setGateResendLoading(false);
+          return;
+        }
+        recordFailedGateAttempt(rateCheck.validAttempts);
+        setGateStep("otp");
+        setGateOtpTimer(OTP_VALIDITY_SECONDS);
       } else {
         recordFailedGateAttempt(rateCheck.validAttempts);
-        setAccessError(result.error || "Incorrect code. Please try again.");
       }
     } catch {
       setAccessError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setAccessLoading(false);
+      setGateResendLoading(false);
+    }
+  };
+
+  const handleVerifyGateOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gateOtpToken) return;
+    setAccessError(null);
+    setAccessLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: adminEmailInput.trim().toLowerCase(),
+        token: gateOtpToken,
+        type: "email",
+      });
+
+      if (error) {
+        setAccessError("Invalid or expired verification code.");
+        setAccessLoading(false);
+        return;
+      }
+
+      setAccessGranted(true);
+    } catch {
+      setAccessError("Failed to verify code. Please try again.");
     } finally {
       setAccessLoading(false);
     }
@@ -341,31 +381,12 @@ export default function AdminSignupPage() {
 
     setFormError(null);
 
-    const key = `admin_signup_attempts_${formData.email.trim().toLowerCase()}`;
-    const now = Date.now();
-    const windowMs = 10 * 60 * 1000;
-    const rawData = localStorage.getItem(key);
-    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
-
-    if (data.blockedUntil && now < data.blockedUntil) {
-      const remainingMs = data.blockedUntil - now;
-      const remainingMins = Math.ceil(remainingMs / 60000);
+    const rateCheck = checkSignupRateLimit(formData.email, true);
+    if (!rateCheck.allowed) {
+      setFormError(rateCheck.message ?? null);
       setIsRateLimited(true);
-      setFormError(`You have reached the maximum requests. Please try again in ${remainingMins} minute(s).`);
       return;
     }
-
-    let attemptsArray = data?.attempts || [];
-    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
-
-    if (validAttempts.length >= 5) {
-      setIsRateLimited(true);
-      setFormError("You have reached the maximum requests. Please try again in 15 minutes.");
-      return;
-    }
-
-    validAttempts.push(now);
-    localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
 
     setLoading(true);
 
@@ -381,7 +402,7 @@ export default function AdminSignupPage() {
             mobile_number: formData.mobile,
             date_of_birth: formData.dob,
             role: "admin",
-            must_change_password: true, // Flag for future password change requirement on login
+            must_change_password: true,
           },
         },
       });
@@ -433,7 +454,6 @@ export default function AdminSignupPage() {
         return;
       }
 
-      // Successful verification redirect straight to admin's home page
       router.refresh();
       router.push(ROUTES.ADMIN.ADMIN_DASHBOARD);
     } catch {
@@ -478,51 +498,99 @@ export default function AdminSignupPage() {
   if (!accessGranted) {
     return (
       <div className="signup-wrapper">
-        <form className="signup-card" onSubmit={handleAccessSubmit} noValidate>
-          <h1>Admin Access Required</h1>
-          <p className="otp-instructions">
-            This page is restricted. Enter the admin signup code provided by the Furlink team to continue.
-          </p>
+        {gateStep === "email" ? (
+          <form className="signup-card" onSubmit={(e) => handleRequestGateOtp(e, false)} noValidate>
+            <h1>Admin Access Required</h1>
+            <p className="otp-instructions">
+              Enter your registered admin email address to receive an authentication code.
+            </p>
 
-          {accessError && <p className="form-error-banner">{accessError}</p>}
+            {accessError && (
+              <p style={{ backgroundColor: "#eef2ff", color: "#3b429f", padding: "12px", borderRadius: "8px", fontSize: "14px", marginBottom: "15px", border: "1px solid #c7d2fe" }}>
+                {accessError}
+              </p>
+            )}
 
-          <div className="input-group" style={{ marginBottom: "20px" }}>
-            <div className="password-container">
+            <div className="input-group" style={{ marginBottom: "20px" }}>
               <input
-                type={showAccessCode ? "text" : "password"}
-                placeholder="Admin Signup Code"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
+                type="email"
+                placeholder="Admin Email Address"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
                 disabled={accessRateLimited}
                 autoFocus
+                required
               />
+            </div>
+
+            <button
+              type="submit"
+              className="register-btn"
+              disabled={accessLoading || accessRateLimited}
+            >
+              {accessLoading
+                ? "Verifying Email..."
+                : accessRateLimited
+                  ? `Try again in ${formatTimer(gateCountdown)}`
+                  : "Send Authentication Code"}
+            </button>
+
+            <p className="auth-redirect-text">
+              Not an admin?{" "}
+              <Link href="/auth/login" className="login-link">Log In</Link>
+            </p>
+          </form>
+        ) : (
+          <form className="signup-card" onSubmit={handleVerifyGateOtp} noValidate>
+            <h1>Verify Admin Access</h1>
+            <p className="otp-instructions">
+              If this account is an admin account you will receive an email. Enter it below to proceed.
+            </p>
+
+            {accessError && (
+              <p style={{ backgroundColor: "#eef2ff", color: "#3b429f", padding: "12px", borderRadius: "8px", fontSize: "14px", marginBottom: "15px", border: "1px solid #c7d2fe" }}>
+                {accessError}
+              </p>
+            )}
+
+            <div className="input-group" style={{ marginBottom: "20px" }}>
+              <input
+                type="text"
+                placeholder="Enter 6-digit OTP"
+                value={gateOtpToken}
+                onChange={handleOtpChange}
+                maxLength={6}
+                required
+                inputMode="numeric"
+              />
+            </div>
+
+            {gateOtpTimer > 0 ? (
+              <p className="otp-timer">Code expires in {formatTimer(gateOtpTimer)}</p>
+            ) : (
+              <p className="otp-timer otp-expired">Code expired.</p>
+            )}
+
+            <p className="otp-resend">
               <button
                 type="button"
-                className="toggle-btn"
-                onClick={() => setShowAccessCode(!showAccessCode)}
+                onClick={(e) => handleRequestGateOtp(e, true)}
+                disabled={gateResendLoading || accessRateLimited}
+                className="resend-link"
               >
-                {showAccessCode ? <FaEyeSlash /> : <FaEye />}
+                {gateResendLoading ? "Resending..." : accessRateLimited ? "Request limit reached" : "Resend code"}
               </button>
-            </div>
-          </div>
+            </p>
 
-          <button
-            type="submit"
-            className="register-btn"
-            disabled={accessLoading || accessRateLimited}
-          >
-            {accessLoading
-              ? "Checking..."
-              : accessRateLimited
-                ? `Try again in ${formatTimer(gateCountdown)}`
-                : "Continue"}
-          </button>
-
-          <p className="auth-redirect-text">
-            Not an admin?{" "}
-            <Link href="/auth/login" className="login-link">Log In</Link>
-          </p>
-        </form>
+            <button
+              type="submit"
+              className="register-btn"
+              disabled={accessLoading || !gateOtpToken}
+            >
+              {accessLoading ? "Verifying..." : "Verify & Proceed"}
+            </button>
+          </form>
+        )}
       </div>
     );
   }
