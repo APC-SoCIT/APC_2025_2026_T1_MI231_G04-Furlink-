@@ -1,3 +1,7 @@
+export const ROLE_PET_OWNER = "pet_owner";
+export const ROLE_SERVICE_PROVIDER = "service_provider";
+export const ROLE_BOTH = "both_sp_po";
+
 export interface BookingServiceInfo {
   id: string;
   booking_service_name: string;
@@ -115,8 +119,14 @@ export interface SeverityLevel {
   description: string;
 }
 
+// Roles that have a service provider side show booked services
+export const SP_ROLES = [ROLE_SERVICE_PROVIDER, ROLE_BOTH];
+
+// Roles that have a pet owner side show booking history
+export const PO_ROLES = [ROLE_PET_OWNER, ROLE_BOTH];
+
 // Roles that should have an email shown 
-export const ROLES_WITH_EMAIL = ["service_provider", "both"];
+export const ROLES_WITH_EMAIL = SP_ROLES;
 
 // Labels for booking_status
 export const STATUS_LABELS: Record<string, string> = {

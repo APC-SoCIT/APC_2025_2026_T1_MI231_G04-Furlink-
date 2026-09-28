@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
 import { FaArrowLeft } from "react-icons/fa";
-import { BookingRow, HistoryEntry, SpBookingRow, ROLES_WITH_EMAIL } from "./_types";
+import { BookingRow, HistoryEntry, SpBookingRow, SP_ROLES, PO_ROLES } from "./_types";
 import { useUserDetails } from "./_hooks/useUserDetails";
 import { useSpBookings } from "./_hooks/useSpBookings";
 import { PageHeader } from "./_components/PageHeader";
@@ -35,23 +35,31 @@ function UserDetailsContent() {
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   } = useUserDetails(userId);
 
-  // service_provider or both -> show booked services; pure service providers don't need the pet owner card
-  const showSpBookings = !!user?.role && ROLES_WITH_EMAIL.includes(user.role);
-  const showPoBookings = user?.role !== "service_provider";
+  // Roles stored in the DB: "pet_owner", "service_provider", "both_sp_po"
+  // - Pet owner history: pet_owner + both_sp_po
+  // - SP booked services: service_provider + both_sp_po
+  // - Warning/suspension history: only accounts with a service provider side
+  const showPoBookings = !!user?.role && PO_ROLES.includes(user.role);
+  const showSpBookings = !!user?.role && SP_ROLES.includes(user.role);
+  const showWarningHistory = showSpBookings;
+
   const { spBookings, spBookingsLoading } = useSpBookings(userId, showSpBookings);
 
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
   const [selectedSpBooking, setSelectedSpBooking] = useState<SpBookingRow | null>(null);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
-  const [warningSeverity, setWarningSeverity] = useState("normal"); 
+  const [warningSeverity, setWarningSeverity] = useState("normal");
 
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
 
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
-  const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
+  const isSuspended =
+    !!currentSuspension &&
+    currentSuspension.status === "active" &&
+    new Date(currentSuspension.suspended_until) > new Date();
 
   // Handlers to link the UI Modals to the hook logic
   const handleSendWarningConfirm = async () => {
@@ -80,7 +88,7 @@ function UserDetailsContent() {
   return (
     <div className={styles["admin-dashboard-page"]}>
       <main className={styles["admin-dashboard-wrapper"]}>
-        
+
         <div className={styles["back-button-container"]}>
           <button className={styles["btn-back"]} onClick={() => router.push(ROUTES.ADMIN.ADMIN_DASHBOARD)}>
             <FaArrowLeft /> Back to Dashboard
@@ -88,11 +96,11 @@ function UserDetailsContent() {
         </div>
 
         <PageHeader user={user} isSuspended={isSuspended} />
-        
-        <SuspensionBanner 
-          currentSuspension={currentSuspension} 
-          autoSuspended={autoSuspended} 
-          isSuspended={isSuspended} 
+
+        <SuspensionBanner
+          currentSuspension={currentSuspension}
+          autoSuspended={autoSuspended}
+          isSuspended={isSuspended}
         />
 
         {(actionError || actionSuccess) && (
@@ -104,13 +112,13 @@ function UserDetailsContent() {
         <div className={styles["details-grid"]}>
           <div className={styles["left-column"]}>
             <PersonalInfoCard user={user} businessEmail={businessEmail} />
-            <AdminActionsCard 
+            <AdminActionsCard
               warningsLoading={warningsLoading}
               activeWarningCount={activeWarningCount}
               warningMessage={warningMessage}
               setWarningMessage={setWarningMessage}
-              warningSeverity={warningSeverity}              
-              setWarningSeverity={setWarningSeverity}        
+              warningSeverity={warningSeverity}
+              setWarningSeverity={setWarningSeverity}
               sendingWarning={sendingWarning}
               onSendWarningClick={() => setShowSendWarningConfirm(true)}
               isSuspended={isSuspended}
@@ -124,9 +132,10 @@ function UserDetailsContent() {
           </div>
 
           <div className={styles["right-column"]}>
+            {/* 1. Pet owner booking history (pet_owner, both_sp_po) */}
             {showPoBookings && (
-              <BookingHistoryTable 
-                bookings={bookings} 
+              <BookingHistoryTable
+                bookings={bookings}
                 bookingsLoading={bookingsLoading}
                 onViewDetails={setSelectedBooking}
                 userId={userId ?? undefined}
@@ -134,6 +143,7 @@ function UserDetailsContent() {
               />
             )}
 
+            {/* 2. Services booked with this provider (service_provider, both_sp_po) */}
             {showSpBookings && (
               <SpBookingHistoryTable
                 bookings={spBookings}
@@ -144,14 +154,17 @@ function UserDetailsContent() {
               />
             )}
 
-            <WarningSuspensionHistoryTable
-              warnings={warnings}
-              suspensions={suspensionHistory}
-              loading={warningsLoading || suspensionHistoryLoading}
-              onViewDetails={setSelectedHistoryEntry}
-              userId={userId ?? undefined}
-              limit={5}
-            />
+            {/* 3. Warning / suspension history (service_provider, both_sp_po) */}
+            {showWarningHistory && (
+              <WarningSuspensionHistoryTable
+                warnings={warnings}
+                suspensions={suspensionHistory}
+                loading={warningsLoading || suspensionHistoryLoading}
+                onViewDetails={setSelectedHistoryEntry}
+                userId={userId ?? undefined}
+                limit={5}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -168,7 +181,7 @@ function UserDetailsContent() {
         <HistoryDetailsModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />
       )}
 
-      <AdminModals 
+      <AdminModals
         user={user}
         warningMessage={warningMessage}
         warningSeverity={warningSeverity}
