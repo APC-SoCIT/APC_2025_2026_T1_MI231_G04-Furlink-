@@ -26,6 +26,7 @@ export interface BookingRow {
   booking_total_amount: number;
   booking_rejection_reason: string | null;
   booking_comment: string | null;
+  booking_review: string | null;
   booking_overall_rating: number | null;
   booking_staff_rating: number | null;
   created_at: string | null;
@@ -72,6 +73,18 @@ export interface SuspensionRow {
 export interface AdminInfo {
   first_name: string | null;
   last_name: string | null;
+}
+
+export type HistoryEntryType = "warning" | "suspension";
+
+export interface HistoryEntry {
+  id: string;
+  type: HistoryEntryType;
+  date: string;
+  issued_by_admin?: AdminInfo;
+  status: string;
+  severity?: string;
+  original: WarningRow | SuspensionRow;
 }
 
 export interface SeverityLevel {

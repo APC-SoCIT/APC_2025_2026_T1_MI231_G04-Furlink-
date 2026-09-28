@@ -6,12 +6,15 @@ import { useRouter, usePathname } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { ROUTES } from "@/config/routes";
 import HeaderLoggedIn from '@/components/HeaderLoggedIn';
+import SessionTimeoutModal from '@/components/SessionTimeoutModal';
+import { useSessionTimeout } from '@/hooks/useSessionTimeout';
 
 export default function LoggedInLayout({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClientComponentClient();
   const router = useRouter();
   const pathname = usePathname();
+  const { showWarning, secondsLeft, stayLoggedIn } = useSessionTimeout();
 
   useEffect(() => {
     const verifyAccessAndPermissions = async () => {
@@ -122,6 +125,9 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
       <main className="main-wrapper">
         {children}
       </main>
+      {showWarning && (
+        <SessionTimeoutModal secondsLeft={secondsLeft} onStayLoggedIn={stayLoggedIn} />
+      )}
     </>
   );
 }
