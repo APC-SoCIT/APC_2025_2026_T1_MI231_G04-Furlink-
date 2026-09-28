@@ -59,7 +59,6 @@ export default function ManageBookingsPage() {
   const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
   const [failedBookingId, setFailedBookingId] = useState<string | null>(null);
 
-  // Load attempt limits & cooldowns from localStorage on mount
   useEffect(() => {
     const savedAttempts = localStorage.getItem('payment_attempts');
     const savedCooldown = localStorage.getItem('payment_cooldown_until');
@@ -77,7 +76,6 @@ export default function ManageBookingsPage() {
     }
   }, []);
 
-  // Cooldown countdown interval ticker
   useEffect(() => {
     if (!cooldownUntil) return;
 
@@ -99,7 +97,6 @@ export default function ManageBookingsPage() {
     return () => clearInterval(interval);
   }, [cooldownUntil]);
 
-  // Mapped to exact status strings allowed by database constraints
   const getStatusesForTab = (tab: BookingTab): string[] => {
     switch (tab) {
       case 'awaiting_approval':
@@ -111,7 +108,8 @@ export default function ManageBookingsPage() {
       case 'cancelled':
         return ['rejected', 'cancelled', 'cancelled_by_po'];
       case 'refund':
-        return ['to_refund', 'refunded'];
+        // Added 'processing' so it routes to the refund tab immediately after cancelling
+        return ['processing', 'to_refund', 'refunded'];
       case 'completed':
         return ['to_rate', 'rated', 'completed'];
       default:
@@ -132,55 +130,19 @@ export default function ManageBookingsPage() {
       }
 
       const now = new Date();
-      const nowTime = now.getTime();
-      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-      // Fetch active candidates for potential auto-transition
-      const { data: candidates } = await supabase
+      // Rule: Unpaid 'to pay' past scheduled booking date -> Move to 'cancelled'
+      // Note: Removed the 24-hr frontend auto-refund logic here to allow the backend Cron Job to handle it securely.
+      const { data: unpaidCandidates } = await supabase
         .from('booking_info')
-        .select('id, booking_date, booking_timeslot, booking_status')
+        .select('id, booking_date, booking_status')
         .eq('profiles_id', user.id)
-        .in('booking_status', ['pending_sp_response', 'to pay']);
+        .eq('booking_status', 'to pay');
 
-      if (candidates && candidates.length > 0) {
-        for (const b of candidates) {
-          const [year, month, day] = b.booking_date.split('-').map(Number);
-          let hours = 9;
-          let minutes = 0;
-
-          if (b.booking_timeslot) {
-            const parts = b.booking_timeslot.split(' ');
-            if (parts.length === 2) {
-              const [hStr, mStr] = parts[0].split(':');
-              hours = parseInt(hStr, 10);
-              minutes = parseInt(mStr, 10) || 0;
-              if (parts[1].toUpperCase() === 'PM' && hours < 12) hours += 12;
-              if (parts[1].toUpperCase() === 'AM' && hours === 12) hours = 0;
-            }
-          }
-
-          const bookingDateTime = new Date(year, month - 1, day, hours, minutes);
-          const bookingTimeMs = bookingDateTime.getTime();
-
-          // Rule 1: Awaiting approval within 24h of appointment -> Move to 'to_refund'
-          if (
-            b.booking_status === 'pending_sp_response' &&
-            bookingTimeMs - nowTime <= TWENTY_FOUR_HOURS_MS
-          ) {
-            await supabase
-              .from('booking_info')
-              .update({
-                booking_status: 'to_refund',
-                booking_rejection_reason:
-                  'System Auto-Refund: Provider did not approve within 24 hours of scheduled appointment',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', b.id);
-          }
-
-          // Rule 2: Unpaid 'to pay' past scheduled booking date -> Move to 'cancelled'
-          const todayDateStr = now.toISOString().split('T')[0];
-          if (b.booking_status === 'to pay' && b.booking_date < todayDateStr) {
+      if (unpaidCandidates && unpaidCandidates.length > 0) {
+        const todayDateStr = now.toISOString().split('T')[0];
+        for (const b of unpaidCandidates) {
+          if (b.booking_date < todayDateStr) {
             await supabase
               .from('booking_info')
               .update({
@@ -247,7 +209,6 @@ export default function ManageBookingsPage() {
     }
   }, [activeTab, supabase]);
 
-  // Handle successful or failed PayMongo redirection callbacks via URL parameters
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const status = queryParams.get('status');
@@ -453,41 +414,48 @@ export default function ManageBookingsPage() {
     alert(`Initiating refund request for booking ID: ${bookingId}`);
   };
 
-  // Opens the confirmation modal for cancelling the currently selected booking.
   const handleOpenCancelModal = () => {
     setShowDetailsModal(false);
     setShowCancelModal(true);
   };
 
-  // Confirms cancellation: this is a pure status change, done directly via
-  // Supabase like the other handlers below. No PayMongo call is made here —
-  // the 80%/20% split for already-approved bookings is handled manually
-  // outside the app; this just flips booking_status accordingly.
+  // Updated: Routes paid cancellations to Edge Function, handles unpaid directly
   const confirmCancelBooking = async () => {
     if (!selectedBooking) return;
-
-    const currentStatus = selectedBooking.booking_status;
-    const nextStatus =
-      currentStatus === 'approved' ? 'cancelled_by_po' : 'cancelled';
-
     setIsCancelling(true);
-    try {
-      const { error } = await supabase
-        .from('booking_info')
-        .update({
-          booking_status: nextStatus,
-          cancelled_by: 'pet_owner',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedBooking.id);
 
-      if (error) {
-        throw new Error(error.message);
+    try {
+      if (selectedBooking.booking_status === 'to pay') {
+        // No payment made yet. Cancel safely without triggering refund flow.
+        const { error } = await supabase
+          .from('booking_info')
+          .update({
+            booking_status: 'cancelled',
+            cancelled_by: 'pet_owner',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedBooking.id);
+
+        if (error) throw new Error(error.message);
+        
+        setActiveTab('cancelled');
+      } else {
+        // Payment was made. Invoke the Edge Function to handle the 70% refund API split.
+        const { error } = await supabase.functions.invoke('process-refund', {
+          body: {
+            booking_id: selectedBooking.id,
+            cancelled_by: 'pet_owner',
+            refund_reason: 'po_cancellation',
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        setActiveTab('refund');
       }
 
       setShowCancelModal(false);
       setSelectedBooking(null);
-      setActiveTab('cancelled');
       fetchBookings();
     } catch (err: any) {
       console.error('Cancel booking error:', err);

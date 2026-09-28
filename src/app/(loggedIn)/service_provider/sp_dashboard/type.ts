@@ -1,12 +1,18 @@
 export type BookingStatus = 
   | 'pending_sp_response' 
+  | 'to pay'
   | 'approved' 
   | 'rejected' 
   | 'paid' 
   | 'cancelled' 
+  | 'cancelled_by_po'
+  | 'processing'
+  | 'to_refund'
+  | 'refunded'
   | 'to_rate' 
-  | 'rated';
-
+  | 'rated'
+  | 'completed';
+  
 export interface BookingServiceInfo {
   id: string;
   booking_pet_info_id: string;
@@ -51,6 +57,7 @@ export interface Booking {
   booking_overall_rating?: number | null;
   booking_staff_rating?: number | null;
   booking_comment?: string | null;
+  refund_reason?: string;
   
   // Embedded relation
   booking_pet_info?: BookingPetInfo[];

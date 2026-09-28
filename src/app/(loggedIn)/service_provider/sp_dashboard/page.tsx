@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-// Supabase client component helper for session management
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
@@ -9,34 +8,28 @@ import { Booking, BookingStatus } from "./type";
 import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
 import BookingDetailsModal from './components/BookingDetailsModal';
 import CalendarModal from './components/CalendarModal';
-import Footer from '@/components/Footer'; // Import global Footer component
+import Footer from '@/components/Footer';
 import styles from "./sp_dashboard.module.css";
 
 export default function ServiceProviderDashboardPage() {
   const supabase = createClientComponentClient();
   
-  // State management
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Fetch bookings on component mount
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  // Fetch filtered bookings from Supabase for the logged-in service provider
   const fetchBookings = async () => {
     try {
       setLoading(true);
-
-      // 1. Get the currently logged-in auth user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("No authenticated user session found.");
 
-      // 2. Find the service provider record belonging to this user using profiles_id
       const { data: providerData, error: providerError } = await supabase
         .from("sp_general_info")
         .select("id")
@@ -49,7 +42,6 @@ export default function ServiceProviderDashboardPage() {
         return;
       }
 
-      // 3. Fetch ONLY bookings assigned to this service provider's business ID
       const { data, error } = await supabase
         .from("booking_info")
         .select(`
@@ -59,12 +51,10 @@ export default function ServiceProviderDashboardPage() {
             booking_service_info (*)
           )
         `)
-        .eq("sp_id", providerData.id) // Filters out pet owner bookings, keeping only those sent to this provider
+        .eq("sp_id", providerData.id)
         .order("booking_date", { ascending: false });
 
       if (error) throw error;
-      
-      console.log("Fetched filtered provider bookings:", data);
       setBookings(data || []);
     } catch (err: any) {
       console.error("Error fetching bookings:", err?.message);
@@ -73,57 +63,78 @@ export default function ServiceProviderDashboardPage() {
     }
   };
 
-  // Update booking status and rejection reason (if applicable)
   const handleUpdateStatus = async (id: string, newStatus: BookingStatus, reason?: string) => {
     try {
-      const updatePayload: any = { 
-        booking_status: newStatus, 
-        updated_at: new Date().toISOString() 
-      };
-      if (reason) updatePayload.booking_rejection_reason = reason;
+      const targetBooking = bookings.find(b => b.id === id);
+      
+      // TRIGGER EDGE FUNCTION: For Paid, Approved, or Pending Requests (since they pay upfront)
+      if ((newStatus === 'rejected' || newStatus === 'cancelled') && (targetBooking?.booking_status === 'paid' || targetBooking?.booking_status === 'approved' || targetBooking?.booking_status === 'pending_sp_response')) {
+        const { error } = await supabase.functions.invoke('process-refund', {
+          body: {
+            booking_id: id,
+            cancelled_by: 'service_provider',
+            refund_reason: reason || 'Cancelled by Service Provider' 
+          },
+        });
 
-      const { error } = await supabase
-        .from("booking_info")
-        .update(updatePayload)
-        .eq("id", id);
+        if (error) throw new Error(error.message);
 
-      if (error) throw error;
+        setBookings((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, booking_status: 'processing' as any, refund_reason: reason } : b))
+        );
+      } else {
+        // STANDARD DATABASE UPDATE: For completions or unpaid statuses
+        const updatePayload: any = { 
+          booking_status: newStatus, 
+          updated_at: new Date().toISOString() 
+        };
+        
+        // Route the text to the correct database column
+        if (reason) {
+          if (newStatus === 'rejected') {
+            updatePayload.booking_rejection_reason = reason;
+          } else if (newStatus === 'cancelled') {
+            updatePayload.refund_reason = reason;
+          }
+        }
 
-      // Update local state to reflect changes
-      setBookings((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, ...updatePayload } : b))
-      );
+        const { error } = await supabase
+          .from("booking_info")
+          .update(updatePayload)
+          .eq("id", id);
+
+        if (error) throw new Error(error.message);
+
+        setBookings((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, ...updatePayload } : b))
+        );
+      }
+      
       setSelectedBooking(null);
     } catch (err: any) {
       alert("Failed to update status: " + (err.message || JSON.stringify(err)));
     }
   };
 
-  // Tab configuration for filtering bookings by status (Cancelled strictly tracks client-side cancellations)
-  const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: BookingStatus[] }[] = [
+  const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: string[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
-    { label: 'Upcoming', value: 'paid', filter: ['paid'] },
+    { label: 'Upcoming', value: 'paid', filter: ['approved', 'paid'] },
     { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated'] },
-    { label: 'Cancelled', value: 'cancelled', filter: ['cancelled'] },
+    { label: 'Cancelled', value: 'cancelled', filter: ['cancelled', 'rejected', 'cancelled_by_po', 'processing', 'to_refund', 'refunded'] },
   ];
 
-  // Calculate revenue metrics
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
   
-  // Total revenue strictly includes paid and completed bookings (excludes 'approved' as it is not yet paid)
   const totalRevenue = bookings
     .filter(b => ['paid', 'to_rate', 'rated'].includes(b.booking_status))
     .reduce((sum, b) => sum + Number(b.booking_total_amount || 0), 0);
 
-  // Get active tab configuration and filter bookings
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
   
-  // Use the TAB_CARDS filter array instead of the strict utils function
   const filteredBookings = activeTab === 'all' 
     ? bookings 
-    : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status));
+    : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status as string));
 
-  // Show loading state
   if (loading) {
     return <div className={styles.container}>Loading Dashboard...</div>;
   }
@@ -131,7 +142,6 @@ export default function ServiceProviderDashboardPage() {
   return (
     <div>
       <div className={styles.container}>
-        {/* Header - Revenue Card & Action Buttons */}
         <div className={styles.headerRow}>
           <div className={styles.revenueCard}>
             <div>
@@ -157,7 +167,6 @@ export default function ServiceProviderDashboardPage() {
           </div>
         </div>
 
-        {/* Booking Status Tabs */}
         <div className={styles.tabsGrid}>
           <div
             onClick={() => setActiveTab('all')}
@@ -168,12 +177,12 @@ export default function ServiceProviderDashboardPage() {
           </div>
 
           {TAB_CARDS.map((tab) => {
-            const count = bookings.filter(b => tab.filter.includes(b.booking_status)).length;
+            const count = bookings.filter(b => tab.filter.includes(b.booking_status as string)).length;
             const isActive = activeTab === tab.value;
             return (
               <div
                 key={tab.value}
-                onClick={() => setActiveTab(tab.value)}
+                onClick={() => setActiveTab(tab.value as BookingStatus | 'all')}
                 className={`${styles.tabCard} ${isActive ? styles.tabCardActive : ''}`}
               >
                 <h3 style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>{tab.label}</h3>
@@ -185,7 +194,6 @@ export default function ServiceProviderDashboardPage() {
           })}
         </div>
 
-        {/* Bookings Table */}
         <div className={styles.tableContainer}>
           <div className={styles.tableHeaderBar}>
             <h3 style={{ fontWeight: 'extrabold', textTransform: 'uppercase' }}>
@@ -215,7 +223,7 @@ export default function ServiceProviderDashboardPage() {
                 filteredBookings.map((booking) => {
                   const petCount = booking.booking_pet_info?.length || 0;
                   const services = booking.booking_pet_info
-                    ?.flatMap(pet => pet.booking_service_info?.map(s => s.booking_service_name))
+                    ?.flatMap((pet: any) => pet.booking_service_info?.map((s: any) => s.booking_service_name))
                     .filter(Boolean)
                     .join(', ') || 'N/A';
 
@@ -229,7 +237,7 @@ export default function ServiceProviderDashboardPage() {
                       <td style={{ fontSize: '0.875rem', maxWidth: '200px' }}>{services}</td>
                       <td><strong>{formatCurrency(booking.booking_total_amount)}</strong></td>
                       <td style={{ textAlign: 'center' }}>
-                        <span className={styles.statusBadge}>{formatStatus(booking.booking_status)}</span>
+                        <span className={styles.statusBadge}>{formatStatus(booking.booking_status as BookingStatus)}</span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button onClick={() => setSelectedBooking(booking)} className={styles.viewBtn}>
@@ -244,25 +252,23 @@ export default function ServiceProviderDashboardPage() {
           </table>
         </div>
 
-        {/* Booking Details Modal - for viewing and managing individual bookings */}
+        {/* Strict check: Only render if selectedBooking is not null */}
         {selectedBooking && (
-          <BookingDetailsModal
-            selectedBooking={selectedBooking}
-            setSelectedBooking={setSelectedBooking}
-            handleUpdateStatus={handleUpdateStatus}
+          <BookingDetailsModal 
+            selectedBooking={selectedBooking} 
+            setSelectedBooking={setSelectedBooking} 
+            handleUpdateStatus={handleUpdateStatus} 
           />
         )}
 
-        {/* Calendar Modal - for viewing appointments by date */}
         {showCalendar && (
-          <CalendarModal
-            bookings={bookings}
-            setShowCalendar={setShowCalendar}
+          <CalendarModal 
+            bookings={bookings} 
+            setShowCalendar={setShowCalendar} 
           />
         )}
       </div>
 
-      {/* Footer component placed outside the container */}
       <Footer />
     </div>
   );
