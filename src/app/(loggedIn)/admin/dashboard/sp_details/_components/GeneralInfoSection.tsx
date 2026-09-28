@@ -16,6 +16,7 @@ export const GeneralInfoSection = ({ provider }: { provider: ProviderDetails }) 
       <p><strong>Service Type:</strong> {provider.business_service_type}</p>
       <p><strong>Bio:</strong> {provider.business_bio}</p>
 
+
       {provider.registration_status === "re-applied" && (
         <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#eef2ff", borderRadius: "4px" }}>
           <p style={{ margin: 0, color: "#3730a3" }}>
