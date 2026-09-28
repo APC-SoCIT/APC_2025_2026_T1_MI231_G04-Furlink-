@@ -5,6 +5,11 @@ export interface BookingServiceInfo {
   booking_price: number;
 }
 
+export interface EmployeeInfo {
+  id: string;
+  [key: string]: any;
+}
+
 export interface BookingPetInfo {
   id: string;
   booking_pet_name: string;
@@ -15,6 +20,8 @@ export interface BookingPetInfo {
   booking_calculated_size: string;
   booking_behavior: string[];
   booking_grooming_notes: string | null;
+  assigned_employee_id?: string | null;
+  assigned_employee?: EmployeeInfo | null;
   booking_service_info: BookingServiceInfo[];
 }
 
@@ -43,6 +50,21 @@ export interface UserProfile {
   date_of_birth: string | null;
   role: string | null;
   created_at: string | null;
+}
+
+export interface PetOwnerInfo {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  mobile_number: string | null;
+}
+
+export interface SpBookingRow extends Omit<BookingRow, "sp_general_info"> {
+    profiles_id: string;
+  cancelled_by: string | null;
+  refund_amount: number | null;
+  refund_reason: string | null;
+  pet_owner: PetOwnerInfo | null;
 }
 
 export interface WarningRow {
@@ -99,12 +121,18 @@ export const ROLES_WITH_EMAIL = ["service_provider", "both"];
 // Labels for booking_status
 export const STATUS_LABELS: Record<string, string> = {
   pending_sp_response: "Pending",
+  "to pay": "To Pay",
   approved: "Approved",
   rejected: "Declined",
   paid: "Paid",
   cancelled: "Cancelled",
+  cancelled_by_po: "Cancelled by Pet Owner",
+  processing: "Processing",
+  to_refund: "To Refund",
+  refunded: "Refunded",
   to_rate: "To Rate",
   rated: "Rated",
+  completed: "Completed",
 };
 
 export const SUSPENSION_DAYS = 7;

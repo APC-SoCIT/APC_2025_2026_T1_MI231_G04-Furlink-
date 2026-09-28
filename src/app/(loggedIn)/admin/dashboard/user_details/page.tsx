@@ -4,14 +4,18 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
 import { FaArrowLeft } from "react-icons/fa";
-import { BookingRow, HistoryEntry } from "./_types";
+import { BookingRow, HistoryEntry, SpBookingRow, ROLES_WITH_EMAIL } from "./_types";
 import { useUserDetails } from "./_hooks/useUserDetails";
+import { useSpBookings } from "./_hooks/useSpBookings";
 import { PageHeader } from "./_components/PageHeader";
 import { SuspensionBanner } from "./_components/SuspensionBanner";
 import { PersonalInfoCard } from "./_components/PersonalInfoCard";
 import { AdminActionsCard } from "./_components/AdminActionsCard";
 import { BookingHistoryTable } from "./_components/BookingHistoryTable";
 import { BookingDetailsModal } from "./_components/BookingDetailsModal";
+// NOTE: the path must match your actual filename casing exactly
+import { SpBookingHistoryTable } from "./_components/SPBookingHistoryTable";
+import { SpBookingDetailsModal } from "./_components/SPBookingDetailsModal";
 import { WarningSuspensionHistoryTable } from "./_components/WarningSuspensionHistoryTable";
 import { HistoryDetailsModal } from "./_components/HistoryDetailsModal";
 import { AdminModals } from "./_components/AdminModals";
@@ -31,7 +35,13 @@ function UserDetailsContent() {
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   } = useUserDetails(userId);
 
+  // service_provider or both -> show booked services; pure service providers don't need the pet owner card
+  const showSpBookings = !!user?.role && ROLES_WITH_EMAIL.includes(user.role);
+  const showPoBookings = user?.role !== "service_provider";
+  const { spBookings, spBookingsLoading } = useSpBookings(userId, showSpBookings);
+
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
+  const [selectedSpBooking, setSelectedSpBooking] = useState<SpBookingRow | null>(null);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
   const [warningSeverity, setWarningSeverity] = useState("normal"); 
@@ -114,13 +124,25 @@ function UserDetailsContent() {
           </div>
 
           <div className={styles["right-column"]}>
-            <BookingHistoryTable 
-              bookings={bookings} 
-              bookingsLoading={bookingsLoading}
-              onViewDetails={setSelectedBooking}
-              userId={userId ?? undefined}
-              limit={5}
-            />
+            {showPoBookings && (
+              <BookingHistoryTable 
+                bookings={bookings} 
+                bookingsLoading={bookingsLoading}
+                onViewDetails={setSelectedBooking}
+                userId={userId ?? undefined}
+                limit={5}
+              />
+            )}
+
+            {showSpBookings && (
+              <SpBookingHistoryTable
+                bookings={spBookings}
+                loading={spBookingsLoading}
+                onViewDetails={setSelectedSpBooking}
+                userId={userId ?? undefined}
+                limit={5}
+              />
+            )}
 
             <WarningSuspensionHistoryTable
               warnings={warnings}
@@ -136,6 +158,10 @@ function UserDetailsContent() {
 
       {selectedBooking && (
         <BookingDetailsModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
+      )}
+
+      {selectedSpBooking && (
+        <SpBookingDetailsModal booking={selectedSpBooking} onClose={() => setSelectedSpBooking(null)} />
       )}
 
       {selectedHistoryEntry && (
