@@ -329,6 +329,7 @@ export default function AdminSignupPage() {
     }
   };
 
+  // Step 2: Verify the gate OTP code and unlock form without keeping an active login session
   const handleVerifyGateOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gateOtpToken) return;
@@ -348,6 +349,10 @@ export default function AdminSignupPage() {
         return;
       }
 
+      // Immediately sign out so verifying the gate OTP does NOT log the admin into a session yet,
+      // allowing them to cleanly fill out and complete their own new admin registration.
+      await supabase.auth.signOut();
+
       setAccessGranted(true);
     } catch {
       setAccessError("Failed to verify code. Please try again.");
@@ -355,7 +360,7 @@ export default function AdminSignupPage() {
       setAccessLoading(false);
     }
   };
-
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
