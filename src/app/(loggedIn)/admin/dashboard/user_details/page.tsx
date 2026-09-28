@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft, FaPaw, FaConciergeBell } from "react-icons/fa";
 import { BookingRow, HistoryEntry, SpBookingRow, SP_ROLES, PO_ROLES } from "./_types";
 import { useUserDetails } from "./_hooks/useUserDetails";
 import { useSpBookings } from "./_hooks/useSpBookings";
@@ -42,6 +42,12 @@ function UserDetailsContent() {
   const showPoBookings = !!user?.role && PO_ROLES.includes(user.role);
   const showSpBookings = !!user?.role && SP_ROLES.includes(user.role);
   const showWarningHistory = showSpBookings;
+
+  // Accounts with both sides get a switch so only one booking card is visible at a time
+  const isBothRole = showPoBookings && showSpBookings;
+  const [activeBookingView, setActiveBookingView] = useState<"po" | "sp">("po");
+  const showPoCard = showPoBookings && (!isBothRole || activeBookingView === "po");
+  const showSpCard = showSpBookings && (!isBothRole || activeBookingView === "sp");
 
   const { spBookings, spBookingsLoading } = useSpBookings(userId, showSpBookings);
 
@@ -132,27 +138,62 @@ function UserDetailsContent() {
           </div>
 
           <div className={styles["right-column"]}>
-            {/* 1. Pet owner booking history (pet_owner, both_sp_po) */}
-            {showPoBookings && (
-              <BookingHistoryTable
-                bookings={bookings}
-                bookingsLoading={bookingsLoading}
-                onViewDetails={setSelectedBooking}
-                userId={userId ?? undefined}
-                limit={5}
-              />
+            {/* Booking view switch (both_sp_po only) */}
+            {isBothRole && (
+              <div
+                className={styles["view-toggle"]}
+                data-active={activeBookingView}
+                role="tablist"
+                aria-label="Booking history view"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeBookingView === "po"}
+                  className={`${styles["view-toggle-btn"]} ${activeBookingView === "po" ? styles["view-toggle-active"] : ""}`}
+                  onClick={() => setActiveBookingView("po")}
+                >
+                  <FaPaw /> Pet Owner Bookings ({bookings.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeBookingView === "sp"}
+                  className={`${styles["view-toggle-btn"]} ${activeBookingView === "sp" ? styles["view-toggle-active"] : ""}`}
+                  onClick={() => setActiveBookingView("sp")}
+                >
+                  <FaConciergeBell /> Booked Services ({spBookings.length})
+                </button>
+              </div>
             )}
 
-            {/* 2. Services booked with this provider (service_provider, both_sp_po) */}
-            {showSpBookings && (
-              <SpBookingHistoryTable
-                bookings={spBookings}
-                loading={spBookingsLoading}
-                onViewDetails={setSelectedSpBooking}
-                userId={userId ?? undefined}
-                limit={5}
-              />
-            )}
+            {/* key remounts the panel on switch so the fade-in replays */}
+            <div
+              key={activeBookingView}
+              className={isBothRole ? styles["view-panel"] : undefined}
+            >
+              {/* 1. Pet owner booking history (pet_owner, both_sp_po) */}
+              {showPoCard && (
+                <BookingHistoryTable
+                  bookings={bookings}
+                  bookingsLoading={bookingsLoading}
+                  onViewDetails={setSelectedBooking}
+                  userId={userId ?? undefined}
+                  limit={5}
+                />
+              )}
+
+              {/* 2. Services booked with this provider (service_provider, both_sp_po) */}
+              {showSpCard && (
+                <SpBookingHistoryTable
+                  bookings={spBookings}
+                  loading={spBookingsLoading}
+                  onViewDetails={setSelectedSpBooking}
+                  userId={userId ?? undefined}
+                  limit={5}
+                />
+              )}
+            </div>
 
             {/* 3. Warning / suspension history (service_provider, both_sp_po) */}
             {showWarningHistory && (
