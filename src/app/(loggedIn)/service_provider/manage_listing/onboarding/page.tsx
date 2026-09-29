@@ -64,6 +64,8 @@ export default function ServiceProviderOnboardingPage() {
     province: "",
     postalCode: "",
     country: "Philippines",
+    // 1. Added map location state to hold latitude and longitude
+    location: null as { lat: number, lng: number } | null, 
   });
   
   const [employees, setEmployees] = useState([{ firstName: "", lastName: "", position: "" }]);
@@ -137,6 +139,10 @@ export default function ServiceProviderOnboardingPage() {
               province: generalData.business_province || "",
               postalCode: generalData.business_postal_code || "",
               country: generalData.business_country || "Philippines",
+              // 2. Fetch existing map coordinates if they exist
+              location: generalData.business_latitude && generalData.business_longitude 
+                ? { lat: parseFloat(generalData.business_latitude), lng: parseFloat(generalData.business_longitude) } 
+                : null,
             }));
 
             // 3. Fetch & Set Employees
@@ -373,8 +379,9 @@ export default function ServiceProviderOnboardingPage() {
         business_payment_qr_url: finalPaymentUrl,
         registration_status: newStatus, // Injects dynamic status here
         registration_rejection_reason: null, // Clears the rejection reason upon resubmission
-        business_latitude: 0, 
-        business_longitude: 0,
+        // 3. Inject the map coordinates into the Supabase payload
+        business_latitude: businessInfo.location?.lat || null, 
+        business_longitude: businessInfo.location?.lng || null,
         updated_at: new Date().toISOString(),
       };
 
