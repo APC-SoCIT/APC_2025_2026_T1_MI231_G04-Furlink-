@@ -38,13 +38,13 @@ function UserDetailsContent() {
   // Roles stored in the DB: "pet_owner", "service_provider", "both_sp_po"
   // - Pet owner history: pet_owner + both_sp_po
   // - SP booked services: service_provider + both_sp_po
-  // - Warning/suspension history: only accounts with a service provider side
+  // - Warning/suspension history: shown for every role (pet_owner, service_provider, both_sp_po)
   const showPoBookings = !!user?.role && PO_ROLES.includes(user.role);
   const showSpBookings = !!user?.role && SP_ROLES.includes(user.role);
-  const showWarningHistory = showSpBookings;
 
   // Accounts with both sides get a switch so only one booking card is visible at a time
   const isBothRole = showPoBookings && showSpBookings;
+  const showWarningHistory = !!user?.role;
   const [activeBookingView, setActiveBookingView] = useState<"po" | "sp">("po");
   const showPoCard = showPoBookings && (!isBothRole || activeBookingView === "po");
   const showSpCard = showSpBookings && (!isBothRole || activeBookingView === "sp");
@@ -195,7 +195,7 @@ function UserDetailsContent() {
               )}
             </div>
 
-            {/* 3. Warning / suspension history (service_provider, both_sp_po) */}
+            {/* 3. Warning / suspension history (all roles) */}
             {showWarningHistory && (
               <WarningSuspensionHistoryTable
                 warnings={warnings}
