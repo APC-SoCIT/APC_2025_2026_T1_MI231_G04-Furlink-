@@ -228,8 +228,50 @@
   cursor: not-allowed;
 }
 
+/* Header actions + New chat button */
+.ai-assistant-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-assistant-new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.ai-assistant-new-chat-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.ai-assistant-new-chat-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (max-width: 480px) {
   .ai-assistant-panel {
     width: 100vw;
   }
+}
+/* Links inside assistant replies (map pin, social media, email) */
+.ai-assistant-bubble a.ai-assistant-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.ai-assistant-bubble-assistant a.ai-assistant-link {
+  color: var(--btn-dark-blue);
 }
