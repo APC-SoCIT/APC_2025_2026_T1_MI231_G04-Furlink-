@@ -547,7 +547,7 @@ export default function ManageBookingsPage() {
             onClick={() => setActiveTab('cancelled')}
           >
             <div className="tab-icon-circle"><FaTimesCircle /></div>
-            <span className="tab-label">Decline/Cancelled</span>
+            <span className="tab-label">Cancelled</span>
           </button>
 
           <button
