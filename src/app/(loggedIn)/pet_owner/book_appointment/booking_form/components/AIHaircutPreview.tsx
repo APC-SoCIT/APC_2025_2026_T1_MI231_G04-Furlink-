@@ -5,11 +5,11 @@ import {
   FaMagic,
   FaTimes,
   FaSpinner,
-  FaRedoAlt,
   FaCheckCircle,
   FaExclamationCircle,
   FaCamera,
   FaPen,
+  FaInfoCircle,
 } from 'react-icons/fa';
 import { PetFormData, HAIRCUT_STYLE_OPTIONS } from '../types';
 
@@ -55,9 +55,16 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
         <span>AI Haircut Preview</span>
       </div>
 
+      {/* AI Disclaimer banner */}
+      <div className="ai-disclaimer-note" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: '#64748b', marginBottom: '16px' }}>
+        <FaInfoCircle style={{ flexShrink: 0, color: '#94a3b8' }} />
+          <span>AI previews can make mistakes or differ from the final grooming result.</span>
+      </div>
+
       {isConfirmed ? (
         <div className="ai-confirmed-badge">
           <div className="ai-confirmed-info">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={pet.aiHaircutUrl!} alt="Confirmed AI haircut preview" className="ai-confirmed-thumb" />
             <span>
               <FaCheckCircle style={{ marginRight: 4 }} />
@@ -74,6 +81,7 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
           <div className="ai-photo-row">
             {hasSourcePhoto ? (
               <div className="ai-photo-dropzone">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={pet.aiSourcePhotoPreview || (pet.aiSourcePhotoFile ? URL.createObjectURL(pet.aiSourcePhotoFile) : '')}
                   alt="Pet photo"
@@ -145,6 +153,7 @@ export const AIHaircutPreview: React.FC<AIHaircutPreviewProps> = ({
                 <FaMagic /> Here's the AI-generated preview:
               </div>
               <div className="ai-preview-image-frame">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={pet.aiPreviewImageUrl!} alt="AI generated haircut preview" />
               </div>
               <div className="ai-preview-actions">
