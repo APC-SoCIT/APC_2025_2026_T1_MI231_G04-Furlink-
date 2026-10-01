@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { FaRobot, FaTimes, FaPaperPlane, FaSpinner, FaPlus } from 'react-icons/fa';
 import { supabase } from '@/lib/supabase'; // adjust if your export is named differently
+import AIBookingFlow from './AIBookingFlow';
 import './ai_booking_assistant.css';
 
 type ChatRole = 'user' | 'assistant';
@@ -12,6 +13,8 @@ type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  // 'flow' = the guided booking card. It is UI only and is never sent to the AI as chat history.
+  kind?: 'text' | 'flow';
 };
 
 // Shown on public/logged-out pages (landing, signup, login, etc.) — static facts only, no live data.
@@ -47,8 +50,11 @@ const nextId = () => `msg-${Date.now()}-${idCounter++}`;
 // anywhere we haven't explicitly listed.
 // ---------------------------------------------------------------------------
 
-const IN_APP_ACTIONS: Record<string, { path: string; label: string }> = {
-  BOOK: { path: '/pet_owner/book_appointment', label: 'Book a Service' },
+type InAppAction = { path: string; label: string; startsBookingFlow?: boolean };
+
+const IN_APP_ACTIONS: Record<string, InAppAction> = {
+  // BOOK starts the guided in-chat booking flow instead of leaving the page.
+  BOOK: { path: '/pet_owner/book_appointment', label: 'Book a Service', startsBookingFlow: true },
   ADD_PET: { path: '/pet_owner/manage_pet/add_pet', label: 'Register a Pet' },
   MANAGE_PET: { path: '/pet_owner/manage_pet', label: 'Manage Pet' },
   MANAGE_BOOKINGS: { path: '/pet_owner/manage_bookings', label: 'Manage Bookings' },
@@ -63,8 +69,8 @@ const HEADER_LINE_RE = /^#{1,6}\s*/;
 type ExternalLink = { url: string; label: string };
 
 /** Pulls the [[ACTION:...]] / [[LINK:...]] tokens out of assistant text, leaving plain prose behind. */
-function extractButtons(raw: string): { text: string; action?: { path: string; label: string }; links: ExternalLink[] } {
-  let action: { path: string; label: string } | undefined;
+function extractButtons(raw: string): { text: string; action?: InAppAction; links: ExternalLink[] } {
+  let action: InAppAction | undefined;
   const links: ExternalLink[] = [];
 
   let text = raw.replace(ACTION_TOKEN_RE, (_match, key: string) => {
@@ -223,6 +229,8 @@ export default function AIBookingAssistant() {
     const sessionId = chatSessionRef.current;
     const userMsg: ChatMessage = { id: nextId(), role: 'user', content: trimmed };
     const updatedHistory = [...messages, userMsg];
+    // The booking card is UI only; keep it out of what the AI sees.
+    const historyForAI = updatedHistory.filter((m) => m.kind !== 'flow');
     setMessages(updatedHistory);
     setInput('');
     setIsLoading(true);
@@ -241,7 +249,7 @@ export default function AIBookingAssistant() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          messages: updatedHistory.map((m) => ({ role: m.role, content: m.content })),
+          messages: historyForAI.map((m) => ({ role: m.role, content: m.content })),
           petOwnerView: isPetOwnerView,
         }),
       });
@@ -268,6 +276,20 @@ export default function AIBookingAssistant() {
     } finally {
       if (sessionId === chatSessionRef.current) setIsLoading(false);
     }
+  };
+
+  const scrollToBottom = () => {
+    setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+  };
+
+  // "Book a Service": start the guided booking flow inside the chat. Only one
+  // flow is kept at a time so an old, half-finished card can't be tapped.
+  const startBookingFlow = () => {
+    if (!isPetOwnerView) {
+      goTo('/pet_owner/book_appointment');
+      return;
+    }
+    setMessages((prev) => [...prev.filter((m) => m.kind !== 'flow'), { id: nextId(), role: 'assistant', content: '', kind: 'flow' }]);
   };
 
   // Used by an [[ACTION:...]] button: navigate and close the panel behind it
@@ -345,6 +367,11 @@ export default function AIBookingAssistant() {
           {messages.length === 0 && (
             <div className="ai-assistant-welcome">
               <p className="ai-assistant-welcome-text">What can I help you with today?</p>
+              {isPetOwnerView && (
+                <button type="button" className="ai-assistant-action-btn ai-assistant-book-cta" onClick={startBookingFlow}>
+                  Book a Service
+                </button>
+              )}
               <div className="ai-assistant-sample-questions">
                 {sampleQuestions.map((q) => (
                   <button
@@ -369,6 +396,14 @@ export default function AIBookingAssistant() {
               );
             }
 
+            if (msg.kind === 'flow') {
+              return (
+                <div key={msg.id} className="ai-assistant-bubble ai-assistant-bubble-assistant ai-assistant-bubble-flow">
+                  <AIBookingFlow onNavigate={goTo} onLayout={scrollToBottom} />
+                </div>
+              );
+            }
+
             const { text, action, links } = extractButtons(msg.content);
             return (
               <div key={msg.id} className="ai-assistant-bubble ai-assistant-bubble-assistant">
@@ -387,7 +422,11 @@ export default function AIBookingAssistant() {
                       </a>
                     ))}
                     {action && (
-                      <button type="button" className="ai-assistant-action-btn" onClick={() => goTo(action.path)}>
+                      <button
+                        type="button"
+                        className="ai-assistant-action-btn"
+                        onClick={() => (action.startsBookingFlow ? startBookingFlow() : goTo(action.path))}
+                      >
                         {action.label}
                       </button>
                     )}
