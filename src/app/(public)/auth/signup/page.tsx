@@ -246,6 +246,8 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      const formattedMobile = "+63" + formData.mobile.replace(/^0+/, "");
+
       const { data: authData, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
