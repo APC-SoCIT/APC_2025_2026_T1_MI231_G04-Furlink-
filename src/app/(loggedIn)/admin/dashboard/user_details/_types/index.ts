@@ -150,8 +150,20 @@ export const WARNING_THRESHOLD = 3;
 
 // Severity levels
 export const SEVERITY_LEVELS: SeverityLevel[] = [
-  { value: "minor", label: "Minor", description: "Small or first-time issue; mostly a heads-up." },
-  { value: "normal", label: "Normal", description: "Standard policy violation." },
-  { value: "severe", label: "Severe", description: "Serious violation warranting closer monitoring." },
-  { value: "critical", label: "Critical", description: "Major violation; likely to lead to suspension." },
+  { value: "minor", 
+    label: "Minor", 
+    description: "For Pet Owners: Excessive cancellations, profanity in feedback, and inaccurate pet info. For Service Providers: Response delays"
+  },
+  { value: "normal", 
+    label: "Normal", 
+    description: "For Pet Owners: No-show and repeated minor warnings within 30 days. For Service Providers: High cancellation, minor service complaints"
+  },
+  { value: "severe", 
+    label: "Severe",
+    description: "For Pet Owners: Abusing multi-booking to lock SP calendars, and posting explicit harrasment, hate speech  or sever verbal attacks. For Service Providers: Unable to fulfill paid bookings"
+  },
+  { value: "critical", 
+    label: "Critical", 
+    description: "For Pet Owners: Direct fraud, severe threats of violence against staff or animals, and 3 Accumulated suspensions. For Service Providers: 3 Accumulated suspensions"
+  },
 ];
