@@ -1,19 +1,19 @@
 import { supabase } from "@/lib/supabase";
 
 export const checkFieldExists = async (
-  field: 'username' | 'email',
+  field: 'username' | 'email' | 'mobile_number',
   value: string
 ): Promise<boolean> => {
   try {
-    // Pass the full schema-qualified name
-    const table = field === 'username' ? 'auth_module.profiles' : 'auth.users';
-    const column = field === 'username' ? 'username' : 'email';
+    // Target the profiles table for username and mobile_number, and auth.users for email
+    const table = field === 'email' ? 'auth.users' : 'auth_module.profiles';
+    const column = field === 'username' ? 'username' : field === 'email' ? 'email' : 'mobile_number';
 
     const { data, error } = await supabase
       .rpc('check_field_exists', {
-        table_name: table,      // e.g., 'auth.users'
-        column_name: column,    // e.g., 'email'
-        value_to_check: value.toLowerCase()
+        table_name: table,      
+        column_name: column,    
+        value_to_check: field === 'email' ? value.toLowerCase() : value
       });
 
     if (error) {
