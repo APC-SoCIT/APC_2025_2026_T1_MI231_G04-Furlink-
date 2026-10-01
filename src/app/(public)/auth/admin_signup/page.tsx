@@ -329,7 +329,6 @@ export default function AdminSignupPage() {
     }
   };
 
-  // Step 2: Verify the gate OTP code and unlock form without keeping an active login session
   const handleVerifyGateOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gateOtpToken) return;
@@ -349,10 +348,7 @@ export default function AdminSignupPage() {
         return;
       }
 
-      // Immediately sign out so verifying the gate OTP does NOT log the admin into a session yet,
-      // allowing them to cleanly fill out and complete their own new admin registration.
       await supabase.auth.signOut();
-
       setAccessGranted(true);
     } catch {
       setAccessError("Failed to verify code. Please try again.");
@@ -376,11 +372,15 @@ export default function AdminSignupPage() {
       return;
     }
 
+    // 1. Declare formattedMobile early for validation checks
+    const formattedMobile = "+63" + formData.mobile.replace(/^0+/, "");
+
     const usernameTaken = await checkFieldExists("username", formData.username);
     const emailTaken = await checkFieldExists("email", formData.email);
+    const mobileTaken = await checkFieldExists("mobile_number", formattedMobile);
 
-    if (usernameTaken || emailTaken) {
-      setFormError("Admin account already exists. Please log in instead.");
+    if (usernameTaken || emailTaken || mobileTaken) {
+      setFormError("An admin account with this username, email, or mobile number already exists.");
       return;
     }
 
@@ -404,7 +404,7 @@ export default function AdminSignupPage() {
             first_name: formData.firstName,
             last_name: formData.lastName,
             username: formData.username,
-            mobile_number: formData.mobile,
+            mobile_number: formattedMobile, // 2. Send formatted mobile number with +63
             date_of_birth: formData.dob,
             role: "admin",
             must_change_password: true,
@@ -563,7 +563,10 @@ export default function AdminSignupPage() {
                 type="text"
                 placeholder="Enter 6-digit OTP"
                 value={gateOtpToken}
-                onChange={handleOtpChange}
+                onChange={(e) => {
+                  const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setOtpToken(digitsOnly);
+                }}
                 maxLength={6}
                 required
                 inputMode="numeric"

@@ -236,6 +236,36 @@ function getEmailContent(item) {
         `)
       };
 
+    case 'sp_booking_to_rate':
+      return {
+        subject: "Booking Completed - Pending Review - furlink",
+        html: wrapEmailTemplate("Booking Completed", `
+          <p>Hello Service Provider,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink dashboard to manage your listings.</p>
+        `)
+      };
+
+    case 'sp_booking_rated':
+      return {
+        subject: "New Service Rating Received - furlink",
+        html: wrapEmailTemplate("New Service Rating", `
+          <p>Hello Service Provider,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink dashboard to check all client reviews.</p>
+        `)
+      };
+
+    case 'sp_reminder_complete_booking':
+      return {
+        subject: "Action Required: Complete Past Booking - furlink",
+        html: wrapEmailTemplate("Action Required", `
+          <p>Hello Service Provider,</p>
+          <p>${msg}</p>
+          <p>Please log in to your furlink dashboard to update the status immediately.</p>
+        `)
+      };
+
     case 'account_warning':
       return {
         subject: "Important: Account Warning Notice - furlink",
