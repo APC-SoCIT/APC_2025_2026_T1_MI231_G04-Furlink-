@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FaArrowLeft } from "react-icons/fa";
 import { ROUTES } from "@/config/routes";
@@ -10,6 +10,7 @@ import { useSpBookings } from "../_hooks/useSpBookings";
 // NOTE: paths must match your actual filename casing exactly
 import { SpBookingHistoryTable } from "../_components/SPBookingHistoryTable";
 import { SpBookingDetailsModal } from "../_components/SPBookingDetailsModal";
+import { DateRangeFilter, filterByDateRange } from "../_components/DateRangeFilter";
 import styles from "../page.module.css";
 
 function FullSpBookingsContent() {
@@ -17,10 +18,17 @@ function FullSpBookingsContent() {
   const router = useRouter();
   const userId = searchParams.get("id");
 
-  // Reused only for the user's name / existence check
   const { user, loading, error } = useBookingHistoryPage(userId);
   const { spBookings, spBookingsLoading } = useSpBookings(userId, true);
   const [selectedBooking, setSelectedBooking] = useState<SpBookingRow | null>(null);
+
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filteredBookings = useMemo(
+    () => filterByDateRange(spBookings, (b) => b.booking_date, dateFrom, dateTo),
+    [spBookings, dateFrom, dateTo]
+  );
 
   if (loading) return <div className={styles["loading-state"]}>Loading booked services...</div>;
   if (error) return <div className={styles["error-state"]}>Error: {error}</div>;
@@ -44,8 +52,18 @@ function FullSpBookingsContent() {
           </h1>
         </div>
 
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onChangeFrom={setDateFrom}
+          onChangeTo={setDateTo}
+          shownCount={filteredBookings.length}
+          totalCount={spBookings.length}
+          itemLabel="bookings"
+        />
+
         <SpBookingHistoryTable
-          bookings={spBookings}
+          bookings={filteredBookings}
           loading={spBookingsLoading}
           onViewDetails={setSelectedBooking}
         />
