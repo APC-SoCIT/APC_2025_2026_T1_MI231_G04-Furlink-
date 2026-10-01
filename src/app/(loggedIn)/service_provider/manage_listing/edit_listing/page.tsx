@@ -5,7 +5,14 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Footer from "@/components/Footer";
+
 import "../manage_listing.css";
+import "../onboarding/services.css";
+import "../onboarding/page.css";
+
+import ServiceCard from "../onboarding/components/ServiceCard";
+import PricingTable from "../onboarding/components/PricingTable";
+import { useServiceManager } from "../onboarding/hooks/useServiceManager";
 
 export default function EditListingPage() {
   const router = useRouter();
@@ -14,17 +21,20 @@ export default function EditListingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [services, setServices] = useState<any[]>([]);
   const [spId, setSpId] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // 1. Fetch Existing Services & Pricing
+  const { 
+    services, setServices, addService, removeService, updateService, 
+    addPricingRow, removePricingRow, updatePricing
+  } = useServiceManager();
+
   useEffect(() => {
     const fetchServices = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Get the provider's general info ID first
         const { data: generalData } = await supabase
           .from('sp_general_info')
           .select('id')
@@ -34,14 +44,32 @@ export default function EditListingPage() {
         if (generalData) {
           setSpId(generalData.id);
 
-          // Fetch services and their nested options
           const { data: srvData, error } = await supabase
             .from('sp_services')
             .select(`*, sp_service_options(*)`)
             .eq('sp_id', generalData.id);
 
           if (error) throw error;
-          setServices(srvData || []);
+
+          if (srvData && srvData.length > 0) {
+            const loadedServices = srvData.map((s: any) => ({
+              id: s.id,
+              type: s.service_type,
+              name: s.service_name,
+              description: s.service_description,
+              notes: s.service_notes || "",
+              haircutIncluded: s.service_haircut_included,
+              pricing: (s.sp_service_options || []).map((p: any) => ({
+                id: p.id,
+                petType: p.pet_type,
+                size: p.pet_size,
+                minWeight: p.pet_min_weight_range === 0 ? "" : p.pet_min_weight_range.toString(),
+                maxWeight: p.pet_max_weight_range === 999 ? "" : p.pet_max_weight_range.toString(),
+                price: p.service_price.toString()
+              }))
+            }));
+            setServices(loadedServices);
+          }
         }
       } catch (err: any) {
         setErrorMessage("Failed to load services.");
@@ -51,61 +79,122 @@ export default function EditListingPage() {
     };
 
     fetchServices();
-  }, [supabase]);
+  }, [supabase, setServices]);
 
-  // 2. Handle Input Changes for Services
-  const handleServiceChange = (index: number, field: string, value: string) => {
-    const updatedServices = [...services];
-    updatedServices[index][field] = value;
-    setServices(updatedServices);
-  };
-
-  // 3. Handle Input Changes for Pricing Options
-  const handleOptionChange = (serviceIndex: number, optionIndex: number, value: string) => {
-    const updatedServices = [...services];
-    updatedServices[serviceIndex].sp_service_options[optionIndex].service_price = parseFloat(value) || 0;
-    setServices(updatedServices);
-  };
-
-  // 4. Save Updates to Supabase
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     setErrorMessage(null);
+    setValidationErrors({});
+
+    let isValid = true;
+    let newErrors: Record<string, string> = {};
+    
+    if (services.length === 0) {
+      setErrorMessage("Please add at least one service.");
+      return;
+    }
+
+    services.forEach((s: any, si: number) => {
+      if (!s.name.trim()) { newErrors[`service_${si}_name`] = "Required"; isValid = false; }
+      s.pricing.forEach((p: any, pi: number) => {
+        if (!p.price || parseFloat(p.price) <= 0) { newErrors[`service_${si}_pricing_${pi}_price`] = "Required"; isValid = false; }
+        if (p.size !== "all") {
+          if (p.minWeight === "" || p.maxWeight === "") {
+            newErrors[`service_${si}_pricing_${pi}_weight`] = "Required"; isValid = false;
+          } else if (parseFloat(p.minWeight) >= parseFloat(p.maxWeight)) {
+            newErrors[`service_${si}_pricing_${pi}_weight`] = "Min < Max"; isValid = false;
+          }
+        }
+      });
+    });
+
+    if (!isValid) {
+      setValidationErrors(newErrors);
+      setErrorMessage("Please fix the errors in your services before saving.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
       if (!spId) throw new Error("Provider ID not found.");
 
-      // Loop through and update each service and its options
-      for (const service of services) {
-        // Update the main service details
-        const { error: srvError } = await supabase
-          .from('sp_services')
-          .update({
-            service_name: service.service_name,
-            service_description: service.service_description,
-          })
-          .eq('id', service.id);
+      const currentServiceIds = services.map((s: any) => s.id).filter(Boolean);
+      const currentOptionIds = services.flatMap((s: any) => s.pricing.map((p: any) => p.id)).filter(Boolean);
 
-        if (srvError) throw srvError;
+      const { data: dbServices } = await supabase.from('sp_services').select('id').eq('sp_id', spId);
+      const dbServiceIds = dbServices?.map(s => s.id) || [];
+      
+      let dbOptions: any[] = [];
+      if (dbServiceIds.length > 0) {
+        const { data: optData } = await supabase.from('sp_service_options').select('id').in('sp_services_id', dbServiceIds);
+        dbOptions = optData || [];
+      }
 
-        // Update the pricing options for this service
-        for (const option of service.sp_service_options) {
-          const { error: optError } = await supabase
-            .from('sp_service_options')
-            .update({
-              service_price: option.service_price
-            })
-            .eq('id', option.id);
-          
-          if (optError) throw optError;
+      const servicesToDelete = dbServiceIds.filter(id => !currentServiceIds.includes(id));
+      const optionsToDelete = dbOptions.map(o => o.id).filter(id => !currentOptionIds.includes(id));
+
+      if (optionsToDelete.length > 0) {
+        const { error: optDelErr } = await supabase.from('sp_service_options').delete().in('id', optionsToDelete);
+        if (optDelErr) {
+          if (optDelErr.code === '23503') throw new Error("Cannot remove pricing options that have been booked by pet owners. Please keep them listed.");
+          throw optDelErr;
         }
       }
 
-      // Route back to the dashboard on success
+      if (servicesToDelete.length > 0) {
+        const { error: srvDelErr } = await supabase.from('sp_services').delete().in('id', servicesToDelete);
+        if (srvDelErr) {
+          if (srvDelErr.code === '23503') throw new Error("Cannot remove services that have active or historical bookings. Please keep them listed.");
+          throw srvDelErr;
+        }
+      }
+
+      for (const service of services) {
+        const srvId = (service as any).id;
+        const srvPayload = {
+          ...(srvId ? { id: srvId } : {}), 
+          sp_id: spId,
+          service_type: service.type,
+          service_name: service.name,
+          service_description: service.description,
+          service_notes: service.notes,
+          service_haircut_included: service.haircutIncluded,
+        };
+
+        const { data: savedSrv, error: srvErr } = await supabase
+          .from('sp_services')
+          .upsert(srvPayload, { onConflict: 'id' })
+          .select()
+          .single();
+
+        if (srvErr) throw srvErr;
+
+        for (const opt of (service as any).pricing) {
+          const optId = (opt as any).id;
+          const optPayload = {
+            ...(optId ? { id: optId } : {}),
+            sp_services_id: savedSrv.id,
+            pet_type: opt.petType,
+            pet_size: opt.size,
+            pet_min_weight_range: parseFloat(opt.minWeight) || 0,
+            pet_max_weight_range: parseFloat(opt.maxWeight) || 999,
+            service_price: parseFloat(opt.price),
+          };
+
+          const { error: optErr } = await supabase
+            .from('sp_service_options')
+            .upsert(optPayload, { onConflict: 'id' });
+
+          if (optErr) throw optErr;
+        }
+      }
+
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to update services.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setIsSaving(false);
     }
@@ -120,7 +209,13 @@ export default function EditListingPage() {
       <div className="manage-listing-container">
         <div style={{ maxWidth: '800px', margin: '0 auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
           
-          <h2 style={{ color: '#0a217a', marginBottom: '20px' }}>Edit Services Menu</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ color: '#0a217a', margin: 0 }}>Edit Services Menu</h2>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="button" onClick={() => addService("individual_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Individual</button>
+              <button type="button" onClick={() => addService("packaged_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Package</button>
+            </div>
+          </div>
 
           {errorMessage && (
             <div style={{ backgroundColor: '#fce8e6', color: '#c5221f', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px' }}>
@@ -129,61 +224,36 @@ export default function EditListingPage() {
           )}
 
           <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {services.map((srv, sIndex) => (
-              <div key={srv.id} style={{ border: '1px solid #e0e0e0', padding: '20px', borderRadius: '8px', background: '#fdfdfd' }}>
-                
-                <div className="listing-field-group" style={{ marginBottom: '12px' }}>
-                  <label>Service Name ({srv.service_type})</label>
-                  <input 
-                    type="text" 
-                    value={srv.service_name} 
-                    onChange={(e) => handleServiceChange(sIndex, 'service_name', e.target.value)} 
-                    required 
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} 
+            
+            <div className="services-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {services.map((service: any, si: number) => (
+                <ServiceCard
+                  key={si}
+                  service={service}
+                  serviceIndex={si}
+                  updateService={updateService}
+                  removeService={removeService}
+                  validationErrors={validationErrors}
+                >
+                  <PricingTable
+                    service={service}
+                    serviceIndex={si}
+                    updatePricing={updatePricing}
+                    removePricingRow={removePricingRow}
+                    addPricingRow={addPricingRow}
+                    validationErrors={validationErrors}
                   />
+                </ServiceCard>
+              ))}
+              
+              {services.length === 0 && (
+                <div style={{ padding: '40px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                  <p style={{ color: '#64748b' }}>No services added yet. Click "+ Individual" or "+ Package" above to get started.</p>
                 </div>
+              )}
+            </div>
 
-                <div className="listing-field-group" style={{ marginBottom: '16px' }}>
-                  <label>Description</label>
-                  <textarea 
-                    value={srv.service_description} 
-                    onChange={(e) => handleServiceChange(sIndex, 'service_description', e.target.value)} 
-                    rows={2} 
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} 
-                  />
-                </div>
-
-                <h4 style={{ fontSize: '14px', color: '#0a217a', marginBottom: '10px' }}>Pricing Options</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {srv.sp_service_options.map((opt: any, oIndex: number) => (
-                    <div key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '15px', background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #eee' }}>
-                      
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'capitalize' }}>{opt.pet_type}</span>
-                        <span style={{ fontSize: '12px', color: '#666', display: 'block' }}>
-                          {opt.pet_size === 'all' ? 'All Sizes' : `${opt.pet_size} (${opt.pet_min_weight_range}-${opt.pet_max_weight_range}kg)`}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 'bold', color: '#0a217a' }}>₱</span>
-                        <input 
-                          type="number" 
-                          value={opt.service_price} 
-                          onChange={(e) => handleOptionChange(sIndex, oIndex, e.target.value)}
-                          style={{ width: '100px', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
-                        />
-                      </div>
-
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {services.length === 0 && <p>No services found to edit.</p>}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
               <button 
                 type="button" 
                 onClick={() => router.push("/service_provider/manage_listing")} 
