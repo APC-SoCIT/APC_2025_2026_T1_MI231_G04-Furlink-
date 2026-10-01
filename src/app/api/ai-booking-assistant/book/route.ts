@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       case 'availability': return await actionAvailability(admin, body);
       case 'find': return await actionFind(admin, body);
       case 'services': return await actionServices(admin, check.userId, body);
+      case 'conflicts': return await actionConflicts(admin, check.userId, body);
       case 'create': return await actionCreate(admin, check.userId, body);
       default: return bad('Unknown action.');
     }
@@ -222,6 +223,51 @@ async function actionServices(admin: SupabaseClient, userId: string, body: any) 
   // Keep the order the client sent.
   pets.sort((a, b) => petIds.indexOf(a.id) - petIds.indexOf(b.id));
   return NextResponse.json({ pets });
+}
+
+// ---------------------------------------------------------------------------
+// 5) Reminder: does any chosen pet already have a booking? Deliberately NOT
+//    filtered by date, time, service, provider or status -- the user is always
+//    reminded of every booking those pets have, then decides what to do.
+// ---------------------------------------------------------------------------
+const MAX_REMINDERS = 10;
+
+async function actionConflicts(admin: SupabaseClient, userId: string, body: any) {
+  const petIds: string[] = Array.isArray(body.petIds) ? [...new Set<string>(body.petIds.filter(isUuid))] : [];
+  if (!petIds.length || petIds.length > MAX_PETS) return bad('Invalid request.');
+
+  const { data: ownPets, error: pErr } = await admin
+    .from('po_registered_pet').select('id, pet_name').in('id', petIds).eq('profiles_id', userId); // ownership
+  if (pErr) throw new Error(pErr.message);
+  const petName = new Map((ownPets ?? []).map((p: any) => [p.id, p.pet_name]));
+  if (!petName.size) return NextResponse.json({ conflicts: [], total: 0 });
+
+  const { data, error } = await admin
+    .from('booking_pet_info')
+    .select('registered_pet_id, booking_service_info(booking_service_name), booking_info!inner(id, booking_date, booking_timeslot, booking_status, sp_general_info(business_name))')
+    .in('registered_pet_id', [...petName.keys()])
+    .limit(300);
+  if (error) throw new Error(error.message);
+
+  const all = (data ?? [])
+    .map((row: any) => {
+      const info: any = Array.isArray(row.booking_info) ? row.booking_info[0] : row.booking_info;
+      const sp: any = Array.isArray(info?.sp_general_info) ? info.sp_general_info[0] : info?.sp_general_info;
+      if (!info) return null;
+      return {
+        petName: petName.get(row.registered_pet_id),
+        provider: sp?.business_name ?? 'a provider',
+        date: info.booking_date,
+        timeslot: info.booking_timeslot,
+        status: info.booking_status,
+        services: (row.booking_service_info ?? []).map((s: any) => s.booking_service_name),
+      };
+    })
+    .filter(Boolean) as any[];
+
+  // Newest first so the most relevant bookings are the ones shown.
+  all.sort((a, b) => `${b.date} ${toMinutes(b.timeslot) ?? 0}`.localeCompare(`${a.date} ${toMinutes(a.timeslot) ?? 0}`, undefined, { numeric: true }));
+  return NextResponse.json({ conflicts: all.slice(0, MAX_REMINDERS), total: all.length });
 }
 
 // ---------------------------------------------------------------------------

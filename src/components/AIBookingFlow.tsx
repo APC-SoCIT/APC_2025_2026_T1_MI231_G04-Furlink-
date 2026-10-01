@@ -28,9 +28,10 @@ type FindResult = { id: string; name: string; address: string; slots: Slot[] };
 type Svc = { optionId: string; name: string; description: string; haircut: boolean; price: number };
 type PetServices = Pet & { services: Svc[]; lastAiHaircutUrl: string | null; hasLastAiHaircut: boolean };
 type Chosen = { spId: string; spName: string; date: string; slot: Slot };
+type Conflict = { petName: string; provider: string; date: string; timeslot: string; status: string; services: string[] };
 type Done = { total: number; provider: string; date: string; timeslot: string };
 
-type Step = 'loading' | 'no_pets' | 'criteria' | 'results' | 'pets' | 'services' | 'haircut' | 'summary' | 'submitting' | 'done' | 'error';
+type Step = 'loading' | 'no_pets' | 'criteria' | 'results' | 'pets' | 'services' | 'haircut' | 'conflict' | 'summary' | 'submitting' | 'done' | 'error';
 
 const peso = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const prettyDate = (iso: string) =>
@@ -85,6 +86,8 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
   const [picks, setPicks] = useState<Record<string, string[]>>({}); // petId -> optionIds
   const [useAiImages, setUseAiImages] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [conflictTotal, setConflictTotal] = useState(0);
 
   useEffect(() => { onLayout?.(); }, [step, dayResults, findResults, busy, error]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -183,10 +186,32 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
   const everyPetHasService = petLines.length > 0 && petLines.every((l) => l.items.length > 0);
   const haircutLines = petLines.filter((l) => l.items.some((s) => s.haircut));
 
+  // Before the summary: always remind the user of every existing booking the
+  // chosen pets have (any date, time, service, provider or status). If the
+  // lookup itself fails, don't block booking.
+  const goToSummary = async () => {
+    if (!chosen) return;
+    setError('');
+    setBusy(true);
+    try {
+      const r = await api<{ conflicts: Conflict[]; total: number }>('conflicts', { petIds: petLines.map((l) => l.pet.id) });
+      setConflicts(r.conflicts);
+      setConflictTotal(r.total);
+      setStep(r.conflicts.length ? 'conflict' : 'summary');
+    } catch {
+      setConflicts([]);
+      setConflictTotal(0);
+      setStep('summary');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const afterServices = () => {
     setError('');
     setUseAiImages(false);
-    setStep(haircutLines.length ? 'haircut' : 'summary');
+    if (haircutLines.length) setStep('haircut');
+    else goToSummary();
   };
 
   // ---- Step 6: create the booking ------------------------------------------
@@ -398,7 +423,7 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
         ))}
         <Err />
         <div className="ai-assistant-buttons">
-          <button type="button" className="ai-assistant-action-btn" disabled={!everyPetHasService} onClick={afterServices}>Continue</button>
+          <button type="button" className="ai-assistant-action-btn" disabled={!everyPetHasService || busy} onClick={afterServices}>{busy ? 'Checking...' : 'Continue'}</button>
           <button type="button" className="ai-assistant-link-btn" onClick={() => setStep('pets')}>Back</button>
         </div>
       </div>
@@ -435,14 +460,14 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
 
         <div className="ai-assistant-buttons">
           {withImage.length > 0 && (
-            <button type="button" className="ai-assistant-action-btn" onClick={() => { setUseAiImages(true); setStep('summary'); }}>
+            <button type="button" className="ai-assistant-action-btn" disabled={busy} onClick={() => { setUseAiImages(true); goToSummary(); }}>
               Use previous image{withImage.length > 1 ? 's' : ''}
             </button>
           )}
           <button
             type="button"
             className={withImage.length > 0 ? 'ai-assistant-link-btn' : 'ai-assistant-action-btn'}
-            onClick={() => { setUseAiImages(false); setStep('summary'); }}
+            disabled={busy} onClick={() => { setUseAiImages(false); goToSummary(); }}
           >
             Continue without preview
           </button>
@@ -450,6 +475,44 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
             Generate a new one in booking form
           </button>
           <button type="button" className="ai-assistant-link-btn" onClick={() => setStep('services')}>Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'conflict' && chosen) {
+    const statusText: Record<string, string> = {
+      pending_sp_response: 'Pending provider response',
+      'to pay': 'To Pay',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      paid: 'Paid',
+      cancelled: 'Cancelled',
+      cancelled_by_po: 'Cancelled by you',
+      processing: 'Processing',
+      to_refund: 'To refund',
+      refunded: 'Refunded',
+      to_rate: 'To rate',
+      rated: 'Rated',
+      completed: 'Completed',
+    };
+    const petNames = [...new Set(petLines.map((l) => l.pet.name))].join(', ');
+    return (
+      <div className="ai-flow">
+        <p><strong>Just a reminder:</strong> {petNames} already {petLines.length > 1 ? 'have' : 'has'} {conflictTotal === 1 ? 'a booking' : 'bookings'} on record.</p>
+        {conflicts.map((c, i) => (
+          <div key={i} className="ai-flow-group">
+            <div className="ai-flow-group-title">{c.petName}</div>
+            <div className="ai-flow-row"><span>{c.services.join(', ') || 'Service not listed'}</span><span>{statusText[c.status] ?? c.status}</span></div>
+            <div className="ai-flow-muted">{c.provider}, {prettyDate(c.date)}, {c.timeslot}</div>
+          </div>
+        ))}
+        {conflictTotal > conflicts.length && <p className="ai-flow-muted">...and {conflictTotal - conflicts.length} more. See all of them in Manage Bookings.</p>}
+        <p>Would you like to review {conflictTotal === 1 ? 'it' : 'them'} first, or go ahead with this new booking?</p>
+        <div className="ai-assistant-buttons">
+          <button type="button" className="ai-assistant-action-btn" onClick={() => onNavigate(MANAGE_BOOKINGS_PATH)}>Manage Bookings</button>
+          <button type="button" className="ai-assistant-link-btn" onClick={() => setStep('summary')}>Proceed with booking</button>
+          <button type="button" className="ai-assistant-link-btn" onClick={() => setStep(haircutLines.length ? 'haircut' : 'services')}>Back</button>
         </div>
       </div>
     );

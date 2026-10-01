@@ -218,6 +218,40 @@ export default function AIBookingAssistant() {
   // Confirmed live mode only once the /pet_owner role check above has actually passed.
   const isPetOwnerView = isPetOwnerPath && petOwnerAllowed;
 
+  // Wipes the conversation (and any half-finished booking card). Bumping the
+  // session id makes a reply that is still in flight get ignored.
+  const resetChat = () => {
+    chatSessionRef.current += 1;
+    setMessages([]);
+    setInput('');
+    setIsLoading(false);
+  };
+
+  // Log out / switch account: end the chat so the next person never sees the
+  // previous user's pets, bookings or half-finished booking card.
+  const lastUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const uid = session?.user?.id ?? null;
+      if (event === 'INITIAL_SESSION') {
+        lastUserIdRef.current = uid;
+        return;
+      }
+      if (event === 'SIGNED_OUT') {
+        lastUserIdRef.current = null;
+        resetChat();
+        setIsOpen(false);
+        setPetOwnerAllowed(false);
+        return;
+      }
+      if (event === 'SIGNED_IN' && lastUserIdRef.current !== uid) {
+        lastUserIdRef.current = uid;
+        resetChat();
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading]);
@@ -299,12 +333,7 @@ export default function AIBookingAssistant() {
   };
 
   // End the current chat and start a fresh one
-  const handleNewChat = () => {
-    chatSessionRef.current += 1;
-    setMessages([]);
-    setInput('');
-    setIsLoading(false);
-  };
+  const handleNewChat = () => resetChat();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,7 +375,6 @@ export default function AIBookingAssistant() {
               type="button"
               className="ai-assistant-new-chat-btn"
               onClick={handleNewChat}
-              disabled={messages.length === 0 && !isLoading}
               aria-label="End chat and start a new one"
               title="End chat and start a new one"
             >
