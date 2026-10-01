@@ -34,6 +34,12 @@ interface Props {
 
   autoSuspendNotice: string | null;
   setAutoSuspendNotice: (val: string | null) => void;
+
+  warningSentNotice: boolean;
+  setWarningSentNotice: (val: boolean) => void;
+
+  suspensionSentNotice: boolean;
+  setSuspensionSentNotice: (val: boolean) => void;
 }
 
 export const AdminModals = ({
@@ -56,6 +62,10 @@ export const AdminModals = ({
   confirmLiftSuspension,
   autoSuspendNotice, 
   setAutoSuspendNotice,
+  warningSentNotice,
+  setWarningSentNotice,
+  suspensionSentNotice,
+  setSuspensionSentNotice,
 }: Props) => {
   return (
     <>
@@ -97,6 +107,28 @@ export const AdminModals = ({
         </div>
       )}
 
+      {/* WARNING SENT SUCCESS MODAL */}
+      {warningSentNotice && !autoSuspendNotice && (
+        <div className={styles["modal-overlay"]} onClick={() => setWarningSentNotice(false)}>
+          <div className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>Warning Sent</h3>
+              <button className={styles["btn-close-modal"]} onClick={() => setWarningSentNotice(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <p className={styles["confirm-modal-message"]}>
+              Your warning was successfully sent to <strong>{user.first_name} {user.last_name}</strong>.
+            </p>
+            <div className={styles["confirm-modal-actions"]}>
+              <button className={styles["btn-confirm-proceed"]} onClick={() => setWarningSentNotice(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SUSPEND CONFIRMATION MODAL */}
       {showSuspendConfirm && (
         <div className={styles["modal-overlay"]} onClick={() => !suspending && setShowSuspendConfirm(false)}>
@@ -116,6 +148,28 @@ export const AdminModals = ({
               </button>
               <button className={styles["btn-confirm-danger"]} onClick={confirmSuspend} disabled={suspending}>
                 {suspending ? "Suspending..." : `Suspend for ${SUSPENSION_DAYS} Days`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUSPENSION SUCCESS MODAL */}
+      {suspensionSentNotice && (
+        <div className={styles["modal-overlay"]} onClick={() => setSuspensionSentNotice(false)}>
+          <div className={`${styles["modal-box"]} ${styles["confirm-modal-box"]}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles["modal-header"]}>
+              <h3 className={styles["modal-title"]}>User Suspended</h3>
+              <button className={styles["btn-close-modal"]} onClick={() => setSuspensionSentNotice(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <p className={styles["confirm-modal-message"]}>
+              <strong>{user.first_name} {user.last_name}</strong> has been suspended for {SUSPENSION_DAYS} days.
+            </p>
+            <div className={styles["confirm-modal-actions"]}>
+              <button className={styles["btn-confirm-proceed"]} onClick={() => setSuspensionSentNotice(false)}>
+                Got it
               </button>
             </div>
           </div>

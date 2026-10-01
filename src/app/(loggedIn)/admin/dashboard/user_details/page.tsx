@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
 import { FaArrowLeft, FaPaw, FaConciergeBell } from "react-icons/fa";
@@ -60,6 +60,18 @@ function UserDetailsContent() {
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
+  const [warningSentNotice, setWarningSentNotice] = useState(false);
+  const [suspensionSentNotice, setSuspensionSentNotice] = useState(false);
+
+  // Tracks which action last ran. Warning and suspension results are shown in
+  // modals, so the inline success banner is hidden for them.
+  const lastActionRef = useRef<"warning" | "suspend" | "lift" | null>(null);
+
+  // If the warning triggered an auto-suspension, only the "User Auto-Suspended"
+  // modal should show, so clear the "Warning Sent" state to stop it appearing afterwards.
+  useEffect(() => {
+    if (autoSuspendNotice) setWarningSentNotice(false);
+  }, [autoSuspendNotice]);
 
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
   const isSuspended =
@@ -69,23 +81,36 @@ function UserDetailsContent() {
 
   // Handlers to link the UI Modals to the hook logic
   const handleSendWarningConfirm = async () => {
+    lastActionRef.current = "warning";
     const success = await confirmSendWarning(warningMessage, warningSeverity);
     if (success) {
       setShowSendWarningConfirm(false);
       setWarningMessage("");
       setWarningSeverity("normal");
+      setWarningSentNotice(true);
     }
   };
 
   const handleSuspendConfirm = async () => {
+    lastActionRef.current = "suspend";
     const success = await confirmSuspend();
-    if (success) setShowSuspendConfirm(false);
+    if (success) {
+      setShowSuspendConfirm(false);
+      setSuspensionSentNotice(true);
+    }
   };
 
   const handleLiftSuspensionConfirm = async () => {
+    lastActionRef.current = "lift";
     const success = await confirmLiftSuspension();
     if (success) setShowLiftConfirm(false);
   };
+
+  // Hide the inline banner for warning/suspension success (they're modals now).
+  // The lift-suspension message still uses the banner.
+  const successHandledByModal =
+    lastActionRef.current === "warning" || lastActionRef.current === "suspend";
+  const bannerSuccess = successHandledByModal ? null : actionSuccess;
 
   if (loading) return <div className={styles["loading-state"]}>Loading user details...</div>;
   if (error) return <div className={styles["error-state"]}>Error: {error}</div>;
@@ -109,9 +134,9 @@ function UserDetailsContent() {
           isSuspended={isSuspended}
         />
 
-        {(actionError || actionSuccess) && (
+        {(actionError || bannerSuccess) && (
           <div className={actionError ? styles["action-error"] : styles["action-success"]}>
-            {actionError || actionSuccess}
+            {actionError || bannerSuccess}
           </div>
         )}
 
@@ -242,6 +267,10 @@ function UserDetailsContent() {
         confirmLiftSuspension={handleLiftSuspensionConfirm}
         autoSuspendNotice={autoSuspendNotice}
         setAutoSuspendNotice={setAutoSuspendNotice}
+        warningSentNotice={warningSentNotice}
+        setWarningSentNotice={setWarningSentNotice}
+        suspensionSentNotice={suspensionSentNotice}
+        setSuspensionSentNotice={setSuspensionSentNotice}
       />
     </div>
   );
