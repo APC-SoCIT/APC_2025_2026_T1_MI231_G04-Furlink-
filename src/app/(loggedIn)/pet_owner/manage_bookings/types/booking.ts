@@ -43,9 +43,5 @@ export interface BookingRecord {
   booking_overall_rating?: number;
   booking_staff_rating?: number;
   booking_total_amount: number;
-  // Amount returned to the pet owner (set once a cancelled paid booking is refunded); null until computed
-  refund_amount?: number | null;
-  // Joined from sp_general_info via booking_info.sp_id
-  sp_general_info?: { business_name: string } | null;
   booking_pet_info?: BookingPetInfo[];
 }
