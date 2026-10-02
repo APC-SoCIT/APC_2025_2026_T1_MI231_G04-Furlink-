@@ -6,7 +6,7 @@ export default function PrivacyPolicyPage() {
     <div className="policy-page-wrapper">
       <div className="policy-container">
         <h1>Privacy Policy</h1>
-        <p className="policy-date">Last Updated: February 16, 2026</p>
+        <p className="policy-date">Last Updated: October 3, 2026</p>
         
         <p className="policy-intro">
           This Privacy Policy explains how we collect, use, and protect your personal information in 
@@ -17,8 +17,8 @@ export default function PrivacyPolicyPage() {
           <h2>1. Information We Collect</h2>
           <p>We collect personal details to facilitate booking services, including:</p>
           <ul>
-            <li><strong>Personal Identity:</strong> Your name, email address, and mobile number.</li>
-            <li><strong>Pet Information:</strong> Names, breeds, medical history, and temperament.</li>
+            <li><strong>Personal Identity:</strong> Your name, email address, date of birth, email address, and mobile number.</li>
+            <li><strong>Pet Information:</strong> Names, breeds, date of birth, medical history, and temperament.</li>
           </ul>
         </section>
 
@@ -52,8 +52,8 @@ export default function PrivacyPolicyPage() {
         <section className="policy-section">
           <h2>5. Data Retention & Compliance (RA 10173)</h2>
           <ul>
-            <li><strong>Account Deactivation:</strong> If you deactivate your account, we will retain your profile and pet information.</li>
-            <li><strong>Legitimate Business Purpose:</strong> In accordance with Philippine law, Transaction Data (such as booking history, payment records, and shop analytics) is retained indefinitely for legitimate business purposes, including accounting, tax compliance, and platform-wide analytics, even after account deactivation.</li>
+            <li><strong>Account Deactivation & Storage:</strong> If you deactivate your account, your profile, transaction records, and pet information are securely retained for a maximum duration of <strong>five (5) years</strong> in compliance with legal, auditing, and tax obligations under Philippine law.</li>
+            <li><strong>Data Deletion:</strong> Upon the expiration of the 5-year retention period following account deactivation or formal deletion requests, all personally identifiable user information and associated transactional records are permanently purged from our primary database and storage buckets, unless a longer retention period is required by active legal proceedings or regulatory mandates.</li>
           </ul>
         </section>
       </div>

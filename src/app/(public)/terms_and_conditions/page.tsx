@@ -9,7 +9,7 @@ export default function TermsAndConditionsPage() {
         <p className="policy-intro">
           These Terms and Conditions (“Terms”) shall govern your access and use of the Platform and 
           of the services therein. The term “Platform” pertains to the website operated by LogiTeh and 
-          its affiliates at https://furlink.com, including the website and social media pages made 
+          its affiliates at furlink, including the website and social media pages made 
           available by us. By continuing to access or use the Platform and/or any of the services 
           therein, you represent that you are at least 13 years old and you have read, understood, and 
           agree, without limitation or qualification, to be bound by these Terms and our Privacy Policy.
@@ -32,14 +32,10 @@ export default function TermsAndConditionsPage() {
           <h2>Obligations for Pet Owners</h2>
           <p>To ensure the safety of Service Providers and the well-being of your pets, you agree to:</p>
           <ul>
-            <li>Do so only for its intended and lawful purposes;</li>
             <li>Provide truthful and complete details regarding your pet’s health, temperament, vaccination status, and behavioral history;</li>
             <li>Disclose if a pet has a history of aggression or specific medical triggers;</li>
-            <li>Take sole responsibility for the data provided in your pet’s profile;</li>
-            <li>Be responsible for maintaining confidentiality of your account information and password and for restricting access to such information and to your computer;</li>
-            <li>Not try or attempt to try to interrupt or harm the Platform, its operations, services, facilities, or software in any manner;</li>
-            <li>Not impersonate any person or entity or falsely state or otherwise misrepresent your affiliation with any person or entity; and</li>
-            <li>Not use or upload any material that contains malicious code, viruses, or disruptive components.</li>
+            <li>Take sole responsibility for maintaining accurate pet profile data (including species, breed, and weight parameters); and</li>
+            <li>Refrain from posting profanity or foul language within un-editable booking comments or review fields.</li>
           </ul>
         </section>
 
@@ -47,13 +43,9 @@ export default function TermsAndConditionsPage() {
           <h2>Obligations for Service Providers</h2>
           <p>To maintain professional standards on the Platform, you agree to:</p>
           <ul>
-            <li>Do so only for its intended and lawful purposes;</li>
-            <li>Ensure your profile accurately reflects your experience, certifications, and the specific services you are equipped to provide;</li>
-            <li>Use the Platform tools (listing creation, booking, and payments confirmation) as intended and maintain the confidentiality of the Pet Owner’s home and personal details;</li>
-            <li>Maintain confidentiality of your account information and password;</li>
-            <li>Not try or attempt to try to interrupt or harm the Platform, its operations, services, facilities, or software in any manner;</li>
-            <li>Not impersonate any person or entity or misrepresent your affiliation; and</li>
-            <li>Not use or upload any material that contains malicious code or disruptive components.</li>
+            <li>Ensure your profile accurately reflects your experience, certifications, operating hours, slot capacities, and services;</li>
+            <li>Use the Platform tools (listing creation, booking management, and payment confirmations) responsibly and maintain client confidentiality; and</li>
+            <li>Respond promptly to incoming appointment requests and manage schedules efficiently.</li>
           </ul>
         </section>
 
@@ -61,12 +53,11 @@ export default function TermsAndConditionsPage() {
           <h2>Registration and Account Security</h2>
           <p>
             To access and use the Platform, you are required to register and create an account. However, 
-            we have the absolute discretion to refuse your registration and/or to terminate the same for 
-            any reason whatsoever at any time, with or without notice.
+            we have the absolute discretion to refuse your registration.
           </p>
           <ul>
             <li>You must provide us with accurate, complete, and up-to-date registration information; and</li>
-            <li>We are authorized to assume that any person using the Platform with your username and password is either you yourself or is authorized to act on your behalf.</li>
+            <li>Account merging or linking (allowing users to merge existing separate profiles or associate multiple email addresses under a single profile) is strictly out of scope; each account remains tied to a unique email address.</li>
           </ul>
           <p>
             You are responsible for safeguarding your username and password and for any activities or actions under your password.
@@ -87,42 +78,55 @@ export default function TermsAndConditionsPage() {
         <section className="policy-section">
           <h2>Creating an Account and Booking Services</h2>
           <p>
-            Upon creation of an account, you may already book available grooming services in the Platform, 
+            Upon creation of an account, you may book available grooming services in the Platform, 
             choose your preferred schedule, and customize your booking by providing the details of your pet. 
-            By clicking the &quot;Confirm booking appointment&quot; button, you are effectively submitting your offer 
-            to book an appointment for Service/s, which service providers may accept or reject.
+            By submitting a booking request, you are effectively offering to reserve an appointment, 
+            which service providers may review, accept, or decline via their dashboard.
           </p>
         </section>
 
         <section className="policy-section">
-          <h2>Payment</h2>
-          <p>All prices indicated in the Platform are in Philippine Peso. Payment options include:</p>
+          <h2>Payment, Cancellations, and Refunds</h2>
+          <p>All prices indicated in the Platform are in Philippine Peso, processed securely via the PayMongo API:</p>
           <ul>
-            <li><strong>No Payment Gateway:</strong> The Platform does not provide an in-app payment gateway. All payments are made directly to the service provider using the payment details they provide.</li>
-            <li><strong>Downpayment and Refund Policy:</strong> A thirty percent (30%) downpayment may be required by service providers to confirm a booking. All downpayments are non-refundable if the pet owner cancels for any reason.</li>
-            <li><strong>Service Provider Cancellation:</strong> In the event that the service provider cancels a confirmed booking, they shall be solely responsible for refunding the full 30% downpayment.</li>
+            <li>
+              <strong>Provider-Side Cancellations & Rejections:</strong> On the Service Provider Dashboard, 
+              the Booking Details modal provides service providers with a comprehensive summary of incoming 
+              booking requests, displaying appointment schedules, total amounts, booking statuses, request 
+              timestamps, and itemized pet profiles alongside selected services. Within this interface, 
+              service providers can review appointment specifics and take administrative action, including 
+              declining an appointment by submitting a required rejection reason. Executing &quot;Confirm Reject&quot; 
+              updates the booking record and automatically triggers a 100% refund back to the pet owner via 
+              the PayMongo payment gateway, ensuring pet owners are never financially penalized when an 
+              appointment cannot be fulfilled by the provider.
+            </li>
+            <li>
+              <strong>Pet Owner-Side Cancellations:</strong> In contrast to provider cancellations, pet 
+              owner-initiated cancellations involve a 25% fee deduction (issuing a 75% refund) to absorb 
+              non-refundable gateway processing fees and partially compensate the provider for blocked calendar time. 
+              This 25% policy remains customer-friendly.
+            </li>
           </ul>
         </section>
 
         <section className="policy-section">
-          <h2>Services</h2>
+          <h2>Platform Moderation: Warnings and Suspensions</h2>
           <p>
-            We do our best to provide accurate descriptions of grooming services, but we cannot assure you 
-            that such content is accurate, complete, reliable, current, or free from error. 
-            Pet Pickup and Transport services are not offered by the Platform and must be arranged strictly 
-            between the service provider and the pet owner.
+            To maintain platform integrity, infractions are categorized across severity tiers (Minor, Normal, 
+            Severe, and Critical) leading to warnings and temporary suspensions for both Pet Owners and Service Providers:
           </p>
-        </section>
-
-        <section className="policy-section">
-          <h2>Grooming Salon</h2>
-          <p>
-            Service providers will handle your pet with the utmost care, but we cannot guarantee the possible 
-            stressful effects of grooming. Pre-existing conditions, pregnancy, allergies, or history of 
-            aggressive behavior must be declared upon registration. Service providers and the 
-            Platform will not be held responsible for minor nicks, cuts, irritations, or adverse effects 
-            unless attributable to fault or gross negligence.
-          </p>
+          <ul>
+            <li>
+              <strong>Pet Owner Infractions:</strong> Minor infractions include excessive cancellations, inaccurate pet info, or profanity in feedback (3 minor warnings result in a 3-day suspension). 
+              Normal infractions include no-shows or repeated minor infractions. Severe infractions cover schedule 
+              siphoning or severe review abuse. Critical infractions involve direct fraud or threats.
+            </li>
+            <li>
+              <strong>Service Provider Infractions:</strong> Minor infractions cover response delays or minor service complaints. Normal infractions include high cancellation rates or low ratings (7-day suspension). 
+              Severe infractions cover mass refunds or severe operational complaints. Critical infractions involve 
+              accumulated suspensions or fraud.
+            </li>
+          </ul>
         </section>
 
         <section className="policy-section">
@@ -130,17 +134,16 @@ export default function TermsAndConditionsPage() {
           <p>
             The Platform acts solely as a venue to connect pet owners and service providers. The Platform 
             shall not be liable for any disputes, claims, damages, injuries, or liabilities arising between 
-            them, nor does it offer any insurance coverage.
+            them, nor does it offer direct insurance coverage.
           </p>
         </section>
 
         <section className="policy-section">
           <h2>Termination of Account and Platform Services</h2>
           <p>
-            We may suspend or terminate your account or your use of the Platform at any time upon proven 
-            violation of these Terms and Conditions. In the event of account cancellation where a single 
-            email address is tied to both a pet owner account and a service provider account, both accounts 
-            shall be deactivated simultaneously.
+            We may suspend or terminate your account or your use of the Platform at any time upon violation 
+            of these Terms and Conditions or accumulation of critical disciplinary warnings. Users may also 
+            request account deactivation via their profile settings, subject to completing active or unfinished bookings.
           </p>
         </section>
 
