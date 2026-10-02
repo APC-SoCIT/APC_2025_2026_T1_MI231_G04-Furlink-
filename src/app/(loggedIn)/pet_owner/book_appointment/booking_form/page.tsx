@@ -781,7 +781,7 @@ function BookingFormContent() {
         try {
           serverMessage = JSON.parse(bodyText)?.error || bodyText;
         } catch {
-          // not JSON, keep the raw text
+          // not JSON, keep the raw texts
         }
 
         throw new Error(serverMessage || `AI service error (${response.status})`);
