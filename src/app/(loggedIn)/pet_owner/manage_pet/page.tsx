@@ -1,10 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FaPaw, FaEdit, FaTrashAlt, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { FaPaw, FaEdit, FaTrashAlt, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationTriangle, FaExclamationCircle } from "react-icons/fa";
 import Footer from "@/components/Footer";
+import { getTodayLocalISO, isFutureDate, validateMedicalFile, MEDICAL_FILE_ACCEPT } from "./petFormValidation";
+import { SortOrder } from "../manage_bookings/types/booking";
+import {
+  formatDateDisplay,
+  formatTimeDisplay,
+  formatStatusLabel,
+  sortByBookingStart,
+} from "../manage_bookings/utils/bookingFormatters";
 import "./manage_pet.css";
 
 type PetBehavior = "friendly" | "aggressive" | "anxious" | "energetic" | "trained";
@@ -33,6 +41,16 @@ type PetProfile = {
   pet_emergency_consent: boolean;
 };
 
+// One past/upcoming booking of a pet, flattened for the history list
+type PetBookingHistoryItem = {
+  id: string;
+  booking_date: string;
+  booking_timeslot: string;
+  booking_status: string;
+  business_name: string;
+  services: string[];
+};
+
 export default function ManagePetPage() {
   const supabase = createClientComponentClient();
 
@@ -51,6 +69,12 @@ export default function ManagePetPage() {
   const [petGroomingNotes, setPetGroomingNotes] = useState("");
   const [petEmergencyConsent, setPetEmergencyConsent] = useState(false);
 
+  // Booking History Modal States
+  const [historyPet, setHistoryPet] = useState<PetProfile | null>(null);
+  const [historyItems, setHistoryItems] = useState<PetBookingHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySort, setHistorySort] = useState<SortOrder>("desc");
+
   // Delete Modal State
   const [deletingPet, setDeletingPet] = useState<PetProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -58,6 +82,9 @@ export default function ManagePetPage() {
   // Files
   const [vaccineFile, setVaccineFile] = useState<File | null>(null);
   const [illnessFile, setIllnessFile] = useState<File | null>(null);
+  const [vaccineWarning, setVaccineWarning] = useState("");
+  const [illnessWarning, setIllnessWarning] = useState("");
+  const [dobWarning, setDobWarning] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -146,10 +173,82 @@ export default function ManagePetPage() {
     setPetEmergencyConsent(pet.pet_emergency_consent);
     setVaccineFile(null);
     setIllnessFile(null);
+    setVaccineWarning("");
+    setIllnessWarning("");
+    setDobWarning("");
   };
+
+  // Opens the booking history of a pet (bookings are linked through booking_pet_info.registered_pet_id)
+  const handleOpenHistory = async (pet: PetProfile) => {
+    setHistoryPet(pet);
+    setHistoryItems([]);
+    setHistoryLoading(true);
+
+    const { data, error } = await supabase
+      .from("booking_pet_info")
+      .select(
+        "id, booking_service_info(booking_service_name), booking_info!inner(booking_date, booking_timeslot, booking_status, sp_general_info(business_name))"
+      )
+      .eq("registered_pet_id", pet.id);
+
+    if (error) {
+      console.error("Error fetching booking history:", error);
+    } else {
+      setHistoryItems(
+        (data as any[]).map((row) => ({
+          id: row.id,
+          booking_date: row.booking_info.booking_date,
+          booking_timeslot: row.booking_info.booking_timeslot,
+          booking_status: row.booking_info.booking_status,
+          business_name: row.booking_info.sp_general_info?.business_name || "Unknown provider",
+          services: (row.booking_service_info || []).map(
+            (s: { booking_service_name: string }) => s.booking_service_name
+          ),
+        }))
+      );
+    }
+    setHistoryLoading(false);
+  };
+
+  // History ordered by booking date/time according to the selected filter
+  const sortedHistory = useMemo(
+    () => sortByBookingStart(historyItems, historySort),
+    [historyItems, historySort]
+  );
 
   const handleCloseEdit = () => {
     setEditingPet(null);
+  };
+
+  const handleDobChange = (value: string) => {
+    if (isFutureDate(value)) {
+      setDobWarning("Date of birth cannot be in the future.");
+      return;
+    }
+    setDobWarning("");
+    setPetDateOfBirth(value);
+  };
+
+  const handleMedicalFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFile: (f: File | null) => void,
+    setWarning: (msg: string) => void
+  ) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) {
+      setFile(null);
+      setWarning("");
+      return;
+    }
+    const problem = validateMedicalFile(file);
+    if (problem) {
+      setFile(null);
+      setWarning(problem);
+      e.target.value = "";
+      return;
+    }
+    setWarning("");
+    setFile(file);
   };
 
   const handleBehaviorToggle = (behavior: PetBehavior) => {
@@ -193,6 +292,11 @@ export default function ManagePetPage() {
   const handleUpdatePet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPet) return;
+
+    if (isFutureDate(petDateOfBirth)) {
+      setDobWarning("Date of birth cannot be in the future.");
+      return;
+    }
 
     if (petBehaviors.length === 0) {
       alert("Please select at least one behavior trait.");
@@ -300,7 +404,17 @@ export default function ManagePetPage() {
         ) : (
           <div className="pets-grid">
             {pets.map((pet) => (
-              <div key={pet.id} className="pet-card">
+              <div
+                key={pet.id}
+                className="pet-card clickable"
+                role="button"
+                tabIndex={0}
+                title="View booking history"
+                onClick={() => handleOpenHistory(pet)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.target === e.currentTarget) handleOpenHistory(pet);
+                }}
+              >
                 <div className="pet-card-header">
                   <div>
                     <h3 className="pet-card-title">{pet.pet_name}</h3>
@@ -308,14 +422,20 @@ export default function ManagePetPage() {
                   </div>
                   <div className="card-action-btns">
                     <button
-                      onClick={() => handleOpenEdit(pet)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEdit(pet);
+                      }}
                       className="action-icon-btn edit-btn-style"
                       title="Edit Pet Profile"
                     >
                       <FaEdit />
                     </button>
                     <button
-                      onClick={() => setDeletingPet(pet)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingPet(pet);
+                      }}
                       className="action-icon-btn delete-btn-style"
                       title="Delete Pet Profile"
                     >
@@ -340,6 +460,64 @@ export default function ManagePetPage() {
           </div>
         )}
       </main>
+
+      {/* BOOKING HISTORY MODAL */}
+      {historyPet && (
+        <div className="modal-overlay">
+          <div className="modal-card history-modal">
+            <div className="modal-header">
+              <h2>{historyPet.pet_name}'s Booking History</h2>
+              <button onClick={() => setHistoryPet(null)} className="close-btn"><FaTimes /></button>
+            </div>
+
+            <div className="history-filter">
+              <label htmlFor="history-sort">Sort by date</label>
+              <select
+                id="history-sort"
+                value={historySort}
+                onChange={(e) => setHistorySort(e.target.value as SortOrder)}
+              >
+                <option value="desc">Descending (newest first)</option>
+                <option value="asc">Ascending (oldest first)</option>
+              </select>
+            </div>
+
+            {historyLoading ? (
+              <p className="loading-text">Loading booking history...</p>
+            ) : sortedHistory.length === 0 ? (
+              <p className="history-empty">No bookings yet for {historyPet.pet_name}.</p>
+            ) : (
+              <div className="history-table-wrapper">
+                <table className="history-table">
+                  <thead>
+                    <tr>
+                      <th>Date &amp; Time</th>
+                      <th>Service Provider</th>
+                      <th>Service Availed</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedHistory.map((item) => (
+                      <tr key={item.id}>
+                        <td>
+                          <strong>{formatDateDisplay(item.booking_date)}</strong>
+                          <span className="history-time">{formatTimeDisplay(item.booking_timeslot)}</span>
+                        </td>
+                        <td>{item.business_name}</td>
+                        <td>{item.services.length > 0 ? item.services.join(", ") : "N/A"}</td>
+                        <td>
+                          <span className="history-status">{formatStatusLabel(item.booking_status)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* EDIT MODAL */}
       {editingPet && (
@@ -432,10 +610,17 @@ export default function ManagePetPage() {
                 <input
                   type="date"
                   required
+                  max={getTodayLocalISO()}
                   value={petDateOfBirth}
-                  onChange={(e) => setPetDateOfBirth(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => handleDobChange(e.target.value)}
+                  className={`form-input${dobWarning ? " form-input-error" : ""}`}
                 />
+                {dobWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{dobWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -464,11 +649,17 @@ export default function ManagePetPage() {
                   <input
                     id="edit-vaccine"
                     type="file"
-                    accept="image/png, image/jpeg"
-                    onChange={(e) => setVaccineFile(e.target.files?.[0] || null)}
+                    accept={MEDICAL_FILE_ACCEPT}
+                    onChange={(e) => handleMedicalFileChange(e, setVaccineFile, setVaccineWarning)}
                     className="file-input-hidden"
                   />
                 </div>
+                {vaccineWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{vaccineWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -481,11 +672,17 @@ export default function ManagePetPage() {
                   <input
                     id="edit-illness"
                     type="file"
-                    accept="image/png, image/jpeg"
-                    onChange={(e) => setIllnessFile(e.target.files?.[0] || null)}
+                    accept={MEDICAL_FILE_ACCEPT}
+                    onChange={(e) => handleMedicalFileChange(e, setIllnessFile, setIllnessWarning)}
                     className="file-input-hidden"
                   />
                 </div>
+                {illnessWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{illnessWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
