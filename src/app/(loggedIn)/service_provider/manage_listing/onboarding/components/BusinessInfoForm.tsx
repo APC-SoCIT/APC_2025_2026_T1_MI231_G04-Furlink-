@@ -1,6 +1,7 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/components/BusinessInfoForm.tsx */
 import React, { useState } from "react";
 import dynamic from 'next/dynamic';
+import Link from 'next/link'; // Imported Next.js Link for internal routing
 import { POSITION_OPTIONS, DAYS_OF_WEEK_SHORT, DAYS_OF_WEEK_FULL, DESCRIPTION_MAX_LENGTH } from "../constants";
 import { reverseGeocode, forwardGeocode } from "@/utils/geocoding";
 
@@ -309,15 +310,13 @@ export default function BusinessInfoForm({
           <p style={{ fontSize: '0.85rem', color: '#4b5563', margin: '0 0 10px 0', lineHeight: '1.5' }}>
             <strong>Purpose:</strong> This waiver protects both your establishment and the pet owners by outlining liability terms during grooming services. <br/>
             <strong>Instructions:</strong> Please upload your own signed waiver. If you don't have a waiver, the platform has a standard{' '}
-            {/* Directs to the Supabase public bucket PDF in a new secure tab */}
-            <a 
-              href="https://ofmqtoeqgcbubkrclqxh.supabase.co/storage/v1/object/public/sp-waiver/furlink-standard-waiver.pdf" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            {/* Navigates internally to the dedicated waiver page */}
+            <Link 
+              href="/service_provider/waiver" 
               style={{ color: '#0E2679', textDecoration: 'underline', fontWeight: '600' }}
             >
               waiver
-            </a>{' '}
+            </Link>{' '}
             you can use.
           </p>
           
