@@ -34,36 +34,6 @@
   margin-top: 4px;
 }
 
-.header-action-btns {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.outline-header-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #1e3a8a;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.outline-header-btn:hover {
-  background-color: #f1f5f9;
-  border-color: #94a3b8;
-}
-
-.btn-icon {
-  font-size: 13px;
-}
-
 /* 6 Category Tab Selection Grid */
 .booking-tabs-grid.six-categories {
   display: grid;
@@ -178,6 +148,11 @@
 .col-action {
   flex: 1.2;
   text-align: right;
+  /* Lets View Details and Rate Service sit side by side */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .font-bold {
@@ -420,6 +395,22 @@
   padding: 12px 16px;
   border-radius: 10px;
   font-size: 13px;
+}
+
+.details-provider-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.refund-row {
+  color: #166534;
 }
 
 .schedule-banner-icon {
@@ -1145,6 +1136,7 @@
   .col-action {
     text-align: left;
     width: 100%;
+    justify-content: flex-start;
   }
 
   .row-action-btn {
