@@ -9,6 +9,7 @@ import { StraightEditableField } from "./components/StraightEditableField";
 import { formatRole, formatDateDisplay, formatDateTimeDisplay, getMaxDobDate, formatOnboardingStatus } from "./utils/warningUtils";
 import Footer from "@/components/Footer";
 import "./manage_account.css";
+import { ROUTES } from "@/config/routes";
 
 type ProfileFormData = {
   firstName: string;
@@ -327,9 +328,22 @@ export default function ManageAccountPage() {
     }
   };
 
-  // Only pet_owner / service_provider can upgrade to both_sp_po
   const canAddRole = formData.role === "pet_owner" || formData.role === "service_provider";
   const roleToAddLabel = formData.role === "pet_owner" ? "Service Provider" : "Pet Owner";
+
+  const handleRoleActionClick = () => {
+    setGeneralError(null);
+    setSuccessMessage(null);
+    
+    // If a pet owner wants to become a service provider, redirect to onboarding instead of changing role directly
+    if (formData.role === "pet_owner") {
+      router.push(ROUTES.SERVICE_PROVIDER.ONBOARDING);
+      return;
+    }
+
+    // Otherwise (e.g. if they are an approved service provider adding pet owner role), show confirmation modal
+    setShowRoleModal(true);
+  };
 
   const handleConfirmAddRole = async () => {
     setIsUpdatingRole(true);
@@ -340,8 +354,6 @@ export default function ManageAccountPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No active session");
 
-      // Restrict to the two upgradeable roles and ask for the row back,
-      // so a silently blocked update (e.g. RLS) is detected.
       const { data: updated, error } = await supabase
         .from("profiles")
         .update({ role: "both_sp_po" })
@@ -461,11 +473,7 @@ export default function ManageAccountPage() {
                         <button
                           className="save-btn"
                           style={{ marginTop: "6px" }}
-                          onClick={() => {
-                            setGeneralError(null);
-                            setSuccessMessage(null);
-                            setShowRoleModal(true);
-                          }}
+                          onClick={handleRoleActionClick}
                         >
                           {formData.role === "pet_owner" ? "Become a Service Provider" : "Become a Pet Owner"}
                         </button>
@@ -524,18 +532,17 @@ export default function ManageAccountPage() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {filteredWarnings.map((w) => {
-                      // Distinct color styling for each severity level
-                      let badgeBg = "#e6f4ea"; // default minor (green)
+                      let badgeBg = "#e6f4ea";
                       let badgeColor = "#137333";
                       
                       if (w.severity === "normal") {
-                        badgeBg = "#fef3c7"; // amber/yellow
+                        badgeBg = "#fef3c7";
                         badgeColor = "#b45309";
                       } else if (w.severity === "severe") {
-                        badgeBg = "#fed7aa"; // orange
+                        badgeBg = "#fed7aa";
                         badgeColor = "#c2410c";
                       } else if (w.severity === "critical") {
-                        badgeBg = "#fce8e6"; // red
+                        badgeBg = "#fce8e6";
                         badgeColor = "#c5221f";
                       }
 
