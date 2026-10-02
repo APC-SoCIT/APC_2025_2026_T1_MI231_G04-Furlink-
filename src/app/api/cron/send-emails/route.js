@@ -216,6 +216,39 @@ function getEmailContent(item) {
         `)
       };
 
+    case 'booking_to_refund':
+      return {
+        subject: "Booking Cancelled - Refund Pending - furlink",
+        html: wrapEmailTemplate("Refund Pending", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Our team is reviewing your cancellation details to process your refund accordingly.</p>
+          <p>Please log in to your furlink account to track your request status.</p>
+        `)
+      };
+
+    case 'booking_refunded':
+      return {
+        subject: "Refund Successfully Processed - furlink",
+        html: wrapEmailTemplate("Refund Processed", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>Your refund has been completed. Please check your payment channel for the credited amount.</p>
+          <p>Please log in to your furlink account for more details.</p>
+        `)
+      };
+
+    case 'booking_no_show':
+      return {
+        subject: "Booking Marked as No-Show - furlink",
+        html: wrapEmailTemplate("Booking No-Show", `
+          <p>Hello,</p>
+          <p>${msg}</p>
+          <p>If you believe this was an error, please reach out to our support team or the service provider directly.</p>
+          <p>Please log in to your furlink account for more information.</p>
+        `)
+      };
+
     case 'po_booking_completed':
       return {
         subject: "Your Booking Has Been Completed - furlink",
