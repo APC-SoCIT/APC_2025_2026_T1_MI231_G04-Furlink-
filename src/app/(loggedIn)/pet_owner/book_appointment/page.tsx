@@ -255,6 +255,7 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               spId={spId}
               operatingHours={operatingHours || []}
               existingBookings={userBookings || []}
+              waiverUrl={spInfo.business_waiver_url}
             />
           </aside>
         </div>

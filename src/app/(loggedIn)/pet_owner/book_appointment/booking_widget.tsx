@@ -27,6 +27,7 @@ type BookingWidgetProps = {
   spId: string;
   operatingHours: OperatingHour[];
   existingBookings?: ExistingBooking[];
+  waiverUrl?: string | null;
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -34,9 +35,14 @@ const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 export default function BookingWidget({ 
   spId, 
   operatingHours, 
-  existingBookings = [] 
+  existingBookings = [],
+  waiverUrl = null
 }: BookingWidgetProps) {
   const router = useRouter();
+
+  // Only show the waiver link when the provider has an actual uploaded waiver
+  // ("PLATFORM_DEFAULT_WAIVER" is a placeholder, not a link).
+  const hasWaiver = !!waiverUrl && /^https?:\/\//i.test(waiverUrl.trim());
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [nowTime, setNowTime] = useState<number>(0);
@@ -382,8 +388,21 @@ export default function BookingWidget({
             style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
           >
             <strong>Terms and Conditions</strong>
-          </Link>{' '}
-          including policies on down payments, cancellations, and pet safety.
+          </Link>
+          {hasWaiver && (
+            <>
+              {' '}and the{' '}
+              <a
+                href={waiverUrl as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
+              >
+                <strong>Service Provider Waiver</strong>
+              </a>
+            </>
+          )}
+          {' '}including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
