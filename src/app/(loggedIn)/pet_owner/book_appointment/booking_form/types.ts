@@ -79,6 +79,20 @@ export type PetFormData = {
   aiPreviewCache: Record<string, { blob: Blob; url: string }>;
 };
 
+// Validation messages for one pet form, keyed by field.
+// `services` has one entry per service row (same index as selectedServices).
+export type PetFormErrors = {
+  services?: (string | null)[];
+  petType?: string;
+  petName?: string;
+  breed?: string;
+  gender?: string;
+  dob?: string;
+  weight?: string;
+  behaviors?: string;
+  vaccine?: string;
+};
+
 export const HAIRCUT_STYLE_OPTIONS = [
   'Teddy Bear Cut',
   'Puppy Cut',

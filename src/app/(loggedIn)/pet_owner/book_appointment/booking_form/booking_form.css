@@ -1200,3 +1200,22 @@
   border: 1px solid #e2e8f0;
   display: block;
 }
+
+/* Validation */
+.field-error-text {
+  color: #b91c1c;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.field-hint {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.form-control.has-error,
+.upload-dropzone.has-error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}

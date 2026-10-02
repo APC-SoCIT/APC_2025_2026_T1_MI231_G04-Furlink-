@@ -24,6 +24,7 @@ import { SuccessModal } from './components/SuccessModal';
 import { FailedModal } from './components/FailedModal';
 import { PayLaterSuccessModal } from './components/PayLaterSuccessModal';
 import { CapacityModal } from './components/CapacityModal';
+import { getMaxAcceptedWeight, validatePet, hasErrors } from './validation';
 
 import './booking_form.css';
 
@@ -187,6 +188,9 @@ function BookingFormContent() {
   const [dogBreeds, setDogBreeds] = useState<string[]>([]);
   const [catBreeds, setCatBreeds] = useState<string[]>([]);
   const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
+
+  // Errors are only shown after the first failed "Proceed to Summary" attempt
+  const [showValidation, setShowValidation] = useState<boolean>(false);
 
   // Synchronize activeBookingId from URL search parameters if redirected back from PayMongo
   useEffect(() => {
@@ -457,6 +461,30 @@ function BookingFormContent() {
     return { sizeLabel: detectedSize, updatedServices };
   };
 
+  // Live validation result per pet form (recomputed whenever a form or the provider's options change)
+  const petErrors = useMemo(
+    () =>
+      Object.fromEntries(
+        petForms.map((pet) => [pet.id, validatePet(pet, serviceWeightOptions, availableServices)])
+      ),
+    [petForms, serviceWeightOptions, availableServices]
+  );
+
+  // Only open the summary when every pet form is valid; otherwise reveal the
+  // errors and scroll to the first pet card that needs attention.
+  const handleProceedToSummary = () => {
+    const firstInvalid = petForms.find((pet) => hasErrors(petErrors[pet.id]));
+    if (firstInvalid) {
+      setShowValidation(true);
+      document
+        .getElementById(`pet-card-${firstInvalid.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    setShowValidation(false);
+    setShowSummaryModal(true);
+  };
+
   const handleAddPet = () => {
     if (petForms.length >= slotCapacity) {
       setShowCapacityModal(true);
@@ -552,7 +580,15 @@ function BookingFormContent() {
     );
   };
 
+  // Registered pets already picked in the other pet forms (a pet can only be used once per booking)
+  const getTakenRegisteredPetIds = (formId: string) =>
+    petForms
+      .filter((p) => p.id !== formId && p.selectedRegisteredPetId)
+      .map((p) => p.selectedRegisteredPetId);
+
   const handleAutofillPet = (formId: string, registeredPetId: string) => {
+    if (registeredPetId && getTakenRegisteredPetIds(formId).includes(registeredPetId)) return;
+
     const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
     if (!selectedPet) {
       updatePetField(formId, 'selectedRegisteredPetId', '');
@@ -1066,7 +1102,7 @@ function BookingFormContent() {
           dateDisplay={formattedDateDisplay}
           timeSlot={timeSlot}
           grandTotal={grandTotal}
-          onProceed={() => setShowSummaryModal(true)}
+          onProceed={handleProceedToSummary}
         />
 
         {petForms.map((pet, index) => (
@@ -1077,6 +1113,7 @@ function BookingFormContent() {
             isLast={index === petForms.length - 1}
             totalPets={petForms.length}
             userRegisteredPets={userRegisteredPets}
+            takenRegisteredPetIds={getTakenRegisteredPetIds(pet.id)}
             availableServices={availableServices}
             loadingServices={loadingServices}
             dogBreeds={dogBreeds}
@@ -1095,6 +1132,8 @@ function BookingFormContent() {
             onGenerateAiPreview={handleGenerateAiPreview}
             onConfirmAiPreview={handleConfirmAiPreview}
             onEditConfirmedAiPreview={handleEditConfirmedAiPreview}
+            errors={showValidation ? petErrors[pet.id] : {}}
+            maxWeight={getMaxAcceptedWeight(pet, serviceWeightOptions)}
           />
         ))}
       </main>
