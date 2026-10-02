@@ -140,12 +140,11 @@ export default function SignupPage() {
     return agreedToTerms && !hasErrors && !!allFieldsFilled;
   };
 
-  // Rate limit check for requesting new codes
   const checkSignupRateLimit = (email: string, isResend = false) => {
     const key = `signup_attempts_${email.trim().toLowerCase()}`;
     const now = Date.now();
-    const windowMs = 10 * 60 * 1000; // 10 minutes rolling window
-    const lockoutMs = 15 * 60 * 1000; // 15 minutes lockout
+    const windowMs = 10 * 60 * 1000;
+    const lockoutMs = 15 * 60 * 1000;
 
     const rawData = localStorage.getItem(key);
     let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
@@ -163,7 +162,6 @@ export default function SignupPage() {
     let attemptsArray = data?.attempts || [];
     let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
 
-    // If they already have 5 attempts recorded and are trying to make a *new* request (beyond the 5th)
     if (validAttempts.length >= 5) {
       const blockedUntil = now + lockoutMs;
       localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
@@ -206,17 +204,20 @@ export default function SignupPage() {
       return;
     }
 
+    // 1. Declare formattedMobile early for validation checks
+    const formattedMobile = "+63" + formData.mobile.replace(/^0+/, "");
+
     const usernameTaken = await checkFieldExists("username", formData.username);
     const emailTaken = await checkFieldExists("email", formData.email);
+    const mobileTaken = await checkFieldExists("mobile_number", formattedMobile);
 
-    if (usernameTaken || emailTaken) {
-      setFormError("Account already exists. Please log in instead.");
+    if (usernameTaken || emailTaken || mobileTaken) {
+      setFormError("An account with this username, email, or mobile number already exists.");
       return;
     }
 
     setFormError(null);
 
-    // Initial sign-up is request #1. Pass false for isResend so it registers the first attempt.
     const key = `signup_attempts_${formData.email.trim().toLowerCase()}`;
     const now = Date.now();
     const windowMs = 10 * 60 * 1000;
@@ -254,7 +255,7 @@ export default function SignupPage() {
             first_name: formData.firstName,
             last_name: formData.lastName,
             username: formData.username,
-            mobile_number: formData.mobile,
+            mobile_number: formattedMobile, // 2. Send formatted mobile number with +63
             date_of_birth: formData.dob,
             role: formData.roleChoice,
           },

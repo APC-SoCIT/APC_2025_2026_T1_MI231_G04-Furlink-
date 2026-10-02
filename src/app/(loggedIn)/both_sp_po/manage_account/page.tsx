@@ -85,8 +85,8 @@ export default function ManageAccountPage() {
 
   useEffect(() => {
     if (editingField === "password") {
-      const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])(?!.*\s).{6,12}$/;
-      setNewPasswordError(tempPassword && !pwdRegex.test(tempPassword) ? "6-12 chars, mix of Aa, 0-9, symbol." : null);
+      const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])(?!.*\s).{6,16}$/;
+      setNewPasswordError(tempPassword && !pwdRegex.test(tempPassword) ? "6-16 chars, mix of Aa, 0-9, symbol." : null);
       setConfirmPasswordError(tempConfirmPassword && tempPassword !== tempConfirmPassword ? "Passwords don't match." : null);
     }
   }, [tempPassword, tempConfirmPassword, editingField]);
@@ -383,17 +383,17 @@ export default function ManageAccountPage() {
                       {editingField === "password" && (
                         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
                           <div className="password-container">
-                            <input type={showCurrentPassword ? "text" : "password"} placeholder="Current Password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} maxLength={12} />
+                            <input type={showCurrentPassword ? "text" : "password"} placeholder="Current Password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} maxLength={16} />
                             <button type="button" className="toggle-password" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>{showCurrentPassword ? <FaEyeSlash /> : <FaEye />}</button>
                           </div>
                           {currentPasswordError && <p className="field-inline-error">{currentPasswordError}</p>}
                           <div className="password-container">
-                            <input type={showPassword ? "text" : "password"} placeholder="New Password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} maxLength={12} />
+                            <input type={showPassword ? "text" : "password"} placeholder="New Password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} maxLength={16} />
                             <button type="button" className="toggle-password" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <FaEyeSlash /> : <FaEye />}</button>
                           </div>
                           {newPasswordError && <p className="field-inline-error">{newPasswordError}</p>}
                           <div className="password-container">
-                            <input type={showConfirmPassword ? "text" : "password"} placeholder="Confirm New Password" value={tempConfirmPassword} onChange={(e) => setTempConfirmPassword(e.target.value)} maxLength={12} />
+                            <input type={showConfirmPassword ? "text" : "password"} placeholder="Confirm New Password" value={tempConfirmPassword} onChange={(e) => setTempConfirmPassword(e.target.value)} maxLength={16} />
                             <button type="button" className="toggle-password" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <FaEyeSlash /> : <FaEye />}</button>
                           </div>
                           {confirmPasswordError && <p className="field-inline-error">{confirmPasswordError}</p>}
