@@ -308,7 +308,17 @@ export default function BusinessInfoForm({
           <span style={{ fontWeight: '600', color: '#0E2679', display: 'block', marginBottom: '8px' }}>📄 Liability Waiver Guidelines</span>
           <p style={{ fontSize: '0.85rem', color: '#4b5563', margin: '0 0 10px 0', lineHeight: '1.5' }}>
             <strong>Purpose:</strong> This waiver protects both your establishment and the pet owners by outlining liability terms during grooming services. <br/>
-            <strong>Instructions:</strong> Please upload your own signed waiver. If you don't have a waiver, the platform has a standard <a href="#" onClick={(e) => e.preventDefault()} style={{ color: '#0E2679', textDecoration: 'underline', fontWeight: '600' }}>waiver</a> you can use.
+            <strong>Instructions:</strong> Please upload your own signed waiver. If you don't have a waiver, the platform has a standard{' '}
+            {/* Directs to the Supabase public bucket PDF in a new secure tab */}
+            <a 
+              href="https://ofmqtoeqgcbubkrclqxh.supabase.co/storage/v1/object/public/sp-waiver/furlink-standard-waiver.pdf" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style={{ color: '#0E2679', textDecoration: 'underline', fontWeight: '600' }}
+            >
+              waiver
+            </a>{' '}
+            you can use.
           </p>
           
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#0E2679', fontWeight: '600', cursor: 'pointer', width: 'fit-content' }}>
