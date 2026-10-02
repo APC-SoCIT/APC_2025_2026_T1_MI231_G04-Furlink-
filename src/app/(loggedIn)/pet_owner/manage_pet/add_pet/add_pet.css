@@ -613,3 +613,15 @@
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+.file-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.form-input-error {
+  border-color: #dc2626 !important;
+}

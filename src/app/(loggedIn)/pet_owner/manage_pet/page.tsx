@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FaPaw, FaEdit, FaTrashAlt, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { FaPaw, FaEdit, FaTrashAlt, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationTriangle, FaExclamationCircle } from "react-icons/fa";
 import Footer from "@/components/Footer";
+import { getTodayLocalISO, isFutureDate, validateMedicalFile, MEDICAL_FILE_ACCEPT } from "./petFormValidation";
 import { SortOrder } from "../manage_bookings/types/booking";
 import {
   formatDateDisplay,
@@ -81,6 +82,9 @@ export default function ManagePetPage() {
   // Files
   const [vaccineFile, setVaccineFile] = useState<File | null>(null);
   const [illnessFile, setIllnessFile] = useState<File | null>(null);
+  const [vaccineWarning, setVaccineWarning] = useState("");
+  const [illnessWarning, setIllnessWarning] = useState("");
+  const [dobWarning, setDobWarning] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -169,6 +173,9 @@ export default function ManagePetPage() {
     setPetEmergencyConsent(pet.pet_emergency_consent);
     setVaccineFile(null);
     setIllnessFile(null);
+    setVaccineWarning("");
+    setIllnessWarning("");
+    setDobWarning("");
   };
 
   // Opens the booking history of a pet (bookings are linked through booking_pet_info.registered_pet_id)
@@ -213,6 +220,37 @@ export default function ManagePetPage() {
     setEditingPet(null);
   };
 
+  const handleDobChange = (value: string) => {
+    if (isFutureDate(value)) {
+      setDobWarning("Date of birth cannot be in the future.");
+      return;
+    }
+    setDobWarning("");
+    setPetDateOfBirth(value);
+  };
+
+  const handleMedicalFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFile: (f: File | null) => void,
+    setWarning: (msg: string) => void
+  ) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) {
+      setFile(null);
+      setWarning("");
+      return;
+    }
+    const problem = validateMedicalFile(file);
+    if (problem) {
+      setFile(null);
+      setWarning(problem);
+      e.target.value = "";
+      return;
+    }
+    setWarning("");
+    setFile(file);
+  };
+
   const handleBehaviorToggle = (behavior: PetBehavior) => {
     if (petBehaviors.includes(behavior)) {
       setPetBehaviors(petBehaviors.filter((b) => b !== behavior));
@@ -254,6 +292,11 @@ export default function ManagePetPage() {
   const handleUpdatePet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPet) return;
+
+    if (isFutureDate(petDateOfBirth)) {
+      setDobWarning("Date of birth cannot be in the future.");
+      return;
+    }
 
     if (petBehaviors.length === 0) {
       alert("Please select at least one behavior trait.");
@@ -567,10 +610,17 @@ export default function ManagePetPage() {
                 <input
                   type="date"
                   required
+                  max={getTodayLocalISO()}
                   value={petDateOfBirth}
-                  onChange={(e) => setPetDateOfBirth(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => handleDobChange(e.target.value)}
+                  className={`form-input${dobWarning ? " form-input-error" : ""}`}
                 />
+                {dobWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{dobWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -599,11 +649,17 @@ export default function ManagePetPage() {
                   <input
                     id="edit-vaccine"
                     type="file"
-                    accept="image/png, image/jpeg"
-                    onChange={(e) => setVaccineFile(e.target.files?.[0] || null)}
+                    accept={MEDICAL_FILE_ACCEPT}
+                    onChange={(e) => handleMedicalFileChange(e, setVaccineFile, setVaccineWarning)}
                     className="file-input-hidden"
                   />
                 </div>
+                {vaccineWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{vaccineWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -616,11 +672,17 @@ export default function ManagePetPage() {
                   <input
                     id="edit-illness"
                     type="file"
-                    accept="image/png, image/jpeg"
-                    onChange={(e) => setIllnessFile(e.target.files?.[0] || null)}
+                    accept={MEDICAL_FILE_ACCEPT}
+                    onChange={(e) => handleMedicalFileChange(e, setIllnessFile, setIllnessWarning)}
                     className="file-input-hidden"
                   />
                 </div>
+                {illnessWarning && (
+                  <div className="file-warning" role="alert">
+                    <FaExclamationCircle style={{ marginTop: 3 }} />
+                    <span>{illnessWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
