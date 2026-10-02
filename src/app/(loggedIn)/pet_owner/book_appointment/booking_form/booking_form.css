@@ -926,3 +926,26 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Validation */
+.field-error-text {
+  color: #b91c1c;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.field-hint {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.form-control.has-error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}
+
+.upload-dropzone.has-error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}

@@ -11,6 +11,7 @@ import {
   ServiceWeightOption,
   SelectedServiceItem,
   PetFormData,
+  PetFormErrors,
   REVERSE_BEHAVIOR_MAP,
   BEHAVIOR_MAP,
   DAYS_OF_WEEK,
@@ -62,6 +63,7 @@ function BookingFormContent() {
   const [dogBreeds, setDogBreeds] = useState<string[]>([]);
   const [catBreeds, setCatBreeds] = useState<string[]>([]);
   const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
+  const [showValidation, setShowValidation] = useState<boolean>(false);
 
   // Synchronize activeBookingId from URL search parameters if redirected back from PayMongo
   useEffect(() => {
@@ -322,6 +324,98 @@ function BookingFormContent() {
     return { sizeLabel: detectedSize, updatedServices };
   };
 
+
+  // Highest weight (kg) the provider accepts for this pet's type, based on the
+  // services chosen so far. Falls back to every service the provider offers
+  // when no service has been picked yet.
+  const getMaxAcceptedWeight = (pet: PetFormData): number | null => {
+    const targetType = pet.petType.toLowerCase();
+    const chosenIds = pet.selectedServices.map((s) => s.serviceId).filter(Boolean);
+    const relevant = serviceWeightOptions.filter(
+      (opt) =>
+        (opt.pet_type === 'both_dog_cat' || opt.pet_type === targetType) &&
+        (chosenIds.length === 0 || chosenIds.includes(opt.sp_services_id))
+    );
+    if (relevant.length === 0) return null;
+    return Math.max(...relevant.map((o) => Number(o.pet_max_weight_range)));
+  };
+
+  const validatePet = (pet: PetFormData): PetFormErrors => {
+    const errors: PetFormErrors = {};
+
+    // Services: every row must be chosen
+    const serviceErrors = pet.selectedServices.map((s) =>
+      s.serviceId ? null : 'Please select a service (or remove this field).'
+    );
+    if (serviceErrors.some(Boolean)) errors.services = serviceErrors;
+
+    if (!pet.petType) errors.petType = 'Pet type is required.';
+    if (!pet.petName.trim()) errors.petName = "Pet's name is required.";
+    if (!pet.breed) errors.breed = 'Breed is required.';
+    if (!pet.gender) errors.gender = 'Gender is required.';
+
+    if (!pet.dob) {
+      errors.dob = 'Date of birth is required.';
+    } else if (new Date(pet.dob).getTime() > Date.now()) {
+      errors.dob = 'Date of birth cannot be in the future.';
+    }
+
+    // Weight + provider size check
+    const w = parseFloat(pet.weight);
+    const maxWeight = getMaxAcceptedWeight(pet);
+    if (pet.weight.trim() === '' || isNaN(w)) {
+      errors.weight = 'Weight is required.';
+    } else if (w <= 0) {
+      errors.weight = 'Weight must be greater than 0 kg.';
+    } else if (maxWeight !== null && w > maxWeight) {
+      errors.weight = `This provider only accepts pets up to ${maxWeight} kg.`;
+    } else {
+      // The weight (and the size it maps to) must exist in the provider's sizes
+      // for every selected service.
+      const unmatched = pet.selectedServices
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => s.serviceId && !s.matchedOptionId);
+      if (unmatched.length > 0) {
+        const names = unmatched
+          .map(({ s }) => availableServices.find((a) => a.id === s.serviceId)?.service_name || 'service')
+          .join(', ');
+        errors.weight = `${w} kg (${pet.petType}) doesn't fall under any size this provider offers for: ${names}.`;
+        const svcErrs = errors.services ?? pet.selectedServices.map(() => null);
+        unmatched.forEach(({ i }) => {
+          svcErrs[i] = `No ${pet.petType.toLowerCase()} size offered for ${w} kg on this service.`;
+        });
+        errors.services = svcErrs;
+      }
+    }
+
+    if (pet.behaviors.length === 0) errors.behaviors = 'Select at least one behavior.';
+    if (!pet.vaccineFile && !pet.vaccineUrl) errors.vaccine = 'Vaccine record is required.';
+
+    return errors;
+  };
+
+  const petErrors = useMemo(() => {
+    const map: Record<string, PetFormErrors> = {};
+    petForms.forEach((pet) => {
+      map[pet.id] = validatePet(pet);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petForms, serviceWeightOptions, availableServices]);
+
+  const handleProceedToSummary = () => {
+    const firstInvalidIdx = petForms.findIndex((p) => Object.keys(petErrors[p.id] || {}).length > 0);
+    if (firstInvalidIdx !== -1) {
+      setShowValidation(true);
+      document
+        .getElementById(`pet-card-${petForms[firstInvalidIdx].id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    setShowValidation(false);
+    setShowSummaryModal(true);
+  };
+
   const handleAddPet = () => {
     if (petForms.length >= slotCapacity) {
       setShowCapacityModal(true);
@@ -418,6 +512,12 @@ function BookingFormContent() {
   };
 
   const handleAutofillPet = (formId: string, registeredPetId: string) => {
+    // A registered pet can only be used in one pet form
+    const alreadyUsed = petForms.some(
+      (p) => p.id !== formId && p.selectedRegisteredPetId === registeredPetId
+    );
+    if (registeredPetId && alreadyUsed) return;
+
     const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
     if (!selectedPet) {
       updatePetField(formId, 'selectedRegisteredPetId', '');
@@ -693,7 +793,7 @@ function BookingFormContent() {
           dateDisplay={formattedDateDisplay}
           timeSlot={timeSlot}
           grandTotal={grandTotal}
-          onProceed={() => setShowSummaryModal(true)}
+          onProceed={handleProceedToSummary}
         />
 
         {petForms.map((pet, index) => (
@@ -704,6 +804,9 @@ function BookingFormContent() {
             isLast={index === petForms.length - 1}
             totalPets={petForms.length}
             userRegisteredPets={userRegisteredPets}
+            takenRegisteredPetIds={petForms
+              .filter((p) => p.id !== pet.id && p.selectedRegisteredPetId)
+              .map((p) => p.selectedRegisteredPetId)}
             availableServices={availableServices}
             loadingServices={loadingServices}
             dogBreeds={dogBreeds}
@@ -717,6 +820,8 @@ function BookingFormContent() {
             onRemoveServiceField={handleRemoveServiceField}
             onAutofillPet={handleAutofillPet}
             onToggleBehavior={toggleBehavior}
+            errors={showValidation ? petErrors[pet.id] || {} : {}}
+            maxWeight={getMaxAcceptedWeight(pet)}
           />
         ))}
       </main>

@@ -78,3 +78,16 @@ export const BEHAVIOR_MAP: Record<string, string> = {
 
 export const BEHAVIOR_OPTIONS = Object.values(BEHAVIOR_MAP);
 export const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+export type PetFormErrors = {
+  /** One message per service row (same index as selectedServices) */
+  services?: (string | null)[];
+  petType?: string;
+  petName?: string;
+  breed?: string;
+  gender?: string;
+  dob?: string;
+  weight?: string;
+  behaviors?: string;
+  vaccine?: string;
+};
