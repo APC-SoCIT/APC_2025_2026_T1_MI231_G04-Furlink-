@@ -179,9 +179,23 @@ export default function EditHoursStaffPage() {
                       <label style={{ marginBottom: '4px' }}>Last Name</label>
                       <input type="text" value={s.employee_last_name} onChange={(e) => handleStaffChange(index, 'employee_last_name', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }} />
                     </div>
+                    {/* DROPDOWN FOR POSITION */}
                     <div className="listing-field-group" style={{ flex: 1, padding: 0, border: 'none' }}>
                       <label style={{ marginBottom: '4px' }}>Position</label>
-                      <input type="text" value={s.employee_position} onChange={(e) => handleStaffChange(index, 'employee_position', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                      <select 
+                        value={s.employee_position} 
+                        onChange={(e) => handleStaffChange(index, 'employee_position', e.target.value)} 
+                        required 
+                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', width: '100%' }}
+                      >
+                        <option value="" disabled>Select Position</option>
+                        
+                        {/* ⚠️ COPY AND PASTE YOUR EXACT <option> TAGS FROM YOUR ONBOARDING PAGE HERE ⚠️ */}
+                        <option value="pet_stylist">Pet Stylist</option>
+                        <option value="business_owner">Business Owner</option>
+                        <option value="staff">Staff</option>
+
+                      </select>
                     </div>
                     <button type="button" onClick={() => removeStaff(index)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '18px', cursor: 'pointer' }}>&times;</button>
                   </div>

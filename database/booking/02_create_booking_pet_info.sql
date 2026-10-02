@@ -48,3 +48,6 @@ ADD COLUMN IF NOT EXISTS assigned_employee_id UUID REFERENCES public.sp_employee
 -- 2. Remove the old column from the main booking table to keep things clean
 ALTER TABLE public.booking_info
 DROP COLUMN IF EXISTS assigned_employee_id;
+
+ALTER TABLE public.booking_pet_info 
+ALTER COLUMN registered_pet_id DROP NOT NULL;

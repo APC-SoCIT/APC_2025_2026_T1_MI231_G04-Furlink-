@@ -74,3 +74,7 @@ DROP CONSTRAINT IF EXISTS sp_general_info_registration_status_check;
 ALTER TABLE public.sp_general_info 
 ADD CONSTRAINT sp_general_info_registration_status_check 
 CHECK (registration_status IN ('pending', 'approved', 'rejected', 're-applied'));
+
+ALTER TABLE sp_general_info 
+ADD COLUMN latitude numeric(10, 8),
+ADD COLUMN longitude numeric(11, 8);

@@ -1,8 +1,18 @@
 /* /src/app/(loggedIn)/service_provider/manage_listing/onboarding/components/BusinessInfoForm.tsx */
-import React from "react";
+import React, { useState } from "react";
+import dynamic from 'next/dynamic';
 import { POSITION_OPTIONS, DAYS_OF_WEEK_SHORT, DAYS_OF_WEEK_FULL, DESCRIPTION_MAX_LENGTH } from "../constants";
+import { reverseGeocode, forwardGeocode } from "@/utils/geocoding";
 
-// Define the exact MIME types for the inputs here to keep the main page clean
+const LocationPicker = dynamic(() => import('@/components/LocationPicker'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ height: '380px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+      Loading map...
+    </div>
+  ),
+});
+
 const DOC_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
 const IMG_TYPES = ["image/jpeg", "image/png"];
 
@@ -11,7 +21,7 @@ interface BusinessInfoFormProps {
   setBusinessInfo: React.Dispatch<React.SetStateAction<any>>;
   employees: any[];
   validationErrors: any;
-  files: any; // Passes down the full useFileUploads object
+  files: any;
   handleBusinessChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   toggleDay: (slotIndex: number, day: string) => void;
   isDayDisabled: (slotIndex: number, day: string) => boolean;
@@ -29,6 +39,61 @@ export default function BusinessInfoForm({
   handleBusinessChange, toggleDay, isDayDisabled, addTimeSlot, removeTimeSlot, handleTimeChange,
   handleEmployeeChange, addEmployee, removeEmployee, handleNextStep
 }: BusinessInfoFormProps) {
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  // 1. Reverse Geocode: Map Pin -> Address Fields
+  const handleLocationSelect = async (coords: { lat: number; lng: number }) => {
+    setBusinessInfo((prev: any) => ({ ...prev, location: coords }));
+    setIsGeocoding(true);
+    const resolvedAddress = await reverseGeocode(coords.lat, coords.lng);
+    setIsGeocoding(false);
+
+    if (resolvedAddress) {
+      setBusinessInfo((prev: any) => ({
+        ...prev,
+        houseStreet: resolvedAddress.houseStreet || prev.houseStreet,
+        barangay: resolvedAddress.barangay || prev.barangay,
+        city: resolvedAddress.city || prev.city,
+        province: resolvedAddress.province || prev.province,
+        postalCode: resolvedAddress.postalCode || prev.postalCode,
+      }));
+    }
+  };
+
+  // 2. Manual Coordinate Input Handlers
+  const handleCoordInputChange = (type: 'lat' | 'lng', value: string) => {
+    const num = parseFloat(value);
+    setBusinessInfo((prev: any) => {
+      const currentLoc = prev.location || { lat: 0, lng: 0 };
+      return {
+        ...prev,
+        location: {
+          ...currentLoc,
+          [type]: isNaN(num) ? 0 : num,
+        },
+      };
+    });
+  };
+
+  // 3. Forward Geocode: Address Fields -> Map Pin
+  const handleLocateFromAddress = async () => {
+    const queryParts = [businessInfo.houseStreet, businessInfo.barangay, businessInfo.city, businessInfo.province, "Philippines"].filter(Boolean);
+    if (queryParts.length <= 1) {
+      alert("Please fill in at least a city, province, or street address first.");
+      return;
+    }
+
+    setIsGeocoding(true);
+    const coords = await forwardGeocode(queryParts.join(", "));
+    setIsGeocoding(false);
+
+    if (coords) {
+      setBusinessInfo((prev: any) => ({ ...prev, location: coords }));
+    } else {
+      alert("Address not found on map. You can still pinpoint your location by clicking directly on the map.");
+    }
+  };
+
   return (
     <form className="apply-provider-form" onSubmit={handleNextStep}>
       <section className="form-section">
@@ -172,6 +237,67 @@ export default function BusinessInfoForm({
           <div className="form-group"><label>Barangay*</label><input type="text" name="barangay" value={businessInfo.barangay} onChange={handleBusinessChange} className={validationErrors.barangay ? "input-error" : ""} />{validationErrors.barangay && <small className="error">{validationErrors.barangay}</small>}</div>
           <div className="form-group"><label>Postal Code*</label><input type="text" name="postalCode" value={businessInfo.postalCode} onChange={handleBusinessChange} maxLength={4} className={validationErrors.postalCode ? "input-error" : ""} />{validationErrors.postalCode && <small className="error">{validationErrors.postalCode}</small>}</div>
           <div className="form-group"><label>Country</label><input type="text" name="country" value={businessInfo.country} disabled className="input-disabled" /></div>
+
+          {/* Sync Address to Map Button */}
+          <div style={{ gridColumn: '1 / -1', marginTop: '4px', marginBottom: '8px' }}>
+            <button
+              type="button"
+              onClick={handleLocateFromAddress}
+              disabled={isGeocoding}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '6px',
+                border: '1px solid #0E2679',
+                background: '#f8fafc',
+                color: '#0E2679',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: isGeocoding ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isGeocoding ? "Syncing location..." : "📍 Locate Address on Map"}
+            </button>
+          </div>
+
+          {/* Map & Coordinate Inputs */}
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label>Pin Your Location</label>
+            <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px', marginTop: 0 }}>
+              Click anywhere on the map or type coordinates below to automatically resolve the address.
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px' }}>Latitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 14.5995"
+                  value={businessInfo.location?.lat ?? ''}
+                  onChange={(e) => handleCoordInputChange('lat', e.target.value)}
+                  onBlur={() => businessInfo.location && handleLocationSelect(businessInfo.location)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px' }}>Longitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 120.9842"
+                  value={businessInfo.location?.lng ?? ''}
+                  onChange={(e) => handleCoordInputChange('lng', e.target.value)}
+                  onBlur={() => businessInfo.location && handleLocationSelect(businessInfo.location)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
+                />
+              </div>
+            </div>
+
+            <LocationPicker 
+              position={businessInfo.location} 
+              setPosition={handleLocationSelect} 
+            />
+          </div>
         </div>
       </section>
 

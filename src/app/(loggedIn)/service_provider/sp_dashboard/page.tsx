@@ -17,8 +17,33 @@ export default function ServiceProviderDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
+  
+  // State for the sub-filter in the "All Bookings" tab
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // State for sorting the "New Requests" tab
+  const [newRequestsSort, setNewRequestsSort] = useState<'urgent' | 'latest'>('urgent');
+  
+  // State for sorting the "Upcoming" tab
+  const [upcomingSort, setUpcomingSort] = useState<'chronological' | 'farthest'>('chronological');
+  
+  // UPDATED: Added 'no_show' to the allowed types for the Completed tab filter
+  const [completedStatusFilter, setCompletedStatusFilter] = useState<'all' | 'to_rate' | 'rated' | 'no_show'>('all');
+
+  // State for sorting the "Cancelled" tab
+  const [cancelledSort, setCancelledSort] = useState<'booking_date' | 'refund_date'>('booking_date');
+  
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+
+  // Reset sub-filters whenever the user switches main tabs
+  useEffect(() => {
+    setStatusFilter('all');
+    setNewRequestsSort('urgent');
+    setUpcomingSort('chronological');
+    setCompletedStatusFilter('all');
+    setCancelledSort('booking_date');
+  }, [activeTab]);
 
   useEffect(() => {
     fetchBookings();
@@ -67,7 +92,6 @@ export default function ServiceProviderDashboardPage() {
     try {
       const targetBooking = bookings.find(b => b.id === id);
       
-      // TRIGGER EDGE FUNCTION: For Paid, Approved, or Pending Requests (since they pay upfront)
       if ((newStatus === 'rejected' || newStatus === 'cancelled') && (targetBooking?.booking_status === 'paid' || targetBooking?.booking_status === 'approved' || targetBooking?.booking_status === 'pending_sp_response')) {
         const { error } = await supabase.functions.invoke('process-refund', {
           body: {
@@ -83,13 +107,11 @@ export default function ServiceProviderDashboardPage() {
           prev.map((b) => (b.id === id ? { ...b, booking_status: 'processing' as any, refund_reason: reason } : b))
         );
       } else {
-        // STANDARD DATABASE UPDATE: For completions or unpaid statuses
         const updatePayload: any = { 
           booking_status: newStatus, 
           updated_at: new Date().toISOString() 
         };
         
-        // Route the text to the correct database column
         if (reason) {
           if (newStatus === 'rejected') {
             updatePayload.booking_rejection_reason = reason;
@@ -119,21 +141,61 @@ export default function ServiceProviderDashboardPage() {
   const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: string[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
     { label: 'Upcoming', value: 'paid', filter: ['approved', 'paid'] },
-    { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated'] },
+    // UPDATED: Moved 'no_show' into the Completed tab
+    { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated', 'no_show'] },
+    // UPDATED: Removed 'no_show' from Cancelled tab
     { label: 'Cancelled', value: 'cancelled', filter: ['cancelled', 'rejected', 'cancelled_by_po', 'processing', 'to_refund', 'refunded'] },
   ];
 
-  const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthIndex = now.getMonth();
+  const currentMonth = now.toLocaleString('default', { month: 'long', year: 'numeric' });
   
   const totalRevenue = bookings
-    .filter(b => ['paid', 'to_rate', 'rated'].includes(b.booking_status))
+    .filter(b => {
+      const isPaidStatus = ['paid', 'to_rate', 'rated'].includes(b.booking_status);
+      if (!isPaidStatus) return false;
+
+      const bookingDate = new Date(b.booking_date);
+      return bookingDate.getFullYear() === currentYear && bookingDate.getMonth() === currentMonthIndex;
+    })
     .reduce((sum, b) => sum + Number(b.booking_total_amount || 0), 0);
 
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
   
-  const filteredBookings = activeTab === 'all' 
-    ? bookings 
+  const baseFilteredBookings = activeTab === 'all' 
+    ? bookings.filter(b => statusFilter === 'all' || b.booking_status === statusFilter)
     : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status as string));
+
+  const filteredBookings = activeTab === 'pending_sp_response'
+    ? [...baseFilteredBookings].sort((a, b) => {
+        if (newRequestsSort === 'urgent') {
+          return new Date(a.booking_date).getTime() - new Date(b.booking_date).getTime();
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      })
+    : activeTab === 'paid'
+    ? [...baseFilteredBookings].sort((a, b) => {
+        const dateA = new Date(a.booking_date).getTime();
+        const dateB = new Date(b.booking_date).getTime();
+        if (upcomingSort === 'chronological') {
+          return dateA - dateB;
+        }
+        return dateB - dateA;
+      })
+    : activeTab === 'rated'
+    ? baseFilteredBookings.filter(b => completedStatusFilter === 'all' || b.booking_status === completedStatusFilter)
+    : activeTab === 'cancelled'
+    ? [...baseFilteredBookings].sort((a, b) => {
+        if (cancelledSort === 'refund_date') {
+          const dateA = (a as any).refund_initiated_at ? new Date((a as any).refund_initiated_at).getTime() : 0;
+          const dateB = (b as any).refund_initiated_at ? new Date((b as any).refund_initiated_at).getTime() : 0;
+          return dateB - dateA; 
+        }
+        return new Date(b.booking_date).getTime() - new Date(a.booking_date).getTime();
+      })
+    : baseFilteredBookings;
 
   if (loading) {
     return <div className={styles.container}>Loading Dashboard...</div>;
@@ -195,16 +257,84 @@ export default function ServiceProviderDashboardPage() {
         </div>
 
         <div className={styles.tableContainer}>
-          <div className={styles.tableHeaderBar}>
+          <div className={styles.tableHeaderBar} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontWeight: 'extrabold', textTransform: 'uppercase' }}>
               {activeTab === 'all' ? 'All Bookings' : activeTabConfig?.label}
             </h3>
+            
+            {activeTab === 'all' && (
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending_sp_response">Pending Request</option>
+                <option value="approved">Approved</option>
+                <option value="paid">Paid</option>
+                <option value="to_rate">To Rate</option>
+                <option value="rated">Completed</option>
+                <option value="no_show">No-Show</option>
+                <option value="to_refund">To Refund</option>
+                <option value="refunded">Refunded</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            )}
+
+            {activeTab === 'pending_sp_response' && (
+              <select 
+                value={newRequestsSort}
+                onChange={(e) => setNewRequestsSort(e.target.value as 'urgent' | 'latest')}
+                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="urgent">Sort by: Urgency (Closest Date)</option>
+                <option value="latest">Sort by: Latest Request</option>
+              </select>
+            )}
+
+            {activeTab === 'paid' && (
+              <select 
+                value={upcomingSort}
+                onChange={(e) => setUpcomingSort(e.target.value as 'chronological' | 'farthest')}
+                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="chronological">Sort by: Upcoming First (Chronological)</option>
+                <option value="farthest">Sort by: Farthest Date First</option>
+              </select>
+            )}
+
+            {/* UPDATED: Added No-Show option to the Completed tab filter */}
+            {activeTab === 'rated' && (
+              <select 
+                value={completedStatusFilter}
+                onChange={(e) => setCompletedStatusFilter(e.target.value as 'all' | 'to_rate' | 'rated' | 'no_show')}
+                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="all">All Completed</option>
+                <option value="to_rate">To Rate</option>
+                <option value="rated">Rated / Finished</option>
+                <option value="no_show">Customer No-Show</option>
+              </select>
+            )}
+
+            {activeTab === 'cancelled' && (
+              <select 
+                value={cancelledSort}
+                onChange={(e) => setCancelledSort(e.target.value as 'booking_date' | 'refund_date')}
+                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="booking_date">Sort by: Booking Date</option>
+                <option value="refund_date">Sort by: Refund Date</option>
+              </select>
+            )}
           </div>
 
           <table className={styles.table}>
             <thead>
               <tr>
                 <th>Date & Time</th>
+                {activeTab === 'cancelled' && <th>Refund Date</th>}
                 <th style={{ textAlign: 'center' }}>No. of Pets</th>
                 <th>Service to Avail</th>
                 <th>Total Amt</th>
@@ -215,7 +345,7 @@ export default function ServiceProviderDashboardPage() {
             <tbody>
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>
+                  <td colSpan={activeTab === 'cancelled' ? 7 : 6} style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>
                     No bookings found for this category.
                   </td>
                 </tr>
@@ -226,6 +356,8 @@ export default function ServiceProviderDashboardPage() {
                     ?.flatMap((pet: any) => pet.booking_service_info?.map((s: any) => s.booking_service_name))
                     .filter(Boolean)
                     .join(', ') || 'N/A';
+                  
+                  const refundDateRaw = (booking as any).refund_initiated_at;
 
                   return (
                     <tr key={booking.id}>
@@ -233,6 +365,13 @@ export default function ServiceProviderDashboardPage() {
                         <strong>{booking.booking_date}</strong>
                         <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{booking.booking_timeslot}</div>
                       </td>
+                      
+                      {activeTab === 'cancelled' && (
+                        <td>
+                          <strong>{refundDateRaw ? new Date(refundDateRaw).toLocaleDateString() : 'N/A'}</strong>
+                        </td>
+                      )}
+                      
                       <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{petCount}</td>
                       <td style={{ fontSize: '0.875rem', maxWidth: '200px' }}>{services}</td>
                       <td><strong>{formatCurrency(booking.booking_total_amount)}</strong></td>
@@ -252,7 +391,6 @@ export default function ServiceProviderDashboardPage() {
           </table>
         </div>
 
-        {/* Strict check: Only render if selectedBooking is not null */}
         {selectedBooking && (
           <BookingDetailsModal 
             selectedBooking={selectedBooking} 

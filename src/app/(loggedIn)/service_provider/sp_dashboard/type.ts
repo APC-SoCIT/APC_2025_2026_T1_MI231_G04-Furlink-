@@ -11,7 +11,8 @@ export type BookingStatus =
   | 'refunded'
   | 'to_rate' 
   | 'rated'
-  | 'completed';
+  | 'completed'
+  | 'no_show';
   
 export interface BookingServiceInfo {
   id: string;
@@ -58,6 +59,7 @@ export interface Booking {
   booking_staff_rating?: number | null;
   booking_comment?: string | null;
   refund_reason?: string;
+  booking_review?: string | null;
   
   // Embedded relation
   booking_pet_info?: BookingPetInfo[];

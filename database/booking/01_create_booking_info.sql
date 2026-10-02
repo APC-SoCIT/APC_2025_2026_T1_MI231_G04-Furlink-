@@ -108,3 +108,25 @@ ADD CONSTRAINT booking_info_cancelled_by_check CHECK (
 );
 
 alter table public.booking_info drop constraint booking_info_refund_reason_check;
+
+-- Combine into a single statement and use NOT VALID to skip the full table scan
+ALTER TABLE public.booking_info 
+  DROP CONSTRAINT booking_info_booking_status_check,
+  ADD CONSTRAINT booking_info_booking_status_check CHECK (
+    booking_status = ANY (ARRAY[
+      'pending_sp_response'::text, 
+      'to pay'::text, 
+      'approved'::text, 
+      'rejected'::text, 
+      'paid'::text, 
+      'cancelled'::text, 
+      'cancelled_by_po'::text, 
+      'processing'::text, 
+      'to_refund'::text, 
+      'refunded'::text, 
+      'to_rate'::text, 
+      'rated'::text, 
+      'completed'::text,
+      'no_show'::text
+    ])
+  ) NOT VALID;
