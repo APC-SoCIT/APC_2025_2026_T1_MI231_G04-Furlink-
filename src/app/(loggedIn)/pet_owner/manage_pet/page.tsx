@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FaPaw, FaEdit, FaTrashAlt, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import Footer from "@/components/Footer";
+import { SortOrder } from "../manage_bookings/types/booking";
+import {
+  formatDateDisplay,
+  formatTimeDisplay,
+  formatStatusLabel,
+  sortByBookingStart,
+} from "../manage_bookings/utils/bookingFormatters";
 import "./manage_pet.css";
 
 type PetBehavior = "friendly" | "aggressive" | "anxious" | "energetic" | "trained";
@@ -33,6 +40,16 @@ type PetProfile = {
   pet_emergency_consent: boolean;
 };
 
+// One past/upcoming booking of a pet, flattened for the history list
+type PetBookingHistoryItem = {
+  id: string;
+  booking_date: string;
+  booking_timeslot: string;
+  booking_status: string;
+  business_name: string;
+  services: string[];
+};
+
 export default function ManagePetPage() {
   const supabase = createClientComponentClient();
 
@@ -50,6 +67,12 @@ export default function ManagePetPage() {
   const [petBehaviors, setPetBehaviors] = useState<PetBehavior[]>([]);
   const [petGroomingNotes, setPetGroomingNotes] = useState("");
   const [petEmergencyConsent, setPetEmergencyConsent] = useState(false);
+
+  // Booking History Modal States
+  const [historyPet, setHistoryPet] = useState<PetProfile | null>(null);
+  const [historyItems, setHistoryItems] = useState<PetBookingHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySort, setHistorySort] = useState<SortOrder>("desc");
 
   // Delete Modal State
   const [deletingPet, setDeletingPet] = useState<PetProfile | null>(null);
@@ -147,6 +170,44 @@ export default function ManagePetPage() {
     setVaccineFile(null);
     setIllnessFile(null);
   };
+
+  // Opens the booking history of a pet (bookings are linked through booking_pet_info.registered_pet_id)
+  const handleOpenHistory = async (pet: PetProfile) => {
+    setHistoryPet(pet);
+    setHistoryItems([]);
+    setHistoryLoading(true);
+
+    const { data, error } = await supabase
+      .from("booking_pet_info")
+      .select(
+        "id, booking_service_info(booking_service_name), booking_info!inner(booking_date, booking_timeslot, booking_status, sp_general_info(business_name))"
+      )
+      .eq("registered_pet_id", pet.id);
+
+    if (error) {
+      console.error("Error fetching booking history:", error);
+    } else {
+      setHistoryItems(
+        (data as any[]).map((row) => ({
+          id: row.id,
+          booking_date: row.booking_info.booking_date,
+          booking_timeslot: row.booking_info.booking_timeslot,
+          booking_status: row.booking_info.booking_status,
+          business_name: row.booking_info.sp_general_info?.business_name || "Unknown provider",
+          services: (row.booking_service_info || []).map(
+            (s: { booking_service_name: string }) => s.booking_service_name
+          ),
+        }))
+      );
+    }
+    setHistoryLoading(false);
+  };
+
+  // History ordered by booking date/time according to the selected filter
+  const sortedHistory = useMemo(
+    () => sortByBookingStart(historyItems, historySort),
+    [historyItems, historySort]
+  );
 
   const handleCloseEdit = () => {
     setEditingPet(null);
@@ -300,7 +361,17 @@ export default function ManagePetPage() {
         ) : (
           <div className="pets-grid">
             {pets.map((pet) => (
-              <div key={pet.id} className="pet-card">
+              <div
+                key={pet.id}
+                className="pet-card clickable"
+                role="button"
+                tabIndex={0}
+                title="View booking history"
+                onClick={() => handleOpenHistory(pet)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.target === e.currentTarget) handleOpenHistory(pet);
+                }}
+              >
                 <div className="pet-card-header">
                   <div>
                     <h3 className="pet-card-title">{pet.pet_name}</h3>
@@ -308,14 +379,20 @@ export default function ManagePetPage() {
                   </div>
                   <div className="card-action-btns">
                     <button
-                      onClick={() => handleOpenEdit(pet)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEdit(pet);
+                      }}
                       className="action-icon-btn edit-btn-style"
                       title="Edit Pet Profile"
                     >
                       <FaEdit />
                     </button>
                     <button
-                      onClick={() => setDeletingPet(pet)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingPet(pet);
+                      }}
                       className="action-icon-btn delete-btn-style"
                       title="Delete Pet Profile"
                     >
@@ -340,6 +417,64 @@ export default function ManagePetPage() {
           </div>
         )}
       </main>
+
+      {/* BOOKING HISTORY MODAL */}
+      {historyPet && (
+        <div className="modal-overlay">
+          <div className="modal-card history-modal">
+            <div className="modal-header">
+              <h2>{historyPet.pet_name}'s Booking History</h2>
+              <button onClick={() => setHistoryPet(null)} className="close-btn"><FaTimes /></button>
+            </div>
+
+            <div className="history-filter">
+              <label htmlFor="history-sort">Sort by date</label>
+              <select
+                id="history-sort"
+                value={historySort}
+                onChange={(e) => setHistorySort(e.target.value as SortOrder)}
+              >
+                <option value="desc">Descending (newest first)</option>
+                <option value="asc">Ascending (oldest first)</option>
+              </select>
+            </div>
+
+            {historyLoading ? (
+              <p className="loading-text">Loading booking history...</p>
+            ) : sortedHistory.length === 0 ? (
+              <p className="history-empty">No bookings yet for {historyPet.pet_name}.</p>
+            ) : (
+              <div className="history-table-wrapper">
+                <table className="history-table">
+                  <thead>
+                    <tr>
+                      <th>Date &amp; Time</th>
+                      <th>Service Provider</th>
+                      <th>Service Availed</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedHistory.map((item) => (
+                      <tr key={item.id}>
+                        <td>
+                          <strong>{formatDateDisplay(item.booking_date)}</strong>
+                          <span className="history-time">{formatTimeDisplay(item.booking_timeslot)}</span>
+                        </td>
+                        <td>{item.business_name}</td>
+                        <td>{item.services.length > 0 ? item.services.join(", ") : "N/A"}</td>
+                        <td>
+                          <span className="history-status">{formatStatusLabel(item.booking_status)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* EDIT MODAL */}
       {editingPet && (

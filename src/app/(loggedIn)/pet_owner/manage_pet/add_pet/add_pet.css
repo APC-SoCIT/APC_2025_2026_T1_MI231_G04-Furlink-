@@ -533,3 +533,83 @@
   color: #64748b;
   padding: 32px 0;
 }
+
+/* Custom Popup / Modal Styles */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.popup-card {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: scaleUp 0.2s ease-in-out;
+}
+
+.popup-icon {
+  font-size: 3rem;
+  color: #10b981; /* Success Green */
+  margin-bottom: 15px;
+}
+
+.error-icon {
+  color: #ef4444; /* Error Red */
+}
+
+.popup-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+
+.popup-message {
+  font-size: 1rem;
+  color: #4b5563;
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.popup-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.popup-btn:hover {
+  background-color: #2563eb;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
