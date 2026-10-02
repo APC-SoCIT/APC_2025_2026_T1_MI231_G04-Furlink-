@@ -77,6 +77,9 @@ export default function ManageAccountPage() {
   const [blockerActionType, setBlockerActionType] = useState<"MANAGE_BOOKING" | "SUMMARY_DASHBOARD" | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -324,6 +327,44 @@ export default function ManageAccountPage() {
     }
   };
 
+  // Only pet_owner / service_provider can upgrade to both_sp_po
+  const canAddRole = formData.role === "pet_owner" || formData.role === "service_provider";
+  const roleToAddLabel = formData.role === "pet_owner" ? "Service Provider" : "Pet Owner";
+
+  const handleConfirmAddRole = async () => {
+    setIsUpdatingRole(true);
+    setGeneralError(null);
+    setSuccessMessage(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No active session");
+
+      // Restrict to the two upgradeable roles and ask for the row back,
+      // so a silently blocked update (e.g. RLS) is detected.
+      const { data: updated, error } = await supabase
+        .from("profiles")
+        .update({ role: "both_sp_po" })
+        .eq("id", user.id)
+        .in("role", ["pet_owner", "service_provider"])
+        .select("role");
+
+      if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error("Your role could not be updated. Please try again.");
+      }
+
+      setShowRoleModal(false);
+      setSuccessMessage(`The ${roleToAddLabel} role was successfully added to your account!`);
+      await fetchUserData();
+    } catch (err: any) {
+      setShowRoleModal(false);
+      setGeneralError(err.message || "Failed to update your role.");
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  };
+
   const filteredWarnings = warnings.filter((w) => severityFilter === "all" || w.severity === severityFilter).sort((a, b) => {
     const timeA = new Date(a.created_at).getTime();
     const timeB = new Date(b.created_at).getTime();
@@ -416,6 +457,19 @@ export default function ManageAccountPage() {
                       <span style={{ fontSize: "13px", color: "#555" }}>
                         Onboarding Application Status: <strong style={{ textTransform: "capitalize" }}>{formatOnboardingStatus(spStatus)}</strong>
                       </span>
+                      {canAddRole && (
+                        <button
+                          className="save-btn"
+                          style={{ marginTop: "6px" }}
+                          onClick={() => {
+                            setGeneralError(null);
+                            setSuccessMessage(null);
+                            setShowRoleModal(true);
+                          }}
+                        >
+                          {formData.role === "pet_owner" ? "Become a Service Provider" : "Become a Pet Owner"}
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -554,6 +608,26 @@ export default function ManageAccountPage() {
               <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
                 <button className="save-btn" onClick={executeUpdate}>Yes, Update</button>
                 <button className="cancel-btn" onClick={() => setShowConfirmation(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showRoleModal && (
+          <div className="confirmation-overlay">
+            <div className="confirmation-dialog">
+              <h3>Confirm Role Change</h3>
+              <p>
+                Are you sure you want to add the <strong>{roleToAddLabel}</strong> role to your account?
+                This will update your account to both Service Provider and Pet Owner.
+              </p>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+                <button className="save-btn" onClick={handleConfirmAddRole} disabled={isUpdatingRole}>
+                  {isUpdatingRole ? "Updating..." : "Yes, Confirm"}
+                </button>
+                <button className="cancel-btn" onClick={() => setShowRoleModal(false)} disabled={isUpdatingRole}>
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
