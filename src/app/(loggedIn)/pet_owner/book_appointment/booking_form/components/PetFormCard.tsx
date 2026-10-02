@@ -12,8 +12,15 @@ import {
   FaFileUpload,
   FaFileAlt,
 } from 'react-icons/fa';
-import { PetFormData, RegisteredPet, ServiceOption, BEHAVIOR_OPTIONS } from '../types';
+import { PetFormData, PetFormErrors, RegisteredPet, ServiceOption, BEHAVIOR_OPTIONS } from '../types';
 import { AIHaircutPreview } from './AIHaircutPreview';
+
+// Inline validation message shown under a field
+const FieldError: React.FC<{ msg?: string | null }> = ({ msg }) =>
+  msg ? <div className="field-error-text">{msg}</div> : null;
+
+// Adds the red "invalid" border to a control when it has an error
+const errCls = (msg?: string | null) => (msg ? ' has-error' : '');
 
 interface PetFormCardProps {
   pet: PetFormData;
@@ -21,6 +28,8 @@ interface PetFormCardProps {
   isLast: boolean;
   totalPets: number;
   userRegisteredPets: RegisteredPet[];
+  // Registered pets already used by the other pet forms (disabled in autofill)
+  takenRegisteredPetIds: string[];
   availableServices: ServiceOption[];
   loadingServices: boolean;
   dogBreeds: string[];
@@ -40,6 +49,10 @@ interface PetFormCardProps {
   onGenerateAiPreview: (petId: string) => void;
   onConfirmAiPreview: (petId: string) => void;
   onEditConfirmedAiPreview: (petId: string) => void;
+  // --- Validation ---
+  errors: PetFormErrors;
+  // Highest weight (kg) the provider accepts for this pet; null if unknown
+  maxWeight: number | null;
 }
 
 export const PetFormCard: React.FC<PetFormCardProps> = ({
@@ -48,6 +61,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
   isLast,
   totalPets,
   userRegisteredPets,
+  takenRegisteredPetIds,
   availableServices,
   loadingServices,
   dogBreeds,
@@ -66,6 +80,8 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
   onGenerateAiPreview,
   onConfirmAiPreview,
   onEditConfirmedAiPreview,
+  errors,
+  maxWeight,
 }) => {
   const currentBreedList = pet.petType === 'Dog' ? dogBreeds : catBreeds;
   const petFormTotal = pet.selectedServices.reduce((sum, item) => sum + item.price, 0);
@@ -77,7 +93,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
   };
 
   return (
-    <div className="pet-form-card">
+    <div className="pet-form-card" id={`pet-card-${pet.id}`}>
       <div className="pet-card-header">
         <div className="pet-badge-tag">Pet #{index + 1}</div>
         <div className="pet-header-actions">
@@ -108,8 +124,13 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
           >
             <option value="">-- Choose a Registered Pet --</option>
             {userRegisteredPets.map((regPet) => (
-              <option key={regPet.id} value={regPet.id}>
+              <option
+                key={regPet.id}
+                value={regPet.id}
+                disabled={takenRegisteredPetIds.includes(regPet.id)}
+              >
                 {regPet.pet_name} ({regPet.pet_type} - {regPet.pet_breed})
+                {takenRegisteredPetIds.includes(regPet.id) ? ' - already selected' : ''}
               </option>
             ))}
           </select>
@@ -126,7 +147,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
             </label>
             <div className="input-with-action">
               <select
-                className="form-control"
+                className={`form-control${errCls(errors.services?.[sIdx])}`}
                 value={svcItem.serviceId}
                 onChange={(e) => onServiceChange(pet.id, sIdx, e.target.value)}
                 disabled={loadingServices}
@@ -149,6 +170,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
                 </button>
               )}
             </div>
+            <FieldError msg={errors.services?.[sIdx]} />
           </div>
         ))}
         {pet.serviceError && (
@@ -166,7 +188,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
           <div className="form-group">
             <label className="field-label">Pet Type *</label>
             <select
-              className="form-control"
+              className={`form-control${errCls(errors.petType)}`}
               value={pet.petType}
               onChange={(e) => {
                 const newType = e.target.value as 'Dog' | 'Cat';
@@ -177,16 +199,18 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
               <option value="Dog">Dog</option>
               <option value="Cat">Cat</option>
             </select>
+            <FieldError msg={errors.petType} />
           </div>
           <div className="form-group">
             <label className="field-label">Pet's Name *</label>
             <input
               type="text"
-              className="form-control"
+              className={`form-control${errCls(errors.petName)}`}
               placeholder="Pet Name"
               value={pet.petName}
               onChange={(e) => onUpdateField(pet.id, 'petName', e.target.value)}
             />
+            <FieldError msg={errors.petName} />
           </div>
         </div>
 
@@ -194,7 +218,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
           <div className="form-group">
             <label className="field-label">Breed *</label>
             <select
-              className="form-control"
+              className={`form-control${errCls(errors.breed)}`}
               value={pet.breed}
               onChange={(e) => onUpdateField(pet.id, 'breed', e.target.value)}
               disabled={loadingBreeds}
@@ -205,17 +229,19 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
               ))}
               <option value="Mixed Breed / Other">Mixed Breed / Other</option>
             </select>
+            <FieldError msg={errors.breed} />
           </div>
           <div className="form-group">
             <label className="field-label">Gender *</label>
             <select
-              className="form-control"
+              className={`form-control${errCls(errors.gender)}`}
               value={pet.gender}
               onChange={(e) => onUpdateField(pet.id, 'gender', e.target.value as 'Male' | 'Female')}
             >
               <option value="Male">Male</option>
               <option value="Female">Female</option>
             </select>
+            <FieldError msg={errors.gender} />
           </div>
         </div>
 
@@ -224,21 +250,28 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
             <label className="field-label">Date of Birth *</label>
             <input
               type="date"
-              className="form-control"
+              className={`form-control${errCls(errors.dob)}`}
+              max={new Date().toISOString().split('T')[0]}
               value={pet.dob}
               onChange={(e) => onUpdateField(pet.id, 'dob', e.target.value)}
             />
+            <FieldError msg={errors.dob} />
           </div>
           <div className="form-group">
-            <label className="field-label">Weight (kg) *</label>
+            <label className="field-label">
+              Weight (kg) *{maxWeight !== null && <span className="field-hint"> (max {maxWeight} kg)</span>}
+            </label>
             <input
               type="number"
               step="0.1"
-              className="form-control"
+              min="0"
+              max={maxWeight ?? undefined}
+              className={`form-control${errCls(errors.weight)}`}
               placeholder="0.0"
               value={pet.weight}
               onChange={(e) => onUpdateField(pet.id, 'weight', e.target.value)}
             />
+            <FieldError msg={errors.weight} />
           </div>
         </div>
 
@@ -261,6 +294,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
               </label>
             ))}
           </div>
+          <FieldError msg={errors.behaviors} />
         </div>
 
         {/* Medical Records */}
@@ -293,7 +327,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
                 )}
               </div>
             ) : (
-              <label className="upload-dropzone">
+              <label className={`upload-dropzone${errCls(errors.vaccine)}`}>
                 <FaFileUpload className="upload-icon" />
                 <span>Vaccine Record *</span>
                 <input
@@ -355,6 +389,7 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
               </label>
             )}
           </div>
+          <FieldError msg={errors.vaccine} />
         </div>
 
         {/* Specifications */}
