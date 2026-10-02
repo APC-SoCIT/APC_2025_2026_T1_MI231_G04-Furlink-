@@ -10,11 +10,17 @@ type FacilityImage = {
   business_facility_images: string;
 };
 
+type BookingRating = {
+  booking_overall_rating: number | null;
+  booking_staff_rating: number | null;
+};
+
 type ServiceProvider = {
   id: string;
   business_name: string;
   business_city: string;
   sp_img_facilities?: FacilityImage[];
+  booking_info?: BookingRating[];
 };
 
 export default async function PetOwnerPage() {
@@ -29,7 +35,7 @@ export default async function PetOwnerPage() {
     redirect("/login");
   }
 
-  // Fetch approved service providers with their facility images
+  // Fetch approved service providers with their facility images and booking ratings
   const { data: providers, error } = await supabase
     .from("sp_general_info")
     .select(`
@@ -38,6 +44,10 @@ export default async function PetOwnerPage() {
       business_city,
       sp_img_facilities (
         business_facility_images
+      ),
+      booking_info (
+        booking_overall_rating,
+        booking_staff_rating
       )
     `)
     .eq("registration_status", "approved");
@@ -75,6 +85,25 @@ export default async function PetOwnerPage() {
                   ? shop.sp_img_facilities[0].business_facility_images
                   : "/placeholder-salon.png";
 
+              // Compute Average Rating from booking_overall_rating and booking_staff_rating
+              let totalScore = 0;
+              let ratingCount = 0;
+
+              if (shop.booking_info && shop.booking_info.length > 0) {
+                shop.booking_info.forEach((booking) => {
+                  if (booking.booking_overall_rating !== null && booking.booking_overall_rating !== undefined) {
+                    totalScore += booking.booking_overall_rating;
+                    ratingCount++;
+                  }
+                  if (booking.booking_staff_rating !== null && booking.booking_staff_rating !== undefined) {
+                    totalScore += booking.booking_staff_rating;
+                    ratingCount++;
+                  }
+                });
+              }
+
+              const averageRating = ratingCount > 0 ? (totalScore / ratingCount).toFixed(1) : "0.0";
+
               return (
                 <Link
                   key={shop.id}
@@ -99,9 +128,9 @@ export default async function PetOwnerPage() {
                       {/* Price Range Placeholder */}
                       <p className="shop-price">₱250.00 - ₱1000.00</p>
 
-                      {/* Rating Placeholder Badge */}
+                      {/* Dynamic Rating Badge */}
                       <div className="rating-badge">
-                        <span className="rating-score">0.0</span>
+                        <span className="rating-score">★ {averageRating}</span>
                       </div>
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Footer from "@/components/Footer";
 import { FaMapMarkerAlt, FaClock, FaExternalLinkAlt } from "react-icons/fa";
 import BookingWidget from "./booking_widget";
+import ServiceLocationMap from "./ServiceLocationMap"; // Import the client wrapper
 import "./book_appointment.css";
 
 type PageProps = {
@@ -154,10 +155,10 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               )}
             </div>
 
-            {/* Operating Hours Section */}
+            {/* Operating Hours & Location Section */}
             <div id="location" className="section-block">
               <h2 className="section-title">Operating Hours</h2>
-              <div className="hours-grid">
+              <div className="hours-grid" style={{ marginBottom: '20px' }}>
                 {ALL_DAYS.map((day) => {
                   const dayData = hoursMap.get(day);
                   return (
@@ -174,6 +175,20 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
                   );
                 })}
               </div>
+
+              {/* Interactive Map Component Render */}
+              {spInfo.business_latitude && spInfo.business_longitude ? (
+                <ServiceLocationMap
+                  businessName={spInfo.business_name}
+                  businessCity={spInfo.business_city}
+                  latitude={spInfo.business_latitude}
+                  longitude={spInfo.business_longitude}
+                />
+              ) : (
+                <p style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
+                  Map coordinates are not provided for this business yet.
+                </p>
+              )}
             </div>
 
             {/* Service Prices Section */}

@@ -7,6 +7,7 @@ import {
   FaMagic,
   FaExclamationCircle,
   FaStar,
+  FaStore,
 } from 'react-icons/fa';
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
@@ -19,7 +20,6 @@ interface BookingDetailsModalProps {
   activeTab: BookingTab;
   onClose: () => void;
   onPayNow: (bookingId: string) => void;
-  onRequestRefund: (bookingId: string) => void;
   onReschedule: () => void;
   onCancelBooking: () => void;
 }
@@ -29,7 +29,6 @@ export default function BookingDetailsModal({
   activeTab,
   onClose,
   onPayNow,
-  onRequestRefund,
   onReschedule,
   onCancelBooking,
 }: BookingDetailsModalProps) {
@@ -56,6 +55,15 @@ export default function BookingDetailsModal({
                 Status: <span className="status-highlight">{formatStatusLabel(selectedBooking.booking_status)}</span>
               </div>
             </div>
+          </div>
+
+          {/* Service provider the booking was made with (always shown) */}
+          <div className="details-provider-row">
+            <FaStore className="schedule-banner-icon" />
+            <span>
+              Service Provider:{' '}
+              <strong>{selectedBooking.sp_general_info?.business_name || 'Unknown provider'}</strong>
+            </span>
           </div>
 
           {selectedBooking.booking_rejection_reason && (
@@ -235,6 +243,18 @@ export default function BookingDetailsModal({
                 ₱{Number(selectedBooking.booking_total_amount || 0).toFixed(2)}
               </span>
             </div>
+
+            {/* Refund tab: show what is being / was returned (booking_info.refund_amount) */}
+            {activeTab === 'refund' && (
+              <div className="financial-row refund-row">
+                <span>Refund Amount:</span>
+                <span className="amount-bold">
+                  {selectedBooking.refund_amount != null
+                    ? `₱${Number(selectedBooking.refund_amount).toFixed(2)}`
+                    : 'Pending'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -245,15 +265,6 @@ export default function BookingDetailsModal({
               onClick={() => onPayNow(selectedBooking.id)}
             >
               Pay Now
-            </button>
-          )}
-
-          {activeTab === 'refund' && (
-            <button
-              className="btn-primary-action"
-              onClick={() => onRequestRefund(selectedBooking.id)}
-            >
-              Request refund
             </button>
           )}
 

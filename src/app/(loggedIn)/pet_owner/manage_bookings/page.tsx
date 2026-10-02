@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Footer from '@/components/Footer';
 import {
@@ -10,18 +10,18 @@ import {
   FaTimesCircle,
   FaUndo,
   FaCheckCircle,
-  FaCalendarAlt,
-  FaHistory,
   FaCalendarTimes,
 } from 'react-icons/fa';
 import './manage_bookings.css';
 
-import { BookingTab, BookingRecord } from './types/booking';
+import { BookingTab, BookingRecord, SortOrder, StatusFilter } from './types/booking';
 import {
   formatDateDisplay,
   formatTimeDisplay,
   formatStatusLabel,
   getStatusCssClass,
+  getBookingStartDate,
+  sortByBookingStart,
 } from './utils/bookingFormatters';
 import BookingDetailsModal from './modals/BookingDetailsModal';
 import RescheduleModal from './modals/RescheduleModal';
@@ -30,12 +30,19 @@ import PaymentFailedModal from './modals/PaymentFailedModal';
 import SubmitRatingModal from './modals/SubmitRatingModal';
 import CancelBookingModal from './modals/CancelBookingModal';
 
+// Unpaid ('to pay') bookings are auto-cancelled once less than this long remains before the booking start
+const UNPAID_AUTO_CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export default function ManageBookingsPage() {
   const supabase = createClientComponentClient();
 
   const [activeTab, setActiveTab] = useState<BookingTab>('awaiting_approval');
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // List filters (apply to the active category)
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Modal states
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
@@ -129,31 +136,33 @@ export default function ManageBookingsPage() {
         return;
       }
 
-      const now = new Date();
-
-      // Rule: Unpaid 'to pay' past scheduled booking date -> Move to 'cancelled'
-      // Note: Removed the 24-hr frontend auto-refund logic here to allow the backend Cron Job to handle it securely.
+      // Rule: Unpaid 'to pay' bookings that are less than 24 hours away (or already past) -> Move to 'cancelled'
+      // Note: The 24-hr refund logic for PAID bookings is still handled by the backend Cron Job.
       const { data: unpaidCandidates } = await supabase
         .from('booking_info')
-        .select('id, booking_date, booking_status')
+        .select('id, booking_date, booking_timeslot')
         .eq('profiles_id', user.id)
         .eq('booking_status', 'to pay');
 
-      if (unpaidCandidates && unpaidCandidates.length > 0) {
-        const todayDateStr = now.toISOString().split('T')[0];
-        for (const b of unpaidCandidates) {
-          if (b.booking_date < todayDateStr) {
-            await supabase
-              .from('booking_info')
-              .update({
-                booking_status: 'cancelled',
-                booking_rejection_reason:
-                  'System Auto-Cancelled: Payment deadline passed before scheduled booking date',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', b.id);
-          }
-        }
+      const overdueIds = (unpaidCandidates || [])
+        .filter(
+          (b) =>
+            getBookingStartDate(b.booking_date, b.booking_timeslot).getTime() - Date.now() <
+            UNPAID_AUTO_CANCEL_WINDOW_MS
+        )
+        .map((b) => b.id);
+
+      if (overdueIds.length > 0) {
+        await supabase
+          .from('booking_info')
+          .update({
+            booking_status: 'cancelled',
+            cancelled_by: 'system',
+            booking_rejection_reason:
+              'System Auto-Cancelled: Payment was not completed at least 24 hours before the scheduled booking',
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', overdueIds);
       }
 
       // Fetch bookings corresponding to active tab
@@ -172,6 +181,10 @@ export default function ManageBookingsPage() {
           booking_overall_rating,
           booking_staff_rating,
           booking_total_amount,
+          refund_amount,
+          sp_general_info (
+            business_name
+          ),
           booking_pet_info (
             id,
             booking_pet_name,
@@ -193,8 +206,7 @@ export default function ManageBookingsPage() {
           )
         `)
         .eq('profiles_id', user.id)
-        .in('booking_status', targetStatuses)
-        .order('booking_date', { ascending: true });
+        .in('booking_status', targetStatuses);
 
       if (!error && data) {
         setBookings(data as unknown as BookingRecord[]);
@@ -251,6 +263,24 @@ export default function ManageBookingsPage() {
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
+
+  // Each category has its own statuses, so the status filter starts over when switching tabs
+  useEffect(() => {
+    setStatusFilter('all');
+  }, [activeTab]);
+
+  // Statuses of the active category (the status filter is only useful when there is more than one)
+  const tabStatuses = getStatusesForTab(activeTab);
+
+  // Apply the status filter, then order by booking date/time
+  const visibleBookings = useMemo(
+    () =>
+      sortByBookingStart(
+        bookings.filter((b) => statusFilter === 'all' || b.booking_status === statusFilter),
+        sortOrder
+      ),
+    [bookings, statusFilter, sortOrder]
+  );
 
   const handleOpenDetails = (booking: BookingRecord) => {
     setSelectedBooking(booking);
@@ -410,10 +440,6 @@ export default function ManageBookingsPage() {
     }
   };
 
-  const handleRequestRefund = (bookingId: string) => {
-    alert(`Initiating refund request for booking ID: ${bookingId}`);
-  };
-
   const handleOpenCancelModal = () => {
     setShowDetailsModal(false);
     setShowCancelModal(true);
@@ -474,14 +500,6 @@ export default function ManageBookingsPage() {
             <h1 className="bookings-title">My Appointments</h1>
             <p className="bookings-subtitle">Manage your pet's grooming sessions</p>
           </div>
-          <div className="header-action-btns">
-            <button className="outline-header-btn">
-              <FaCalendarAlt className="btn-icon" /> View Calendar
-            </button>
-            <button className="outline-header-btn">
-              <FaHistory className="btn-icon" /> View History
-            </button>
-          </div>
         </div>
 
         {/* 6 Category Tabs Grid */}
@@ -535,6 +553,37 @@ export default function ManageBookingsPage() {
           </button>
         </div>
 
+        {/* Filters for the active category */}
+        <div className="bookings-filter-bar">
+          <label className="filter-field">
+            <span>Sort by date</span>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            >
+              <option value="asc">Ascending (oldest first)</option>
+              <option value="desc">Descending (newest first)</option>
+            </select>
+          </label>
+
+          {tabStatuses.length > 1 && (
+            <label className="filter-field">
+              <span>Booking status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All statuses</option>
+                {tabStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {formatStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+
         {/* Appointments Table Section */}
         <div className="appointments-table-card">
           <div className="table-header-row">
@@ -550,7 +599,7 @@ export default function ManageBookingsPage() {
             <div className="table-loading-box">
               <p>Loading appointments...</p>
             </div>
-          ) : bookings.length === 0 ? (
+          ) : visibleBookings.length === 0 ? (
             <div className="table-empty-box">
               <FaCalendarTimes className="empty-calendar-icon" />
               <h3 className="empty-title">No appointments found.</h3>
@@ -558,7 +607,7 @@ export default function ManageBookingsPage() {
             </div>
           ) : (
             <div className="table-body-rows">
-              {bookings.map((item) => {
+              {visibleBookings.map((item) => {
                 const petsCount = item.booking_pet_info?.length || 0;
                 const allServiceNames = Array.from(
                   new Set(
@@ -596,20 +645,22 @@ export default function ManageBookingsPage() {
                     </div>
 
                     <div className="col-cell col-action">
-                      {activeTab === 'completed' && !item.booking_overall_rating ? (
+                      {/* View Details is always available */}
+                      <button
+                        className="row-action-btn secondary"
+                        onClick={() => handleOpenDetails(item)}
+                      >
+                        View Details
+                      </button>
+
+                      {/* Only bookings still waiting for a rating can be rated; once rated, only View Details remains */}
+                      {item.booking_status === 'to_rate' && (
                         <button
                           className="row-action-btn"
                           style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}
                           onClick={() => handleOpenRatingModal(item)}
                         >
                           Rate Service
-                        </button>
-                      ) : (
-                        <button
-                          className="row-action-btn secondary"
-                          onClick={() => handleOpenDetails(item)}
-                        >
-                          View Details
                         </button>
                       )}
                     </div>
@@ -648,7 +699,6 @@ export default function ManageBookingsPage() {
           activeTab={activeTab}
           onClose={() => setShowDetailsModal(false)}
           onPayNow={handlePayNow}
-          onRequestRefund={handleRequestRefund}
           onReschedule={() => {
             setShowDetailsModal(false);
             setShowRescheduleModal(true);

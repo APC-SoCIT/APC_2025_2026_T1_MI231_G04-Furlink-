@@ -1,20 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Footer from '@/components/Footer';
-
-import {
-  RegisteredPet,
-  ServiceOption,
-  ServiceWeightOption,
-  SelectedServiceItem,
-  PetFormData,
-  REVERSE_BEHAVIOR_MAP,
-  BEHAVIOR_MAP,
-  DAYS_OF_WEEK,
-} from './types';
 
 import { HeaderBar } from './components/HeaderBar';
 import { InfoSummaryCard } from './components/InfoSummaryCard';
@@ -24,1074 +13,104 @@ import { SuccessModal } from './components/SuccessModal';
 import { FailedModal } from './components/FailedModal';
 import { PayLaterSuccessModal } from './components/PayLaterSuccessModal';
 import { CapacityModal } from './components/CapacityModal';
-import { getMaxAcceptedWeight, validatePet, hasErrors } from './validation';
+
+import { useFreshUser } from './hooks/useFreshUser';
+import { useBookingParams } from './hooks/useBookingParams';
+import { useActiveBookingId } from './hooks/useActiveBookingId';
+import { useBookingModals } from './hooks/useBookingModals';
+import { usePaymentCooldown } from './hooks/usePaymentCooldown';
+import { usePaymentRedirect } from './hooks/usePaymentRedirect';
+import { useSlotCapacity } from './hooks/useSlotCapacity';
+import { useServices } from './hooks/useServices';
+import { useRegisteredPets } from './hooks/useRegisteredPets';
+import { usePetBreeds } from './hooks/usePetBreeds';
+import { usePetForms } from './hooks/usePetForms';
+import { useAiHaircutPreview } from './hooks/useAiHaircutPreview';
+import { usePetValidation } from './hooks/usePetValidation';
+import { useBookingActions } from './hooks/useBookingActions';
+import { formatDateForSummary } from './utils/dateFormat';
+import { getMaxAcceptedWeight } from './validation';
 
 import './booking_form.css';
 
-const POLLINATIONS_EDIT_ENDPOINT = '/api/generate-haircut-preview';
-const AI_PREVIEW_DIMENSION = 768;
-
-async function resizeImageFile(file: File, maxDimension = 1600, quality = 0.85): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height * maxDimension) / width);
-          width = maxDimension;
-        } else {
-          width = Math.round((width * maxDimension) / height);
-          height = maxDimension;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          URL.revokeObjectURL(objectUrl);
-          if (!blob) {
-            reject(new Error('Failed to compress image'));
-            return;
-          }
-          const compressedFile = new File(
-            [blob],
-            file.name.replace(/\.[^.]+$/, '.jpg'),
-            { type: 'image/jpeg' },
-          );
-          resolve(compressedFile);
-        },
-        'image/jpeg',
-        quality,
-      );
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to load image for compression'));
-    };
-
-    img.src = objectUrl;
-  });
-}
-
-async function compressBlobUnderLimit(
-  blob: Blob,
-  maxBytes = 900 * 1024, // stay safely under the 1 MB bucket limit
-  maxDimension = 1024,
-): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  let scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      bitmap.close();
-      throw new Error('Could not get canvas context');
-    }
-    ctx.fillStyle = '#fff'; // avoid a black background from transparent PNGs
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bitmap, 0, 0, w, h);
-
-    for (const quality of [0.85, 0.75, 0.65, 0.5]) {
-      const out = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', quality),
-      );
-      if (out && out.size <= maxBytes) {
-        bitmap.close();
-        return out;
-      }
-    }
-    scale *= 0.8; // still too big: shrink the dimensions and retry
-  }
-
-  bitmap.close();
-  throw new Error('Could not compress the image under the size limit.');
-}
-
 function BookingFormContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const getFreshUser = useFreshUser(supabase);
 
-  // Returns the current user, refreshing the session first if the access token is
-  // expired or about to expire (e.g. after the page sat idle in a background tab).
-  const getFreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const msLeft = session?.expires_at ? session.expires_at * 1000 - Date.now() : 0;
+  // URL params + shared state
+  const {
+    spId,
+    dateStr,
+    timeSlot,
+    queryPetsCount,
+    statusParam,
+    bookingIdParam,
+    formattedDateDisplay,
+  } = useBookingParams();
+  const [activeBookingId, setActiveBookingId] = useActiveBookingId(bookingIdParam);
+  const modals = useBookingModals();
+  const cooldown = usePaymentCooldown();
 
-    if (session && msLeft > 60_000) return session.user;
-
-    const { data, error } = await supabase.auth.refreshSession();
-    if (error) {
-      console.error('Session refresh failed:', error.message);
-      return null;
-    }
-    return data.session?.user ?? null;
-  };
-
-  // Refresh an expired token as soon as the user returns to this tab
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession(); // triggers a refresh if the token has expired
-      }
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [supabase]);
-
-  const spId = searchParams.get('sp_id') || '';
-  const dateStr = searchParams.get('date') || '2026-08-20';
-  const timeSlot = searchParams.get('time') || '9:00 AM';
-  const queryPetsCount = parseInt(searchParams.get('pets') || '1', 10);
-  const statusParam = searchParams.get('status');
-  const bookingIdParam = searchParams.get('booking_id');
-
-  const [slotCapacity, setSlotCapacity] = useState<number>(queryPetsCount || 1);
-  const [showCapacityModal, setShowCapacityModal] = useState<boolean>(false);
-  const [userRegisteredPets, setUserRegisteredPets] = useState<RegisteredPet[]>([]);
-  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
-
-  const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
-  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
-  const [showFailedModal, setShowFailedModal] = useState<boolean>(false);
-  const [showPayLaterSuccessModal, setShowPayLaterSuccessModal] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
-
-  const [paymentAttempts, setPaymentAttempts] = useState<number>(0);
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<string>('');
-
-  const [availableServices, setAvailableServices] = useState<ServiceOption[]>([]);
-  const [serviceWeightOptions, setServiceWeightOptions] = useState<ServiceWeightOption[]>([]);
-  const [loadingServices, setLoadingServices] = useState<boolean>(false);
-
-  const [dogBreeds, setDogBreeds] = useState<string[]>([]);
-  const [catBreeds, setCatBreeds] = useState<string[]>([]);
-  const [loadingBreeds, setLoadingBreeds] = useState<boolean>(false);
-
-  // Errors are only shown after the first failed "Proceed to Summary" attempt
-  const [showValidation, setShowValidation] = useState<boolean>(false);
-
-  // Synchronize activeBookingId from URL search parameters if redirected back from PayMongo
-  useEffect(() => {
-    if (bookingIdParam && !activeBookingId) {
-      setActiveBookingId(bookingIdParam);
-    }
-  }, [bookingIdParam, activeBookingId]);
-
-  // Cooldown interval timer
-  useEffect(() => {
-    if (!cooldownUntil) return;
-    const interval = setInterval(() => {
-      const diff = cooldownUntil - Date.now();
-      if (diff <= 0) {
-        setCooldownUntil(null);
-        setPaymentAttempts(0);
-        setTimeRemaining('');
-        clearInterval(interval);
-      } else {
-        const minutes = Math.floor(diff / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-        setTimeRemaining(`${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [cooldownUntil]);
-
-  // Payment status redirect handlers & secure server-side verification syncing paymongo_session_id and paymongo_payment_id
-  useEffect(() => {
-    const handlePaymentSuccess = async () => {
-      if (statusParam === 'success') {
-        if (activeBookingId) {
-          try {
-            const verifyRes = await fetch(`/api/paymongo/verify?booking_id=${activeBookingId}`);
-            if (!verifyRes.ok) {
-              // Fallback simple database status update if verification API errors out
-              await supabase
-                .from('booking_info')
-                .update({ booking_status: 'pending_sp_response' })
-                .eq('id', activeBookingId);
-            }
-          } catch (err) {
-            console.error('Error during payment success synchronization:', err);
-          }
-        }
-        setShowSuccessModal(true);
-        setShowFailedModal(false);
-        setShowSummaryModal(false);
-      } else if (
-        statusParam === 'failed' || 
-        statusParam === 'cancelled' || 
-        statusParam === 'expired'
-      ) {
-        setShowFailedModal(true);
-        setShowSuccessModal(false);
-        setShowSummaryModal(false);
-      } else {
-        setShowFailedModal(false);
-      }
-    };
-    handlePaymentSuccess();
-  }, [statusParam, activeBookingId, supabase]);
-
-  const formattedDateDisplay = useMemo(() => {
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  }, [dateStr]);
-
-  const formatDateForSummary = (dateVal: string) => {
-    if (!dateVal) return 'N/A';
-    try {
-      return new Date(dateVal).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateVal;
-    }
-  };
-
-  // Fetch Operating Capacity
-  useEffect(() => {
-    if (!spId || !dateStr) return;
-    const fetchCapacity = async () => {
-      const selectedDay = DAYS_OF_WEEK[new Date(dateStr).getDay()];
-      const { data, error } = await supabase
-        .from('sp_operating_hours')
-        .select('slot_capacity')
-        .eq('sp_id', spId)
-        .eq('day_of_week', selectedDay)
-        .single();
-
-      if (!error && data?.slot_capacity) {
-        setSlotCapacity(data.slot_capacity);
-      }
-    };
-    fetchCapacity();
-  }, [spId, dateStr, supabase]);
-
-  // Fetch Available Services & Options
-  useEffect(() => {
-    if (!spId) return;
-    const fetchServicesAndOptions = async () => {
-      setLoadingServices(true);
-      const { data: svcData, error: svcErr } = await supabase
-        .from('sp_services')
-        .select('id, sp_id, service_name, service_type, service_status')
-        .eq('sp_id', spId)
-        .eq('service_status', 'active');
-
-      if (!svcErr && svcData) {
-        setAvailableServices(svcData as ServiceOption[]);
-        const serviceIds = svcData.map((s) => s.id);
-        if (serviceIds.length > 0) {
-          const { data: optData } = await supabase
-            .from('sp_service_options')
-            .select('*')
-            .in('sp_services_id', serviceIds)
-            .eq('option_status', 'active');
-
-          if (optData) {
-            setServiceWeightOptions(optData as ServiceWeightOption[]);
-          }
-        }
-      }
-      setLoadingServices(false);
-    };
-    fetchServicesAndOptions();
-  }, [spId, supabase]);
-
-  // Fetch Registered Pets
-  useEffect(() => {
-    const fetchRegisteredPets = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('po_registered_pet')
-        .select('*')
-        .eq('profiles_id', user.id);
-
-      if (!error && data) {
-        setUserRegisteredPets(data as RegisteredPet[]);
-      }
-    };
-    fetchRegisteredPets();
-  }, [supabase]);
-
-  // Fetch External Breeds
-  useEffect(() => {
-    const fetchBreeds = async () => {
-      setLoadingBreeds(true);
-      try {
-        const dogRes = await fetch('https://dog.ceo/api/breeds/list/all');
-        const dogData = await dogRes.json();
-        if (dogData.status === 'success') {
-          const breedList: string[] = ['Aspin'];
-          Object.keys(dogData.message).forEach((mainBreed) => {
-            const subBreeds: string[] = dogData.message[mainBreed];
-            if (subBreeds.length > 0) {
-              subBreeds.forEach((sub) => {
-                const formatted = `${sub} ${mainBreed}`
-                  .split(' ')
-                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                  .join(' ');
-                breedList.push(formatted);
-              });
-            } else {
-              breedList.push(mainBreed.charAt(0).toUpperCase() + mainBreed.slice(1));
-            }
-          });
-          setDogBreeds(breedList.sort());
-        }
-
-        const catRes = await fetch('https://api.thecatapi.com/v1/breeds');
-        const catData = await catRes.json();
-        if (Array.isArray(catData)) {
-          setCatBreeds(['Puspin', ...catData.map((b: { name: string }) => b.name)].sort());
-        }
-      } catch (err) {
-        console.error('Failed to fetch breeds', err);
-      } finally {
-        setLoadingBreeds(false);
-      }
-    };
-    fetchBreeds();
-  }, []);
-
-  const createDefaultPet = (index: number): PetFormData => ({
-    id: `pet-${Date.now()}-${index}-${Math.random()}`,
-    selectedRegisteredPetId: '',
-    selectedServices: [{ serviceId: '', matchedOptionId: null, price: 0 }],
-    serviceError: null,
-    petType: 'Dog',
-    petName: '',
-    breed: '',
-    gender: 'Male',
-    dob: '',
-    weight: '',
-    calculatedSize: 'AUTO-CALC',
-    behaviors: [],
-    vaccineFile: null,
-    vaccineUrl: null,
-    illnessFile: null,
-    illnessUrl: null,
-    groomingSpecs: '',
-    desiredStyle: 'Lion Cut',
-    emergencyConsent: false,
-    // AI Haircut Preview defaults
-    aiSourcePhotoFile: null,
-    aiSourcePhotoPreview: null,
-    aiUploadedSourceUrl: null,
-    aiPreviewBlob: null,
-    aiPreviewImageUrl: null,
-    aiPreviewStatus: 'idle',
-    aiPreviewError: null,
-    aiHaircutUrl: null,
-    aiPreviewCache: {},
+  usePaymentRedirect({
+    supabase,
+    statusParam,
+    activeBookingId,
+    setShowSuccessModal: modals.setShowSuccessModal,
+    setShowFailedModal: modals.setShowFailedModal,
+    setShowSummaryModal: modals.setShowSummaryModal,
   });
 
-  const [petForms, setPetForms] = useState<PetFormData[]>(() => {
-    const initialCount = Math.max(1, queryPetsCount);
-    return Array.from({ length: initialCount }, (_, i) => createDefaultPet(i + 1));
+  // Remote data
+  const slotCapacity = useSlotCapacity(supabase, spId, dateStr, queryPetsCount);
+  const { availableServices, serviceWeightOptions, loadingServices } = useServices(supabase, spId);
+  const userRegisteredPets = useRegisteredPets(supabase);
+  const { dogBreeds, catBreeds, loadingBreeds } = usePetBreeds();
+
+  // Form state
+  const petFormsApi = usePetForms({
+    initialCount: queryPetsCount,
+    slotCapacity,
+    serviceWeightOptions,
+    userRegisteredPets,
+    onCapacityReached: () => modals.setShowCapacityModal(true),
+  });
+  const { petForms, grandTotal } = petFormsApi;
+
+  const { petErrors, showValidation, handleProceedToSummary } = usePetValidation({
+    petForms,
+    serviceWeightOptions,
+    availableServices,
+    onValid: () => modals.setShowSummaryModal(true),
   });
 
-  const calculateSizeAndPrice = (
-    weightStr: string,
-    pType: 'Dog' | 'Cat',
-    selectedSvcs: SelectedServiceItem[]
-  ) => {
-    const w = parseFloat(weightStr);
-    const targetPetType = pType.toLowerCase();
+  const aiPreview = useAiHaircutPreview({
+    supabase,
+    petForms,
+    patchPetForm: petFormsApi.patchPetForm,
+    getFreshUser,
+  });
 
-    if (isNaN(w) || w < 0) {
-      return {
-        sizeLabel: 'AUTO-CALC',
-        updatedServices: selectedSvcs.map((s) => ({ ...s, price: 0, matchedOptionId: null })),
-      };
-    }
-
-    let detectedSize = 'AUTO-CALC';
-    const updatedServices = selectedSvcs.map((item) => {
-      if (!item.serviceId) return { ...item, price: 0, matchedOptionId: null };
-
-      const matched = serviceWeightOptions.find((opt) => {
-        if (opt.sp_services_id !== item.serviceId) return false;
-        const isTypeMatch = opt.pet_type === 'both_dog_cat' || opt.pet_type === targetPetType;
-        const isWeightMatch = w >= Number(opt.pet_min_weight_range) && w <= Number(opt.pet_max_weight_range);
-        return isTypeMatch && isWeightMatch;
-      });
-
-      if (matched) {
-        detectedSize = matched.pet_size;
-        return { ...item, matchedOptionId: matched.id, price: Number(matched.service_price) };
-      }
-      return { ...item, matchedOptionId: null, price: 0 };
+  const { isSubmitting, isSavingPayLater, handleConfirmBooking, handlePayLater } =
+    useBookingActions({
+      supabase,
+      getFreshUser,
+      spId,
+      dateStr,
+      timeSlot,
+      formattedDateDisplay,
+      petForms,
+      availableServices,
+      grandTotal,
+      activeBookingId,
+      setActiveBookingId,
+      cooldownUntil: cooldown.cooldownUntil,
+      timeRemaining: cooldown.timeRemaining,
+      registerAttempt: cooldown.registerAttempt,
+      setShowFailedModal: modals.setShowFailedModal,
+      setShowSummaryModal: modals.setShowSummaryModal,
+      setShowPayLaterSuccessModal: modals.setShowPayLaterSuccessModal,
     });
-
-    return { sizeLabel: detectedSize, updatedServices };
-  };
-
-  // Live validation result per pet form (recomputed whenever a form or the provider's options change)
-  const petErrors = useMemo(
-    () =>
-      Object.fromEntries(
-        petForms.map((pet) => [pet.id, validatePet(pet, serviceWeightOptions, availableServices)])
-      ),
-    [petForms, serviceWeightOptions, availableServices]
-  );
-
-  // Only open the summary when every pet form is valid; otherwise reveal the
-  // errors and scroll to the first pet card that needs attention.
-  const handleProceedToSummary = () => {
-    const firstInvalid = petForms.find((pet) => hasErrors(petErrors[pet.id]));
-    if (firstInvalid) {
-      setShowValidation(true);
-      document
-        .getElementById(`pet-card-${firstInvalid.id}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    setShowValidation(false);
-    setShowSummaryModal(true);
-  };
-
-  const handleAddPet = () => {
-    if (petForms.length >= slotCapacity) {
-      setShowCapacityModal(true);
-      return;
-    }
-    setPetForms((prev) => [...prev, createDefaultPet(prev.length + 1)]);
-  };
-
-  const handleDeletePet = (id: string) => {
-    if (petForms.length <= 1) return;
-    setPetForms((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const updatePetField = (id: string, field: keyof PetFormData, value: any) => {
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== id) return pet;
-        const updatedPet = { ...pet, [field]: value };
-
-        if (field === 'weight' || field === 'petType') {
-          const { sizeLabel, updatedServices } = calculateSizeAndPrice(
-            field === 'weight' ? value : pet.weight,
-            field === 'petType' ? value : pet.petType,
-            pet.selectedServices
-          );
-          updatedPet.calculatedSize = sizeLabel;
-          updatedPet.selectedServices = updatedServices;
-        }
-
-        return updatedPet;
-      })
-    );
-  };
-
-  const handleServiceChange = (petId: string, index: number, serviceId: string) => {
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== petId) return pet;
-        const currentServices = [...pet.selectedServices];
-        currentServices[index] = { serviceId, matchedOptionId: null, price: 0 };
-
-        const { sizeLabel, updatedServices } = calculateSizeAndPrice(
-          pet.weight,
-          pet.petType,
-          currentServices
-        );
-
-        return {
-          ...pet,
-          selectedServices: updatedServices,
-          calculatedSize: sizeLabel,
-          serviceError: serviceId ? null : pet.serviceError,
-        };
-      })
-    );
-  };
-
-  const handleAddServiceField = (petId: string) => {
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== petId) return pet;
-        const lastService = pet.selectedServices[pet.selectedServices.length - 1];
-        if (!lastService?.serviceId) {
-          return { ...pet, serviceError: 'Please select a service before adding another field.' };
-        }
-        return {
-          ...pet,
-          selectedServices: [...pet.selectedServices, { serviceId: '', matchedOptionId: null, price: 0 }],
-          serviceError: null,
-        };
-      })
-    );
-  };
-
-  const handleRemoveServiceField = (petId: string, index: number) => {
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== petId || pet.selectedServices.length <= 1) return pet;
-        const updatedServices = pet.selectedServices.filter((_, i) => i !== index);
-        const { sizeLabel, updatedServices: recalculated } = calculateSizeAndPrice(
-          pet.weight,
-          pet.petType,
-          updatedServices
-        );
-
-        return {
-          ...pet,
-          selectedServices: recalculated,
-          calculatedSize: sizeLabel,
-          serviceError: null,
-        };
-      })
-    );
-  };
-
-  // Registered pets already picked in the other pet forms (a pet can only be used once per booking)
-  const getTakenRegisteredPetIds = (formId: string) =>
-    petForms
-      .filter((p) => p.id !== formId && p.selectedRegisteredPetId)
-      .map((p) => p.selectedRegisteredPetId);
-
-  const handleAutofillPet = (formId: string, registeredPetId: string) => {
-    if (registeredPetId && getTakenRegisteredPetIds(formId).includes(registeredPetId)) return;
-
-    const selectedPet = userRegisteredPets.find((p) => p.id === registeredPetId);
-    if (!selectedPet) {
-      updatePetField(formId, 'selectedRegisteredPetId', '');
-      return;
-    }
-
-    const mappedBehaviors = (selectedPet.pet_behaviors || [])
-      .map((b) => BEHAVIOR_MAP[b.toLowerCase()])
-      .filter(Boolean);
-
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== formId) return pet;
-        const pType = selectedPet.pet_type.toLowerCase() === 'cat' ? 'Cat' : 'Dog';
-        const weightVal = selectedPet.pet_weight.toString();
-        const { sizeLabel, updatedServices } = calculateSizeAndPrice(weightVal, pType, pet.selectedServices);
-
-        return {
-          ...pet,
-          selectedRegisteredPetId: registeredPetId,
-          petType: pType,
-          petName: selectedPet.pet_name,
-          breed: selectedPet.pet_breed,
-          gender: selectedPet.pet_gender.toLowerCase() === 'female' ? 'Female' : 'Male',
-          dob: selectedPet.pet_date_of_birth,
-          weight: weightVal,
-          calculatedSize: sizeLabel,
-          selectedServices: updatedServices,
-          behaviors: mappedBehaviors,
-          vaccineFile: null,
-          vaccineUrl: selectedPet.pet_vaccine_url || null,
-          illnessFile: null,
-          illnessUrl: selectedPet.pet_illness_proof_url || null,
-          groomingSpecs: selectedPet.pet_grooming_notes || '',
-          emergencyConsent: selectedPet.pet_emergency_consent || false,
-        };
-      })
-    );
-  };
-
-  const toggleBehavior = (id: string, behavior: string) => {
-    setPetForms((prev) =>
-      prev.map((pet) => {
-        if (pet.id !== id) return pet;
-        const exists = pet.behaviors.includes(behavior);
-        const updated = exists ? pet.behaviors.filter((b) => b !== behavior) : [...pet.behaviors, behavior];
-        return { ...pet, behaviors: updated };
-      })
-    );
-  };
-
-  const grandTotal = useMemo(() => {
-    return petForms.reduce((acc, pet) => {
-      const petTotal = pet.selectedServices.reduce((sAcc, sItem) => sAcc + sItem.price, 0);
-      return acc + petTotal;
-    }, 0);
-  }, [petForms]);
-
-  const uploadFileToBucket = async (file: File, path: string): Promise<string> => {
-    const { data, error } = await supabase.storage.from('ai-haircut-previews').upload(path, file);
-    if (error) {
-      console.error('File upload error:', error.message, error);
-      throw new Error(`Upload failed: ${error.message}`);
-    }
-    const { data: publicData } = supabase.storage.from('ai-haircut-previews').getPublicUrl(data.path);
-    return publicData.publicUrl;
-  };
-
-  const STYLE_DETAILS: Record<string, string> = {
-    'Teddy Bear Cut':
-      'a rounded, plush "teddy bear" trim: fur kept at a medium length all over (roughly 1-1.5 inches), ' +
-      'face and head fur rounded into a full, fluffy circular shape framing the eyes, ears trimmed neatly ' +
-      'but left soft-edged, legs left slightly fuller and rounded at the paws like little pillars, overall ' +
-      'silhouette soft, plush, and evenly rounded with no sharp lines',
-    'Puppy Cut':
-      'a classic all-over "puppy cut": fur trimmed to a short, uniform length (about 1 inch) evenly across ' +
-      'the body, legs, and head, face trimmed short and neat rather than rounded or sculpted, ears trimmed ' +
-      'close to follow their natural shape, tail trimmed short and even, overall look clean, low-maintenance, ' +
-      'and youthful with no dramatic shaping anywhere',
-    'Lion Cut':
-      'a dramatic "lion cut": body fur shaved very short and close to the skin from the ribcage back through ' +
-      'the hindquarters and tail (leaving only a tufted pom at the very tip of the tail), while the fur on the ' +
-      'head, neck, chest, and front legs down to the "elbow" is left long, thick, and voluminous like a mane, ' +
-      'a sharp, visible line where the short-shaved body meets the long mane fur, strong visual contrast between ' +
-      'the shaved and unshaved sections',
-    'Summer / Short All-Over Trim':
-      'a short, practical summer trim: fur clipped very short and uniform (close to 0.5 inch) across the entire ' +
-      'body including legs, head, and tail, no shaping, rounding, or contouring of any kind, ears trimmed close ' +
-      'and flat against the head, the coat should look neat, cool, and minimal with an even buzzed texture ' +
-      'throughout',
-  };
-
-  const buildHaircutPrompt = (petType: string, style: string) => {
-    const petLabel = petType.toLowerCase();
-
-    const styleClause = STYLE_DETAILS[style] ?? `a "${style}" haircut, groomed neatly and evenly`;
-    return (
-      `Professional pet grooming after-photo. Keep the exact same ${petLabel} ` +
-      `(same face, same eyes, same fur color and markings, same pose, same background, same lighting), ` +
-      `but re-style its coat into ${styleClause}. ` +
-      `The haircut should be clearly and visibly distinct in length and shape from the pet's original coat in the ` +
-      `source photo. Realistic, well-lit pet salon photo, natural fur texture, no text, no watermark.`
-    );
-  };
-
-  const patchPetForm = (petId: string, patch: Partial<PetFormData>) => {
-    setPetForms((prev) => prev.map((p) => (p.id === petId ? { ...p, ...patch } : p)));
-  };
-
-  const handleUploadPetPhoto = async (petId: string, file: File) => {
-    try {
-      const compressedFile = await resizeImageFile(file);
-      const previewUrl = URL.createObjectURL(compressedFile);
-      patchPetForm(petId, {
-        aiSourcePhotoFile: compressedFile,
-        aiSourcePhotoPreview: previewUrl,
-        aiUploadedSourceUrl: null,
-        aiPreviewBlob: null,
-        aiPreviewImageUrl: null,
-        aiPreviewStatus: 'idle',
-        aiPreviewError: null,
-        aiHaircutUrl: null,
-        aiPreviewCache: {},
-      });
-    } catch (err) {
-      console.error('Image compression failed:', err);
-      alert('That photo could not be processed. Please try a different image.');
-    }
-  };
-
-  const handleRemovePetPhoto = (petId: string) => {
-    patchPetForm(petId, {
-      aiSourcePhotoFile: null,
-      aiSourcePhotoPreview: null,
-      aiUploadedSourceUrl: null,
-      aiPreviewBlob: null,
-      aiPreviewImageUrl: null,
-      aiPreviewStatus: 'idle',
-      aiPreviewError: null,
-      aiHaircutUrl: null,
-      aiPreviewCache: {},
-    });
-  };
-
-  const handleEditConfirmedAiPreview = (petId: string) => {
-    patchPetForm(petId, { aiHaircutUrl: null });
-  };
-
-  const runAiHaircutGeneration = async (petId: string) => {
-    const pet = petForms.find((p) => p.id === petId);
-    if (!pet) return;
-
-    if (!pet.aiSourcePhotoFile) {
-      alert('Please upload a photo of your pet first.');
-      return;
-    }
-    if (!pet.desiredStyle) {
-      alert('Please select a desired haircut style.');
-      return;
-    }
-
-    const cached = pet.aiPreviewCache[pet.desiredStyle];
-    if (cached) {
-      patchPetForm(petId, {
-        aiPreviewBlob: cached.blob,
-        aiPreviewImageUrl: cached.url,
-        aiPreviewStatus: 'idle',
-        aiPreviewError: null,
-        aiHaircutUrl: null,
-      });
-      return;
-    }
-
-    try {
-      const user = await getFreshUser();
-      if (!user) {
-        throw new Error(
-          'Your session timed out while this page was idle. Please sign in again in a new tab, then come back here and click Generate. Your form details are still saved on this page.',
-        );
-      }
-
-      patchPetForm(petId, { aiPreviewStatus: 'generating', aiPreviewError: null });
-
-      const prompt = buildHaircutPrompt(pet.petType, pet.desiredStyle);
-      const seed = Math.floor(Math.random() * 1_000_000);
-
-      const formData = new FormData();
-      formData.append('image', pet.aiSourcePhotoFile, 'source.jpg');
-      formData.append('prompt', prompt);
-      formData.append('model', 'kontext');
-      formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
-      formData.append('seed', String(seed));
-      formData.append('petType', pet.petType.toLowerCase()); // 'dog' | 'cat' - lets the server verify the photo
-
-      const response = await fetch(POLLINATIONS_EDIT_ENDPOINT, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const bodyText = await response.text().catch(() => '');
-        
-        if (response.status === 422) {
-          let message = bodyText;
-          try {
-            message = JSON.parse(bodyText)?.error || bodyText;
-          } catch {
-            // not JSON, keep the raw text
-          }
-          const validationError: any = new Error(message || 'This photo cannot be used for a preview.');
-          validationError.expected = true;
-          throw validationError;
-        }
-
-        console.error('AI preview error:', response.status, response.statusText, bodyText);
-
-        if (response.status === 504) {
-          throw new Error('Too many requests. Please wait about 15 seconds before generating another preview.');
-        }
-
-        if (response.status === 402) {
-          throw new Error('Unable to process your request at this moment. Please try again later.');
-        }
-
-        let serverMessage = bodyText;
-        try {
-          serverMessage = JSON.parse(bodyText)?.error || bodyText;
-        } catch {
-          // not JSON, keep the raw texts
-        }
-
-        throw new Error(serverMessage || `AI service error (${response.status})`);
-      }
-
-      const blob = await response.blob();
-
-      if (!blob.type.startsWith('image/')) {
-        console.error('Unexpected AI preview content type:', blob.type);
-        throw new Error('The AI service returned an unexpected response. Please try again.');
-      }
-
-      const previewObjectUrl = URL.createObjectURL(blob);
-      const styleUsed = pet.desiredStyle;
-
-      patchPetForm(petId, {
-        aiPreviewBlob: blob,
-        aiPreviewImageUrl: previewObjectUrl,
-        aiPreviewStatus: 'idle',
-        aiPreviewError: null,
-        aiHaircutUrl: null,
-        aiPreviewCache: {
-          ...pet.aiPreviewCache,
-          [pet.desiredStyle]: { blob, url: previewObjectUrl },
-        },
-      });
-    } catch (err: any) {
-      if (!err?.expected) console.error('AI haircut generation error:', err);
-      patchPetForm(petId, {
-        aiPreviewStatus: 'error',
-        aiPreviewError: err.message || 'Something went wrong while generating the preview.',
-      });
-    }
-  };
-
-  const handleGenerateAiPreview = (petId: string) => {
-    runAiHaircutGeneration(petId);
-  };
-
-  const handleConfirmAiPreview = async (petId: string) => {
-    const pet = petForms.find((p) => p.id === petId);
-    if (!pet || !pet.aiPreviewBlob) return;
-
-    patchPetForm(petId, { aiPreviewStatus: 'uploading', aiPreviewError: null });
-
-    try {
-      const user = await getFreshUser();
-      if (!user) {
-        throw new Error(
-          'Your session timed out while this page was idle. Please sign in again in a new tab, then click "Confirm this look" again.',
-        );
-      }
-
-      const fileName = `${Date.now()}_ai_haircut_${petId}.jpg`;
-      const filePath = `${user.id}/${fileName}`;
-      const compressedBlob = await compressBlobUnderLimit(pet.aiPreviewBlob);
-      const fileToUpload = new File([compressedBlob], fileName, {
-        type: 'image/jpeg',
-      });
-
-      const uploadedUrl = await uploadFileToBucket(fileToUpload, filePath);
-
-      patchPetForm(petId, {
-        aiHaircutUrl: uploadedUrl,
-        aiPreviewStatus: 'idle',
-        aiPreviewError: null,
-      });
-    } catch (err: any) {
-      console.error('AI haircut confirm error:', err);
-      patchPetForm(petId, {
-        aiPreviewStatus: 'error',
-        aiPreviewError: err.message || 'Failed to confirm the preview. Please try again.',
-      });
-    }
-  };
-
-  const createBookingInDatabase = async () => {
-    const user = await getFreshUser();
-    if (!user) throw new Error('User authentication failed. Please log in again.');
-
-    let currentBookingId = activeBookingId;
-
-    if (!currentBookingId) {
-      const { data: bookingData, error: bookingErr } = await supabase
-        .from('booking_info')
-        .insert({
-          profiles_id: user.id,
-          sp_id: spId,
-          booking_date: dateStr,
-          booking_timeslot: timeSlot,
-          booking_status: 'pending_sp_response',
-          booking_total_amount: grandTotal,
-        })
-        .select()
-        .single();
-
-      if (bookingErr || !bookingData) throw new Error(bookingErr?.message || 'Failed to create booking.');
-      currentBookingId = bookingData.id;
-      setActiveBookingId(currentBookingId);
-    }
-
-    for (const pet of petForms) {
-      let finalVaccineUrl = pet.vaccineUrl || '';
-      let finalIllnessUrl = pet.illnessUrl || null;
-      let regPetId = pet.selectedRegisteredPetId;
-
-      if (pet.vaccineFile) {
-        const filePath = `${user.id}/${Date.now()}_vaccine_${pet.vaccineFile.name}`;
-        const uploadedUrl = await uploadFileToBucket(pet.vaccineFile, filePath);
-        if (uploadedUrl) finalVaccineUrl = uploadedUrl;
-      }
-
-      if (pet.illnessFile) {
-        const filePath = `${user.id}/${Date.now()}_illness_${pet.illnessFile.name}`;
-        const uploadedUrl = await uploadFileToBucket(pet.illnessFile, filePath);
-        if (uploadedUrl) finalIllnessUrl = uploadedUrl;
-      }
-
-      if (!regPetId) {
-        const { data: newRegPet, error: regErr } = await supabase
-          .from('po_registered_pet')
-          .insert({
-            profiles_id: user.id,
-            pet_name: pet.petName,
-            pet_type: pet.petType.toLowerCase(),
-            pet_breed: pet.breed,
-            pet_gender: pet.gender.toLowerCase(),
-            pet_date_of_birth: pet.dob,
-            pet_weight: parseFloat(pet.weight),
-            pet_behaviors: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
-            pet_vaccine_url: finalVaccineUrl,
-            pet_illness_proof_url: finalIllnessUrl,
-            pet_grooming_notes: pet.groomingSpecs || null,
-            pet_emergency_consent: pet.emergencyConsent,
-          })
-          .select()
-          .single();
-
-        if (regErr || !newRegPet) throw new Error(regErr?.message || 'Failed to register pet context.');
-        regPetId = newRegPet.id;
-      }
-
-      let normalizedSize = pet.calculatedSize.toLowerCase().replace(/\s+/g, '_');
-      const allowedSizes = ['all', 'extra_small', 'small', 'medium', 'large', 'extra_large', 'cat'];
-      if (!allowedSizes.includes(normalizedSize)) {
-        normalizedSize = pet.petType.toLowerCase() === 'cat' ? 'cat' : 'medium';
-      }
-
-      const { data: petInfoData, error: petInfoErr } = await supabase
-        .from('booking_pet_info')
-        .insert({
-          booking_info_id: currentBookingId,
-          registered_pet_id: regPetId,
-          booking_pet_name: pet.petName,
-          booking_pet_type: pet.petType.toLowerCase(),
-          booking_breed: pet.breed,
-          booking_gender: pet.gender.toLowerCase(),
-          booking_date_of_birth: pet.dob,
-          booking_weight: parseFloat(pet.weight),
-          booking_behavior: pet.behaviors.map((b) => REVERSE_BEHAVIOR_MAP[b] || b.toLowerCase()),
-          booking_vaccine_url: finalVaccineUrl,
-          booking_illness_proof_url: finalIllnessUrl,
-          booking_grooming_notes: pet.groomingSpecs || null,
-          booking_ai_haircut_url: pet.aiHaircutUrl || null,
-          booking_emergency_consent: pet.emergencyConsent,
-          booking_calculated_size: normalizedSize,
-        })
-        .select()
-        .single();
-
-      if (petInfoErr || !petInfoData) throw new Error(petInfoErr?.message || 'Failed to save pet booking info.');
-
-      const servicesToInsert = pet.selectedServices
-        .filter((svcItem) => svcItem.matchedOptionId)
-        .map((svcItem) => {
-          const matchedSvcObj = availableServices.find((s) => s.id === svcItem.serviceId);
-          return {
-            booking_pet_info_id: petInfoData.id,
-            booking_services_id: svcItem.matchedOptionId,
-            booking_service_name: matchedSvcObj ? matchedSvcObj.service_name : 'Service',
-            booking_service_type: matchedSvcObj?.service_type || 'individual_service',
-            booking_price: svcItem.price,
-          };
-        });
-
-      if (servicesToInsert.length > 0) {
-        const { error: svcInsertErr } = await supabase
-          .from('booking_service_info')
-          .insert(servicesToInsert);
-
-        if (svcInsertErr) throw new Error(svcInsertErr.message);
-      }
-    }
-
-    return { bookingInfoId: currentBookingId, userId: user.id };
-  };
-
-  const handleConfirmBooking = async () => {
-    if (grandTotal <= 0 && !activeBookingId) {
-      alert('Invalid Booking: Total amount cannot be ₱0.00.');
-      return;
-    }
-    if (cooldownUntil && Date.now() < cooldownUntil) {
-      alert(`Payment attempts exceeded. Please try again in ${timeRemaining}.`);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setShowFailedModal(false);
-
-    try {
-      let bookingInfoId = activeBookingId;
-      if (!bookingInfoId) {
-        const res = await createBookingInDatabase();
-        bookingInfoId = res.bookingInfoId;
-      }
-
-      const response = await fetch('/api/paymongo/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: grandTotal > 0 ? grandTotal : 1, 
-          description: `Pet Grooming Session on ${formattedDateDisplay}`,
-          bookingId: bookingInfoId,
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok || !result.checkoutUrl) throw new Error(result.error || 'Failed to initialize payment.');
-
-      const nextAttempts = paymentAttempts + 1;
-      setPaymentAttempts(nextAttempts);
-      if (nextAttempts >= 3) setCooldownUntil(Date.now() + 60 * 60 * 1000);
-
-      window.location.href = result.checkoutUrl;
-      setShowSummaryModal(false);
-      setIsSubmitting(false);
-    } catch (err: any) {
-      console.error('Booking processing error:', err);
-      alert(`Booking Error: ${err.message || 'An error occurred while initiating payment.'}`);
-      setIsSubmitting(false);
-    }
-  };
-
-  const handlePayLater = async () => {
-    if (grandTotal <= 0 && !activeBookingId) {
-      alert('Invalid Booking: Total amount cannot be ₱0.00.');
-      return;
-    }
-
-    setIsSavingPayLater(true);
-    try {
-      let bookingInfoId = activeBookingId;
-      if (!bookingInfoId) {
-        const res = await createBookingInDatabase();
-        bookingInfoId = res.bookingInfoId;
-      }
-
-      const { error: updateErr } = await supabase
-        .from('booking_info')
-        .update({ booking_status: 'to pay' })
-        .eq('id', bookingInfoId);
-
-      if (updateErr) throw new Error(updateErr.message);
-
-      setShowFailedModal(false);
-      setShowPayLaterSuccessModal(true);
-    } catch (err: any) {
-      console.error('Pay Later Save Error:', err);
-      alert(`Error saving booking for later: ${err.message}`);
-    } finally {
-      setIsSavingPayLater(false);
-    }
-  };
 
   return (
     <div className="booking-form-page">
@@ -1113,81 +132,76 @@ function BookingFormContent() {
             isLast={index === petForms.length - 1}
             totalPets={petForms.length}
             userRegisteredPets={userRegisteredPets}
-            takenRegisteredPetIds={getTakenRegisteredPetIds(pet.id)}
+            takenRegisteredPetIds={petFormsApi.getTakenRegisteredPetIds(pet.id)}
             availableServices={availableServices}
             loadingServices={loadingServices}
             dogBreeds={dogBreeds}
             catBreeds={catBreeds}
             loadingBreeds={loadingBreeds}
-            onAddPet={handleAddPet}
-            onDeletePet={handleDeletePet}
-            onUpdateField={updatePetField}
-            onServiceChange={handleServiceChange}
-            onAddServiceField={handleAddServiceField}
-            onRemoveServiceField={handleRemoveServiceField}
-            onAutofillPet={handleAutofillPet}
-            onToggleBehavior={toggleBehavior}
-            onUploadPetPhoto={handleUploadPetPhoto}
-            onRemovePetPhoto={handleRemovePetPhoto}
-            onGenerateAiPreview={handleGenerateAiPreview}
-            onConfirmAiPreview={handleConfirmAiPreview}
-            onEditConfirmedAiPreview={handleEditConfirmedAiPreview}
+            onAddPet={petFormsApi.handleAddPet}
+            onDeletePet={petFormsApi.handleDeletePet}
+            onUpdateField={petFormsApi.updatePetField}
+            onServiceChange={petFormsApi.handleServiceChange}
+            onAddServiceField={petFormsApi.handleAddServiceField}
+            onRemoveServiceField={petFormsApi.handleRemoveServiceField}
+            onAutofillPet={petFormsApi.handleAutofillPet}
+            onToggleBehavior={petFormsApi.toggleBehavior}
+            onUploadPetPhoto={aiPreview.handleUploadPetPhoto}
+            onRemovePetPhoto={aiPreview.handleRemovePetPhoto}
+            onGenerateAiPreview={aiPreview.handleGenerateAiPreview}
+            onConfirmAiPreview={aiPreview.handleConfirmAiPreview}
+            onEditConfirmedAiPreview={aiPreview.handleEditConfirmedAiPreview}
             errors={showValidation ? petErrors[pet.id] : {}}
             maxWeight={getMaxAcceptedWeight(pet, serviceWeightOptions)}
           />
         ))}
       </main>
 
-      {/* Summary Modal */}
-      {showSummaryModal && (
+      {modals.showSummaryModal && (
         <SummaryModal
           petForms={petForms}
           availableServices={availableServices}
           grandTotal={grandTotal}
           isSubmitting={isSubmitting}
-          cooldownUntil={cooldownUntil}
+          cooldownUntil={cooldown.cooldownUntil}
           formatDateForSummary={formatDateForSummary}
-          onClose={() => setShowSummaryModal(false)}
+          onClose={() => modals.setShowSummaryModal(false)}
           onConfirm={handleConfirmBooking}
         />
       )}
 
-      {/* Success Modal */}
-      {showSuccessModal && (
+      {modals.showSuccessModal && (
         <SuccessModal onRedirect={() => router.push('/pet_owner/manage_bookings')} />
       )}
 
-      {/* Failed Modal */}
-      {showFailedModal && !showSuccessModal && (
+      {modals.showFailedModal && !modals.showSuccessModal && (
         <FailedModal
-          cooldownUntil={cooldownUntil}
-          timeRemaining={timeRemaining}
-          paymentAttempts={paymentAttempts}
+          cooldownUntil={cooldown.cooldownUntil}
+          timeRemaining={cooldown.timeRemaining}
+          paymentAttempts={cooldown.paymentAttempts}
           isSavingPayLater={isSavingPayLater}
           onRetry={() => {
-            setShowFailedModal(false);
-            setShowSummaryModal(true);
+            modals.setShowFailedModal(false);
+            modals.setShowSummaryModal(true);
           }}
           onPayLater={handlePayLater}
         />
       )}
 
-      {/* Pay Later Modal */}
-      {showPayLaterSuccessModal && (
+      {modals.showPayLaterSuccessModal && (
         <PayLaterSuccessModal
           onRedirect={() => {
-            setShowPayLaterSuccessModal(false);
+            modals.setShowPayLaterSuccessModal(false);
             router.push('/pet_owner/manage_bookings');
           }}
         />
       )}
 
-      {/* Capacity Modal */}
-      {showCapacityModal && (
+      {modals.showCapacityModal && (
         <CapacityModal
           slotCapacity={slotCapacity}
           timeSlot={timeSlot}
-          onClose={() => setShowCapacityModal(false)}
+          onClose={() => modals.setShowCapacityModal(false)}
         />
       )}
 

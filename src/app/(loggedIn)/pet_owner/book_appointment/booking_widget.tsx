@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 
 export type OperatingHour = {
@@ -107,7 +108,6 @@ export default function BookingWidget({
     return slots;
   }, [currentOperatingHour, selectedDate, nowTime, isMounted]);
 
-  // Helper to compute remaining capacity factoring in exact pet counts per booking
   const getRemainingCapacity = (slot: string): number => {
     if (!selectedDate || !currentOperatingHour) return 0;
 
@@ -374,7 +374,16 @@ export default function BookingWidget({
           onChange={(e) => setAgreedTerms(e.target.checked)}
         />
         <label htmlFor="terms">
-          I agree to the <strong>Terms and Conditions</strong> including policies on down payments, cancellations, and pet safety.
+          I agree to the{' '}
+          <Link 
+            href="/terms_and_conditions" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
+          >
+            <strong>Terms and Conditions</strong>
+          </Link>{' '}
+          including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
