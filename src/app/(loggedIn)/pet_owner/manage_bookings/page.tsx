@@ -10,6 +10,8 @@ import {
   FaTimesCircle,
   FaUndo,
   FaCheckCircle,
+  FaCalendarAlt,
+  FaHistory,
   FaCalendarTimes,
 } from 'react-icons/fa';
 import './manage_bookings.css';
@@ -181,10 +183,6 @@ export default function ManageBookingsPage() {
           booking_overall_rating,
           booking_staff_rating,
           booking_total_amount,
-          refund_amount,
-          sp_general_info (
-            business_name
-          ),
           booking_pet_info (
             id,
             booking_pet_name,
@@ -440,6 +438,10 @@ export default function ManageBookingsPage() {
     }
   };
 
+  const handleRequestRefund = (bookingId: string) => {
+    alert(`Initiating refund request for booking ID: ${bookingId}`);
+  };
+
   const handleOpenCancelModal = () => {
     setShowDetailsModal(false);
     setShowCancelModal(true);
@@ -499,6 +501,14 @@ export default function ManageBookingsPage() {
           <div>
             <h1 className="bookings-title">My Appointments</h1>
             <p className="bookings-subtitle">Manage your pet's grooming sessions</p>
+          </div>
+          <div className="header-action-btns">
+            <button className="outline-header-btn">
+              <FaCalendarAlt className="btn-icon" /> View Calendar
+            </button>
+            <button className="outline-header-btn">
+              <FaHistory className="btn-icon" /> View History
+            </button>
           </div>
         </div>
 
@@ -645,22 +655,20 @@ export default function ManageBookingsPage() {
                     </div>
 
                     <div className="col-cell col-action">
-                      {/* View Details is always available */}
-                      <button
-                        className="row-action-btn secondary"
-                        onClick={() => handleOpenDetails(item)}
-                      >
-                        View Details
-                      </button>
-
-                      {/* Only bookings still waiting for a rating can be rated; once rated, only View Details remains */}
-                      {item.booking_status === 'to_rate' && (
+                      {activeTab === 'completed' && !item.booking_overall_rating ? (
                         <button
                           className="row-action-btn"
                           style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}
                           onClick={() => handleOpenRatingModal(item)}
                         >
                           Rate Service
+                        </button>
+                      ) : (
+                        <button
+                          className="row-action-btn secondary"
+                          onClick={() => handleOpenDetails(item)}
+                        >
+                          View Details
                         </button>
                       )}
                     </div>
@@ -699,6 +707,7 @@ export default function ManageBookingsPage() {
           activeTab={activeTab}
           onClose={() => setShowDetailsModal(false)}
           onPayNow={handlePayNow}
+          onRequestRefund={handleRequestRefund}
           onReschedule={() => {
             setShowDetailsModal(false);
             setShowRescheduleModal(true);
