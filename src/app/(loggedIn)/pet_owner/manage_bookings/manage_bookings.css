@@ -34,6 +34,35 @@
   margin-top: 4px;
 }
 
+/* Date / status filters above the table */
+.bookings-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.filter-field select {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #1e3a8a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* 6 Category Tab Selection Grid */
 .booking-tabs-grid.six-categories {
   display: grid;

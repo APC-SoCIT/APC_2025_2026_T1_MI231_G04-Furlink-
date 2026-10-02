@@ -6,6 +6,10 @@ export type BookingTab =
   | 'refund'
   | 'completed';
 
+// Date ordering and status filter used by the list filters
+export type SortOrder = 'asc' | 'desc';
+export type StatusFilter = 'all' | string;
+
 export interface BookingServiceInfo {
   id: string;
   booking_service_name: string;
