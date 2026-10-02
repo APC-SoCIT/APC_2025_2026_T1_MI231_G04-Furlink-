@@ -130,6 +130,21 @@ export default function TermsAndConditionsPage() {
         </section>
 
         <section className="policy-section">
+          <h2>Service Level Agreement (SLA)</h2>
+          <p>This Service Level Agreement outlines Furlink’s commitment to platform availability and response performance:</p>
+          <ul>
+            <li>
+              <strong>Platform Availability & Uptime:</strong> Furlink targets a cloud infrastructure availability of 
+              <strong> 99.99%</strong> uptime, excluding scheduled maintenance windows typically executed during off-peak hours.
+            </li>
+            <li>
+              <strong>Response Standards:</strong> Service providers are expected to review booking requests promptly. Automated 
+              email notifications and Supabase database webhooks target near-instant delivery upon booking status modifications.
+            </li>
+          </ul>
+        </section>
+
+        <section className="policy-section">
           <h2>Limitation of Liability</h2>
           <p>
             The Platform acts solely as a venue to connect pet owners and service providers. The Platform 
