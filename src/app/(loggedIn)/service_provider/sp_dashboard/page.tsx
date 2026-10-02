@@ -27,8 +27,8 @@ export default function ServiceProviderDashboardPage() {
   // State for sorting the "Upcoming" tab
   const [upcomingSort, setUpcomingSort] = useState<'chronological' | 'farthest'>('chronological');
   
-  // State for filtering the "Completed" tab by specific status (to_rate vs rated)
-  const [completedStatusFilter, setCompletedStatusFilter] = useState<'all' | 'to_rate' | 'rated'>('all');
+  // UPDATED: Added 'no_show' to the allowed types for the Completed tab filter
+  const [completedStatusFilter, setCompletedStatusFilter] = useState<'all' | 'to_rate' | 'rated' | 'no_show'>('all');
 
   // State for sorting the "Cancelled" tab
   const [cancelledSort, setCancelledSort] = useState<'booking_date' | 'refund_date'>('booking_date');
@@ -141,24 +141,33 @@ export default function ServiceProviderDashboardPage() {
   const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: string[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
     { label: 'Upcoming', value: 'paid', filter: ['approved', 'paid'] },
-    { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated'] },
+    // UPDATED: Moved 'no_show' into the Completed tab
+    { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated', 'no_show'] },
+    // UPDATED: Removed 'no_show' from Cancelled tab
     { label: 'Cancelled', value: 'cancelled', filter: ['cancelled', 'rejected', 'cancelled_by_po', 'processing', 'to_refund', 'refunded'] },
   ];
 
-  const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthIndex = now.getMonth();
+  const currentMonth = now.toLocaleString('default', { month: 'long', year: 'numeric' });
   
   const totalRevenue = bookings
-    .filter(b => ['paid', 'to_rate', 'rated'].includes(b.booking_status))
+    .filter(b => {
+      const isPaidStatus = ['paid', 'to_rate', 'rated'].includes(b.booking_status);
+      if (!isPaidStatus) return false;
+
+      const bookingDate = new Date(b.booking_date);
+      return bookingDate.getFullYear() === currentYear && bookingDate.getMonth() === currentMonthIndex;
+    })
     .reduce((sum, b) => sum + Number(b.booking_total_amount || 0), 0);
 
   const activeTabConfig = TAB_CARDS.find(t => t.value === activeTab);
   
-  // Base filtered bookings logic
   const baseFilteredBookings = activeTab === 'all' 
     ? bookings.filter(b => statusFilter === 'all' || b.booking_status === statusFilter)
     : bookings.filter(b => activeTabConfig?.filter.includes(b.booking_status as string));
 
-  // Apply specific sorting or filtering based on the active tab
   const filteredBookings = activeTab === 'pending_sp_response'
     ? [...baseFilteredBookings].sort((a, b) => {
         if (newRequestsSort === 'urgent') {
@@ -179,14 +188,11 @@ export default function ServiceProviderDashboardPage() {
     ? baseFilteredBookings.filter(b => completedStatusFilter === 'all' || b.booking_status === completedStatusFilter)
     : activeTab === 'cancelled'
     ? [...baseFilteredBookings].sort((a, b) => {
-        // UPDATED: Handles most recent to least recent (Descending) sorting
         if (cancelledSort === 'refund_date') {
-          // Fallback to 0 if null, pushing non-refunded items to the bottom of the descending list
           const dateA = (a as any).refund_initiated_at ? new Date((a as any).refund_initiated_at).getTime() : 0;
           const dateB = (b as any).refund_initiated_at ? new Date((b as any).refund_initiated_at).getTime() : 0;
           return dateB - dateA; 
         }
-        // Descending for booking date
         return new Date(b.booking_date).getTime() - new Date(a.booking_date).getTime();
       })
     : baseFilteredBookings;
@@ -256,7 +262,6 @@ export default function ServiceProviderDashboardPage() {
               {activeTab === 'all' ? 'All Bookings' : activeTabConfig?.label}
             </h3>
             
-            {/* Status Filter Dropdown (Only visible on All Bookings) */}
             {activeTab === 'all' && (
               <select 
                 value={statusFilter}
@@ -269,6 +274,7 @@ export default function ServiceProviderDashboardPage() {
                 <option value="paid">Paid</option>
                 <option value="to_rate">To Rate</option>
                 <option value="rated">Completed</option>
+                <option value="no_show">No-Show</option>
                 <option value="to_refund">To Refund</option>
                 <option value="refunded">Refunded</option>
                 <option value="rejected">Rejected</option>
@@ -276,7 +282,6 @@ export default function ServiceProviderDashboardPage() {
               </select>
             )}
 
-            {/* Sort Filter Dropdown (Only visible on New Requests) */}
             {activeTab === 'pending_sp_response' && (
               <select 
                 value={newRequestsSort}
@@ -288,7 +293,6 @@ export default function ServiceProviderDashboardPage() {
               </select>
             )}
 
-            {/* Sort Filter Dropdown (Only visible on Upcoming tab) */}
             {activeTab === 'paid' && (
               <select 
                 value={upcomingSort}
@@ -300,20 +304,20 @@ export default function ServiceProviderDashboardPage() {
               </select>
             )}
 
-            {/* Status Filter Dropdown (Only visible on Completed tab) */}
+            {/* UPDATED: Added No-Show option to the Completed tab filter */}
             {activeTab === 'rated' && (
               <select 
                 value={completedStatusFilter}
-                onChange={(e) => setCompletedStatusFilter(e.target.value as 'all' | 'to_rate' | 'rated')}
+                onChange={(e) => setCompletedStatusFilter(e.target.value as 'all' | 'to_rate' | 'rated' | 'no_show')}
                 style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontWeight: 'bold', color: '#1e3a8a', backgroundColor: '#f8fafc', cursor: 'pointer', outline: 'none' }}
               >
                 <option value="all">All Completed</option>
                 <option value="to_rate">To Rate</option>
                 <option value="rated">Rated / Finished</option>
+                <option value="no_show">Customer No-Show</option>
               </select>
             )}
 
-            {/* Sort Filter Dropdown (Only visible on Cancelled tab) */}
             {activeTab === 'cancelled' && (
               <select 
                 value={cancelledSort}
@@ -330,7 +334,6 @@ export default function ServiceProviderDashboardPage() {
             <thead>
               <tr>
                 <th>Date & Time</th>
-                {/* Conditionally render Refund Date column header for Cancelled tab */}
                 {activeTab === 'cancelled' && <th>Refund Date</th>}
                 <th style={{ textAlign: 'center' }}>No. of Pets</th>
                 <th>Service to Avail</th>
@@ -342,7 +345,6 @@ export default function ServiceProviderDashboardPage() {
             <tbody>
               {filteredBookings.length === 0 ? (
                 <tr>
-                  {/* Dynamically adjust colSpan to handle the conditional column */}
                   <td colSpan={activeTab === 'cancelled' ? 7 : 6} style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>
                     No bookings found for this category.
                   </td>
@@ -355,7 +357,6 @@ export default function ServiceProviderDashboardPage() {
                     .filter(Boolean)
                     .join(', ') || 'N/A';
                   
-                  // Safely extract refund_initiated_at bypassing strict Booking type constraints if not updated yet
                   const refundDateRaw = (booking as any).refund_initiated_at;
 
                   return (
@@ -365,7 +366,6 @@ export default function ServiceProviderDashboardPage() {
                         <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{booking.booking_timeslot}</div>
                       </td>
                       
-                      {/* Conditionally render Refund Date cell data */}
                       {activeTab === 'cancelled' && (
                         <td>
                           <strong>{refundDateRaw ? new Date(refundDateRaw).toLocaleDateString() : 'N/A'}</strong>
