@@ -10,6 +10,7 @@ import {
   FaMagic,
 } from 'react-icons/fa';
 import { PetFormData, ServiceOption } from '../types';
+import { CancellationPolicyNotice } from './CancellationPolicyNotice';
 
 interface SummaryModalProps {
   petForms: PetFormData[];
@@ -149,6 +150,8 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
               )}
             </div>
           </div>
+
+          <CancellationPolicyNotice totalAmount={grandTotal} />
         </div>
 
         <div className="summary-modal-footer">

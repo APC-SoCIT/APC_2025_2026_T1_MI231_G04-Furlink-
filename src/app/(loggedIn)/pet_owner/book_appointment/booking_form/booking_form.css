@@ -1219,3 +1219,38 @@
   border-color: #dc2626;
   background-color: #fef2f2;
 }
+
+.cancellation-policy-notice {
+  margin: 16px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #6b6b6b;
+}
+.cancellation-policy-title {
+  margin: 0 0 2px;
+  font-weight: 600;
+  color: inherit;
+}
+.cancellation-policy-text,
+.cancellation-policy-amounts {
+  margin: 0;
+}
+.cancellation-policy-amounts {
+  margin-top: 4px;
+}
+.cancellation-policy-notice strong {
+  font-weight: 600;
+  color: #444;
+}
+
+.cancellation-policy-notice--compact {
+  margin: 8px 0 0;
+  padding: 0;
+  border-top: none;
+  font-size: 0.75rem;
+}
+.summary-left .cancellation-policy-notice--compact {
+  max-width: 420px;
+}
