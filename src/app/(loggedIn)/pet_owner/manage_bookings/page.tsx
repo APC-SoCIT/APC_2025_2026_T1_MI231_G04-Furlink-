@@ -334,7 +334,6 @@ export default function ManageBookingsPage() {
         return;
       }
 
-      alert('Booking successfully rescheduled!');
       setShowRescheduleModal(false);
       fetchBookings();
     } catch (err) {
