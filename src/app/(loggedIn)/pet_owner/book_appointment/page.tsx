@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import Footer from "@/components/Footer";
 import { FaMapMarkerAlt, FaClock, FaExternalLinkAlt } from "react-icons/fa";
 import BookingWidget from "./booking_widget";
-import ServiceLocationMap from "./ServiceLocationMap"; // Import the client wrapper
+import ServiceLocationMap from "./ServiceLocationMap";
 import "./book_appointment.css";
 
 type PageProps = {
@@ -85,12 +85,36 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
     .eq("sp_id", spId)
     .eq("service_status", "active");
 
-  // 5. Fetch Active Bookings for Current User
-  const { data: userBookings } = await supabase
+  // 5. Fetch Active Bookings across ALL users with profiles_id to track global capacity & user-specific warnings
+  const { data: rawBookings } = await supabase
     .from("booking_info")
-    .select("id, booking_date, booking_timeslot, booking_status")
-    .eq("profiles_id", session.user.id)
-    .not("booking_status", "in", '("cancelled","rejected")');
+    .select(`
+      id,
+      profiles_id,
+      booking_date,
+      booking_timeslot,
+      booking_status,
+      booking_pet_info (
+        id
+      )
+    `)
+    .eq("sp_id", spId)
+    .in("booking_status", [
+      "pending_sp_response",
+      "to pay",
+      "approved",
+      "paid",
+      "processing"
+    ]);
+
+  const existingBookings = (rawBookings || []).map((b) => ({
+    id: b.id,
+    profiles_id: b.profiles_id,
+    booking_date: b.booking_date,
+    booking_timeslot: b.booking_timeslot,
+    booking_status: b.booking_status,
+    pet_count: Array.isArray(b.booking_pet_info) ? b.booking_pet_info.length : 1,
+  }));
 
   // Format full street address
   const fullAddress = [
@@ -103,13 +127,11 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
     .filter(Boolean)
     .join(", ");
 
-  // Cover image fallback
   const coverImage =
     facilityImages && facilityImages.length > 0
       ? facilityImages[0].business_facility_images
       : "/placeholder-salon.png";
 
-  // Map operating hours by day
   const hoursMap = new Map();
   operatingHours?.forEach((oh) => {
     hoursMap.set(oh.day_of_week, oh);
@@ -118,7 +140,6 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
   return (
     <div className="book-appointment-container">
       <main className="book-appointment-main">
-        {/* Navigation Tabs Bar */}
         <nav className="tab-nav">
           <a href="#overview" className="tab-item active">Overview</a>
           <a href="#prices" className="tab-item">Prices</a>
@@ -127,14 +148,11 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
         </nav>
 
         <div className="booking-layout">
-          {/* Left Main Section */}
           <div className="main-details-col">
-            {/* Gallery Image */}
             <div id="overview" className="gallery-card">
               <img src={coverImage} alt={spInfo.business_name} className="main-facility-img" />
             </div>
 
-            {/* Business Info Header */}
             <div className="business-header-card">
               <h1 className="business-title">{spInfo.business_name}</h1>
               <p className="business-address">
@@ -155,7 +173,6 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               )}
             </div>
 
-            {/* Operating Hours & Location Section */}
             <div id="location" className="section-block">
               <h2 className="section-title">Operating Hours</h2>
               <div className="hours-grid" style={{ marginBottom: '20px' }}>
@@ -176,7 +193,6 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
                 })}
               </div>
 
-              {/* Interactive Map Component Render */}
               {spInfo.business_latitude && spInfo.business_longitude ? (
                 <ServiceLocationMap
                   businessName={spInfo.business_name}
@@ -191,7 +207,6 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               )}
             </div>
 
-            {/* Service Prices Section */}
             <div id="prices" className="section-block">
               <h2 className="section-title">Service Prices</h2>
               <span className="vat-text">* VAT inclusive</span>
@@ -249,12 +264,12 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Right Sidebar Booking Widget */}
           <aside className="booking-sidebar-col">
             <BookingWidget
               spId={spId}
               operatingHours={operatingHours || []}
-              existingBookings={userBookings || []}
+              existingBookings={existingBookings}
+              currentUserId={session.user.id}
             />
           </aside>
         </div>

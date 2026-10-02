@@ -17,6 +17,7 @@ export type OperatingHour = {
 
 export type ExistingBooking = {
   id: string;
+  profiles_id: string;
   booking_date: string;
   booking_timeslot: string;
   booking_status: string;
@@ -25,16 +26,26 @@ export type ExistingBooking = {
 
 type BookingWidgetProps = {
   spId: string;
-  operatingHours: OperatingHour[];
+  operatingHours?: OperatingHour[];
   existingBookings?: ExistingBooking[];
+  currentUserId: string;
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const ACTIVE_HOLD_STATUSES = [
+  'pending_sp_response',
+  'to pay',
+  'approved',
+  'paid',
+  'processing'
+];
+
 export default function BookingWidget({ 
   spId, 
-  operatingHours, 
-  existingBookings = [] 
+  operatingHours = [], 
+  existingBookings = [],
+  currentUserId 
 }: BookingWidgetProps) {
   const router = useRouter();
 
@@ -65,7 +76,10 @@ export default function BookingWidget({
 
   const hoursByDay = useMemo(() => {
     const map = new Map<string, OperatingHour>();
-    operatingHours.forEach((oh) => map.set(oh.day_of_week, oh));
+    // Safeguard against undefined/null operatingHours arrays
+    if (Array.isArray(operatingHours)) {
+      operatingHours.forEach((oh) => map.set(oh.day_of_week, oh));
+    }
     return map;
   }, [operatingHours]);
 
@@ -108,6 +122,7 @@ export default function BookingWidget({
     return slots;
   }, [currentOperatingHour, selectedDate, nowTime, isMounted]);
 
+  // Global capacity subtraction across all users
   const getRemainingCapacity = (slot: string): number => {
     if (!selectedDate || !currentOperatingHour) return 0;
 
@@ -116,13 +131,11 @@ export default function BookingWidget({
     const dd = String(selectedDate.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
-    const activeStatuses = ['pending_sp_response', 'approved', 'to pay', 'paid'];
-    
     const slotBookings = existingBookings.filter(
       (b) =>
         b.booking_date === dateStr &&
         b.booking_timeslot === slot &&
-        activeStatuses.includes(b.booking_status.toLowerCase())
+        ACTIVE_HOLD_STATUSES.includes(b.booking_status.toLowerCase())
     );
 
     const bookedPets = slotBookings.reduce((sum, b) => sum + (Number(b.pet_count) || 1), 0);
@@ -134,16 +147,22 @@ export default function BookingWidget({
     return getRemainingCapacity(selectedTimeSlot);
   }, [selectedTimeSlot, selectedDate, existingBookings, currentOperatingHour]);
 
+  // Same-day warnings restricted strictly to the current logged-in user's bookings
   const sameDayBooking = useMemo(() => {
-    if (!selectedDate) return null;
+    if (!selectedDate || !currentUserId) return null;
     
     const yyyy = selectedDate.getFullYear();
     const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const dd = String(selectedDate.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
-    return existingBookings.find((b) => b.booking_date === dateStr) || null;
-  }, [selectedDate, existingBookings]);
+    return existingBookings.find(
+      (b) =>
+        b.booking_date === dateStr &&
+        b.profiles_id === currentUserId &&
+        ACTIVE_HOLD_STATUSES.includes(b.booking_status.toLowerCase())
+    ) || null;
+  }, [selectedDate, existingBookings, currentUserId]);
 
   const todayYear = isMounted ? new Date().getFullYear() : 2026;
   const todayMonth = isMounted ? new Date().getMonth() : 0;
@@ -279,15 +298,17 @@ export default function BookingWidget({
               const dd = String(thisDate.getDate()).padStart(2, '0');
               const dStr = `${yyyy}-${mm}-${dd}`;
 
-              const hasExisting = existingBookings.some((b) => b.booking_date === dStr);
+              const hasUserActiveBooking = existingBookings.some(
+                (b) => b.booking_date === dStr && b.profiles_id === currentUserId && ACTIVE_HOLD_STATUSES.includes(b.booking_status.toLowerCase())
+              );
 
               let tooltipMessage = `${dayName}: Open`;
               if (isPastOrWithin24Hours) {
                 tooltipMessage = 'Bookings require at least 24 hours advance notice';
               } else if (!isOpen) {
                 tooltipMessage = `${dayName}: Closed`;
-              } else if (hasExisting) {
-                tooltipMessage = 'You already have a booking on this date';
+              } else if (hasUserActiveBooking) {
+                tooltipMessage = 'You already have an active booking on this date';
               }
 
               return (
@@ -297,7 +318,7 @@ export default function BookingWidget({
                   className={`
                     ${isSelected ? 'selected' : ''} 
                     ${!isSelectable ? 'disabled-date' : ''} 
-                    ${hasExisting && !isSelected && isSelectable ? 'has-booking' : ''}
+                    ${hasUserActiveBooking && !isSelected && isSelectable ? 'has-booking' : ''}
                   `}
                   title={tooltipMessage}
                 >
@@ -313,7 +334,7 @@ export default function BookingWidget({
         <div className="same-day-warning">
           <FaExclamationTriangle className="warning-icon" />
           <div>
-            <strong>Existing Booking Found:</strong> You already have an appointment on this day at <strong>{sameDayBooking.booking_timeslot}</strong> ({sameDayBooking.booking_status.replace(/_/g, ' ')}).
+            <strong>Existing Booking Found:</strong> You already have an active appointment on this day at <strong>{sameDayBooking.booking_timeslot}</strong> ({sameDayBooking.booking_status.replace(/_/g, ' ')}).
           </div>
         </div>
       )}
