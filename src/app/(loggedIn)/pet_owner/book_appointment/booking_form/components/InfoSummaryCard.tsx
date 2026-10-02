@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { FaCalendarAlt } from 'react-icons/fa';
+import { CancellationPolicyNotice } from './CancellationPolicyNotice';
 
 interface InfoSummaryCardProps {
   dateDisplay: string;
@@ -23,6 +24,7 @@ export const InfoSummaryCard: React.FC<InfoSummaryCardProps> = ({
         <span>{`${dateDisplay} at ${timeSlot}`}</span>
       </div>
       <div className="summary-total">Total Amount: ₱{grandTotal.toFixed(2)}</div>
+      <CancellationPolicyNotice compact />
     </div>
     <div className="summary-right">
       <button className="proceed-btn" onClick={onProceed}>
