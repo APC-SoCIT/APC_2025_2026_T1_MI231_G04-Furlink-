@@ -30,6 +30,7 @@ export const ROUTES = {
     SP_DETAILS: "/admin/dashboard/sp_details",
     USER_DETAILS: "/admin/dashboard/user_details",
     BOOKINGS: "/admin/dashboard/user_details/bookings",
+    SP_BOOKINGS: "/admin/dashboard/user_details/sp_bookings",
     WARNING_SUSPENSION_HISTORY: "/admin/dashboard/user_details/history",
   },
   SHARED: {

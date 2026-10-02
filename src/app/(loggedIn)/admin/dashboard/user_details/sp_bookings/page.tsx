@@ -4,30 +4,33 @@ import { useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FaArrowLeft } from "react-icons/fa";
 import { ROUTES } from "@/config/routes";
-import { BookingRow } from "../_types";
+import { SpBookingRow } from "../_types";
 import { useBookingHistoryPage } from "../_hooks/useBookingHistoryPage";
-import { BookingHistoryTable } from "../_components/BookingHistoryTable";
-import { BookingDetailsModal } from "../_components/BookingDetailsModal";
+import { useSpBookings } from "../_hooks/useSpBookings";
+// NOTE: paths must match your actual filename casing exactly
+import { SpBookingHistoryTable } from "../_components/SPBookingHistoryTable";
+import { SpBookingDetailsModal } from "../_components/SPBookingDetailsModal";
 import { DateRangeFilter, filterByDateRange } from "../_components/DateRangeFilter";
 import styles from "../page.module.css";
 
-function FullBookingHistoryContent() {
+function FullSpBookingsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const userId = searchParams.get("id");
 
-  const { user, loading, bookings, bookingsLoading, error } = useBookingHistoryPage(userId);
-  const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
+  const { user, loading, error } = useBookingHistoryPage(userId);
+  const { spBookings, spBookingsLoading } = useSpBookings(userId, true);
+  const [selectedBooking, setSelectedBooking] = useState<SpBookingRow | null>(null);
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
   const filteredBookings = useMemo(
-    () => filterByDateRange(bookings, (b) => b.booking_date, dateFrom, dateTo),
-    [bookings, dateFrom, dateTo]
+    () => filterByDateRange(spBookings, (b) => b.booking_date, dateFrom, dateTo),
+    [spBookings, dateFrom, dateTo]
   );
 
-  if (loading) return <div className={styles["loading-state"]}>Loading booking history...</div>;
+  if (loading) return <div className={styles["loading-state"]}>Loading booked services...</div>;
   if (error) return <div className={styles["error-state"]}>Error: {error}</div>;
   if (!user) return <div className={styles["empty-state"]}>User not found.</div>;
 
@@ -45,7 +48,7 @@ function FullBookingHistoryContent() {
 
         <div className={styles["page-header"]}>
           <h1 className={styles["page-title"]}>
-            Booking History — {user.first_name} {user.last_name}
+            Booked Services — {user.first_name} {user.last_name}
           </h1>
         </div>
 
@@ -55,28 +58,28 @@ function FullBookingHistoryContent() {
           onChangeFrom={setDateFrom}
           onChangeTo={setDateTo}
           shownCount={filteredBookings.length}
-          totalCount={bookings.length}
+          totalCount={spBookings.length}
           itemLabel="bookings"
         />
 
-        <BookingHistoryTable
+        <SpBookingHistoryTable
           bookings={filteredBookings}
-          bookingsLoading={bookingsLoading}
+          loading={spBookingsLoading}
           onViewDetails={setSelectedBooking}
         />
       </main>
 
       {selectedBooking && (
-        <BookingDetailsModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
+        <SpBookingDetailsModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
       )}
     </div>
   );
 }
 
-export default function FullBookingHistoryPage() {
+export default function FullSpBookingsPage() {
   return (
-    <Suspense fallback={<div className={styles["loading-state"]}>Loading booking history...</div>}>
-      <FullBookingHistoryContent />
+    <Suspense fallback={<div className={styles["loading-state"]}>Loading booked services...</div>}>
+      <FullSpBookingsContent />
     </Suspense>
   );
 }

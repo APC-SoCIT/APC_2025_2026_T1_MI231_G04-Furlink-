@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FaArrowLeft } from "react-icons/fa";
 import { ROUTES } from "@/config/routes";
@@ -8,6 +8,7 @@ import { HistoryEntry } from "../_types";
 import { useHistoryPage } from "../_hooks/useHistoryPage";
 import { WarningSuspensionHistoryTable } from "../_components/WarningSuspensionHistoryTable";
 import { HistoryDetailsModal } from "../_components/HistoryDetailsModal";
+import { DateRangeFilter, filterByDateRange } from "../_components/DateRangeFilter";
 import styles from "../page.module.css";
 
 function FullHistoryContent() {
@@ -17,6 +18,18 @@ function FullHistoryContent() {
 
   const { user, loading, warnings, suspensions, historyLoading, error } = useHistoryPage(userId);
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
+
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filteredWarnings = useMemo(
+    () => filterByDateRange(warnings, (w) => w.created_at, dateFrom, dateTo),
+    [warnings, dateFrom, dateTo]
+  );
+  const filteredSuspensions = useMemo(
+    () => filterByDateRange(suspensions, (s) => s.suspended_at, dateFrom, dateTo),
+    [suspensions, dateFrom, dateTo]
+  );
 
   if (loading) return <div className={styles["loading-state"]}>Loading history...</div>;
   if (error) return <div className={styles["error-state"]}>Error: {error}</div>;
@@ -40,9 +53,19 @@ function FullHistoryContent() {
           </h1>
         </div>
 
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onChangeFrom={setDateFrom}
+          onChangeTo={setDateTo}
+          shownCount={filteredWarnings.length + filteredSuspensions.length}
+          totalCount={warnings.length + suspensions.length}
+          itemLabel="records"
+        />
+
         <WarningSuspensionHistoryTable
-          warnings={warnings}
-          suspensions={suspensions}
+          warnings={filteredWarnings}
+          suspensions={filteredSuspensions}
           loading={historyLoading}
           onViewDetails={setSelectedEntry}
         />

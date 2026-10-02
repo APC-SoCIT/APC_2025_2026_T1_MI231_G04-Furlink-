@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ROUTES } from "@/config/routes";
-import { FaArrowLeft } from "react-icons/fa";
-import { BookingRow, HistoryEntry } from "./_types";
+import { FaArrowLeft, FaPaw, FaConciergeBell } from "react-icons/fa";
+import { BookingRow, HistoryEntry, SpBookingRow, SP_ROLES, PO_ROLES } from "./_types";
 import { useUserDetails } from "./_hooks/useUserDetails";
+import { useSpBookings } from "./_hooks/useSpBookings";
 import { PageHeader } from "./_components/PageHeader";
 import { SuspensionBanner } from "./_components/SuspensionBanner";
 import { PersonalInfoCard } from "./_components/PersonalInfoCard";
 import { AdminActionsCard } from "./_components/AdminActionsCard";
 import { BookingHistoryTable } from "./_components/BookingHistoryTable";
 import { BookingDetailsModal } from "./_components/BookingDetailsModal";
+// NOTE: the path must match your actual filename casing exactly
+import { SpBookingHistoryTable } from "./_components/SPBookingHistoryTable";
+import { SpBookingDetailsModal } from "./_components/SPBookingDetailsModal";
 import { WarningSuspensionHistoryTable } from "./_components/WarningSuspensionHistoryTable";
 import { HistoryDetailsModal } from "./_components/HistoryDetailsModal";
 import { AdminModals } from "./_components/AdminModals";
@@ -31,37 +35,82 @@ function UserDetailsContent() {
     confirmSendWarning, confirmSuspend, confirmLiftSuspension
   } = useUserDetails(userId);
 
+  // Roles stored in the DB: "pet_owner", "service_provider", "both_sp_po"
+  // - Pet owner history: pet_owner + both_sp_po
+  // - SP booked services: service_provider + both_sp_po
+  // - Warning/suspension history: shown for every role (pet_owner, service_provider, both_sp_po)
+  const showPoBookings = !!user?.role && PO_ROLES.includes(user.role);
+  const showSpBookings = !!user?.role && SP_ROLES.includes(user.role);
+
+  // Accounts with both sides get a switch so only one booking card is visible at a time
+  const isBothRole = showPoBookings && showSpBookings;
+  const showWarningHistory = !!user?.role;
+  const [activeBookingView, setActiveBookingView] = useState<"po" | "sp">("po");
+  const showPoCard = showPoBookings && (!isBothRole || activeBookingView === "po");
+  const showSpCard = showSpBookings && (!isBothRole || activeBookingView === "sp");
+
+  const { spBookings, spBookingsLoading } = useSpBookings(userId, showSpBookings);
+
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
+  const [selectedSpBooking, setSelectedSpBooking] = useState<SpBookingRow | null>(null);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
   const [warningMessage, setWarningMessage] = useState("");
-  const [warningSeverity, setWarningSeverity] = useState("normal"); 
+  const [warningSeverity, setWarningSeverity] = useState("normal");
 
   const [showSendWarningConfirm, setShowSendWarningConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [showLiftConfirm, setShowLiftConfirm] = useState(false);
+  const [warningSentNotice, setWarningSentNotice] = useState(false);
+  const [suspensionSentNotice, setSuspensionSentNotice] = useState(false);
+
+  // Tracks which action last ran. Warning and suspension results are shown in
+  // modals, so the inline success banner is hidden for them.
+  const lastActionRef = useRef<"warning" | "suspend" | "lift" | null>(null);
+
+  // If the warning triggered an auto-suspension, only the "User Auto-Suspended"
+  // modal should show, so clear the "Warning Sent" state to stop it appearing afterwards.
+  useEffect(() => {
+    if (autoSuspendNotice) setWarningSentNotice(false);
+  }, [autoSuspendNotice]);
 
   const activeWarningCount = warnings.filter((w) => w.status === "active").length;
-  const isSuspended = !!currentSuspension && currentSuspension.status === "active" && new Date(currentSuspension.suspended_until) > new Date();
+  const isSuspended =
+    !!currentSuspension &&
+    currentSuspension.status === "active" &&
+    new Date(currentSuspension.suspended_until) > new Date();
 
   // Handlers to link the UI Modals to the hook logic
   const handleSendWarningConfirm = async () => {
+    lastActionRef.current = "warning";
     const success = await confirmSendWarning(warningMessage, warningSeverity);
     if (success) {
       setShowSendWarningConfirm(false);
       setWarningMessage("");
       setWarningSeverity("normal");
+      setWarningSentNotice(true);
     }
   };
 
   const handleSuspendConfirm = async () => {
+    lastActionRef.current = "suspend";
     const success = await confirmSuspend();
-    if (success) setShowSuspendConfirm(false);
+    if (success) {
+      setShowSuspendConfirm(false);
+      setSuspensionSentNotice(true);
+    }
   };
 
   const handleLiftSuspensionConfirm = async () => {
+    lastActionRef.current = "lift";
     const success = await confirmLiftSuspension();
     if (success) setShowLiftConfirm(false);
   };
+
+  // Hide the inline banner for warning/suspension success (they're modals now).
+  // The lift-suspension message still uses the banner.
+  const successHandledByModal =
+    lastActionRef.current === "warning" || lastActionRef.current === "suspend";
+  const bannerSuccess = successHandledByModal ? null : actionSuccess;
 
   if (loading) return <div className={styles["loading-state"]}>Loading user details...</div>;
   if (error) return <div className={styles["error-state"]}>Error: {error}</div>;
@@ -70,7 +119,7 @@ function UserDetailsContent() {
   return (
     <div className={styles["admin-dashboard-page"]}>
       <main className={styles["admin-dashboard-wrapper"]}>
-        
+
         <div className={styles["back-button-container"]}>
           <button className={styles["btn-back"]} onClick={() => router.push(ROUTES.ADMIN.ADMIN_DASHBOARD)}>
             <FaArrowLeft /> Back to Dashboard
@@ -78,29 +127,29 @@ function UserDetailsContent() {
         </div>
 
         <PageHeader user={user} isSuspended={isSuspended} />
-        
-        <SuspensionBanner 
-          currentSuspension={currentSuspension} 
-          autoSuspended={autoSuspended} 
-          isSuspended={isSuspended} 
+
+        <SuspensionBanner
+          currentSuspension={currentSuspension}
+          autoSuspended={autoSuspended}
+          isSuspended={isSuspended}
         />
 
-        {(actionError || actionSuccess) && (
+        {(actionError || bannerSuccess) && (
           <div className={actionError ? styles["action-error"] : styles["action-success"]}>
-            {actionError || actionSuccess}
+            {actionError || bannerSuccess}
           </div>
         )}
 
         <div className={styles["details-grid"]}>
           <div className={styles["left-column"]}>
             <PersonalInfoCard user={user} businessEmail={businessEmail} />
-            <AdminActionsCard 
+            <AdminActionsCard
               warningsLoading={warningsLoading}
               activeWarningCount={activeWarningCount}
               warningMessage={warningMessage}
               setWarningMessage={setWarningMessage}
-              warningSeverity={warningSeverity}              
-              setWarningSeverity={setWarningSeverity}        
+              warningSeverity={warningSeverity}
+              setWarningSeverity={setWarningSeverity}
               sendingWarning={sendingWarning}
               onSendWarningClick={() => setShowSendWarningConfirm(true)}
               isSuspended={isSuspended}
@@ -114,22 +163,74 @@ function UserDetailsContent() {
           </div>
 
           <div className={styles["right-column"]}>
-            <BookingHistoryTable 
-              bookings={bookings} 
-              bookingsLoading={bookingsLoading}
-              onViewDetails={setSelectedBooking}
-              userId={userId ?? undefined}
-              limit={5}
-            />
+            {/* Booking view switch (both_sp_po only) */}
+            {isBothRole && (
+              <div
+                className={styles["view-toggle"]}
+                data-active={activeBookingView}
+                role="tablist"
+                aria-label="Booking history view"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeBookingView === "po"}
+                  className={`${styles["view-toggle-btn"]} ${activeBookingView === "po" ? styles["view-toggle-active"] : ""}`}
+                  onClick={() => setActiveBookingView("po")}
+                >
+                  <FaPaw /> Pet Owner Bookings ({bookings.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeBookingView === "sp"}
+                  className={`${styles["view-toggle-btn"]} ${activeBookingView === "sp" ? styles["view-toggle-active"] : ""}`}
+                  onClick={() => setActiveBookingView("sp")}
+                >
+                  <FaConciergeBell /> Booked Services ({spBookings.length})
+                </button>
+              </div>
+            )}
 
-            <WarningSuspensionHistoryTable
-              warnings={warnings}
-              suspensions={suspensionHistory}
-              loading={warningsLoading || suspensionHistoryLoading}
-              onViewDetails={setSelectedHistoryEntry}
-              userId={userId ?? undefined}
-              limit={5}
-            />
+            {/* key remounts the panel on switch so the fade-in replays */}
+            <div
+              key={activeBookingView}
+              className={isBothRole ? styles["view-panel"] : undefined}
+            >
+              {/* 1. Pet owner booking history (pet_owner, both_sp_po) */}
+              {showPoCard && (
+                <BookingHistoryTable
+                  bookings={bookings}
+                  bookingsLoading={bookingsLoading}
+                  onViewDetails={setSelectedBooking}
+                  userId={userId ?? undefined}
+                  limit={5}
+                />
+              )}
+
+              {/* 2. Services booked with this provider (service_provider, both_sp_po) */}
+              {showSpCard && (
+                <SpBookingHistoryTable
+                  bookings={spBookings}
+                  loading={spBookingsLoading}
+                  onViewDetails={setSelectedSpBooking}
+                  userId={userId ?? undefined}
+                  limit={5}
+                />
+              )}
+            </div>
+
+            {/* 3. Warning / suspension history (all roles) */}
+            {showWarningHistory && (
+              <WarningSuspensionHistoryTable
+                warnings={warnings}
+                suspensions={suspensionHistory}
+                loading={warningsLoading || suspensionHistoryLoading}
+                onViewDetails={setSelectedHistoryEntry}
+                userId={userId ?? undefined}
+                limit={5}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -138,11 +239,15 @@ function UserDetailsContent() {
         <BookingDetailsModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
       )}
 
+      {selectedSpBooking && (
+        <SpBookingDetailsModal booking={selectedSpBooking} onClose={() => setSelectedSpBooking(null)} />
+      )}
+
       {selectedHistoryEntry && (
         <HistoryDetailsModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />
       )}
 
-      <AdminModals 
+      <AdminModals
         user={user}
         warningMessage={warningMessage}
         warningSeverity={warningSeverity}
@@ -162,6 +267,10 @@ function UserDetailsContent() {
         confirmLiftSuspension={handleLiftSuspensionConfirm}
         autoSuspendNotice={autoSuspendNotice}
         setAutoSuspendNotice={setAutoSuspendNotice}
+        warningSentNotice={warningSentNotice}
+        setWarningSentNotice={setWarningSentNotice}
+        suspensionSentNotice={suspensionSentNotice}
+        setSuspensionSentNotice={setSuspensionSentNotice}
       />
     </div>
   );

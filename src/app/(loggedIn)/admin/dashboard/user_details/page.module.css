@@ -988,3 +988,157 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/*Toggle for sp po booking history*/
+.view-toggle {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  background: #eef0f6;
+  border: 1px solid #c4c5c6;
+  border-radius: 999px;
+}
+
+.view-toggle::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+  background: #193687;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(16, 36, 92, 0.25);
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-toggle[data-active="sp"]::before {
+  transform: translateX(calc(100% + 4px));
+}
+
+.view-toggle-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.view-toggle-btn:hover:not(.view-toggle-active) {
+  color: #10245c;
+}
+
+.view-toggle-btn:focus-visible {
+  outline: 2px solid #10245c;
+  outline-offset: 2px;
+}
+
+.view-toggle-active {
+  color: #ffffff;
+}
+
+.view-panel {
+  animation: viewPanelIn 0.3s ease both;
+}
+
+@keyframes viewPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stacked tabs on small screens: no slide, just a smooth color change */
+@media (max-width: 480px) {
+  .view-toggle {
+    flex-direction: column;
+    border-radius: 12px;
+  }
+
+  .view-toggle::before {
+    display: none;
+  }
+
+  .view-toggle-btn {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .view-toggle-active {
+    background: #10245c;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-toggle::before,
+  .view-toggle-btn {
+    transition: none;
+  }
+
+  .view-panel {
+    animation: none;
+  }
+}
+
+.date-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 16px 0;
+  color: #0f2557;
+}
+
+.date-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f2557;
+}
+
+.date-filter-field input {
+  padding: 8px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font: inherit;
+  color: #0f2557;
+  background: #fff;
+}
+
+.date-filter-clear {
+  padding: 8px 14px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f2557;
+  cursor: pointer;
+}
+
+.date-filter-count {
+  order: -1;
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: #0f2557;
+  opacity: 0.7;
+  padding-bottom: 10px;
+}
