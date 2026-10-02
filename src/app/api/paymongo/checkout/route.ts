@@ -62,7 +62,7 @@ export async function POST(req: Request) {
                 quantity: 1,
               },
             ],
-            payment_method_types: ['card', 'gcash', 'paymaya', 'qrph'],
+            payment_method_types: ['card', 'gcash', 'paymaya'],
             success_url: successUrl,
             cancel_url: cancelUrl,
             metadata: {

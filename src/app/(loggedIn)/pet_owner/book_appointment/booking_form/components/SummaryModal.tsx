@@ -117,7 +117,6 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
               <span className="pay-badge gcash">GCash</span>
               <span className="pay-badge maya">Maya</span>
               <span className="pay-badge card">Cards</span>
-              <span className="pay-badge qrph">QR Ph</span>
             </div>
           </div>
 
