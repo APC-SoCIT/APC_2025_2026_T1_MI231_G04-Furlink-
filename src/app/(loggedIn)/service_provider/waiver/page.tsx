@@ -4,7 +4,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
-import "../manage_listing.css";
+import "../manage_listing/manage_listing.css";
 
 export default function PlatformWaiverPage() {
   const router = useRouter();
