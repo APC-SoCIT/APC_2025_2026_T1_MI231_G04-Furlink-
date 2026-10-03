@@ -42,6 +42,14 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
 
         const role = profile.role; 
 
+        // The Furlink standard waiver is a read-only page that pet owners open from the
+        // booking widget. It lives under /service_provider, so let any active, logged-in
+        // user through instead of bouncing them to their own dashboard.
+        if (pathname === ROUTES.SERVICE_PROVIDER.WAIVER) {
+          setIsLoading(false);
+          return;
+        }
+
         // 3. Admin-only pages check
         if (pathname.startsWith("/admin")) {
           if (role !== "admin") {

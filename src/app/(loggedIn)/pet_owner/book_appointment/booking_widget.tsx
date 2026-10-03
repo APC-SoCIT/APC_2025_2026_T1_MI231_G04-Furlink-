@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ROUTES } from '@/config/routes';
 import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 import './capacity_modal.css';
 
@@ -31,6 +32,7 @@ type BookingWidgetProps = {
   operatingHours?: OperatingHour[];
   existingBookings?: ExistingBooking[];
   currentUserId: string;
+  waiverUrl?: string | null;
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -47,9 +49,14 @@ export default function BookingWidget({
   spId, 
   operatingHours = [], 
   existingBookings = [],
-  currentUserId 
+  currentUserId,
+  waiverUrl = null
 }: BookingWidgetProps) {
   const router = useRouter();
+
+  const trimmedWaiver = (waiverUrl ?? '').trim();
+  const hasProviderWaiver =
+    /^https?:\/\//i.test(trimmedWaiver) && !trimmedWaiver.includes('furlink-standard-waiver.pdf');
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [nowTime, setNowTime] = useState<number>(0);
@@ -407,8 +414,28 @@ export default function BookingWidget({
             style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
           >
             <strong>Terms and Conditions</strong>
-          </Link>{' '}
-          including policies on down payments, cancellations, and pet safety.
+          </Link>
+          {' '}and the{' '}
+          {hasProviderWaiver ? (
+            <a
+              href={trimmedWaiver}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
+            >
+              <strong>Service Provider Waiver</strong>
+            </a>
+          ) : (
+            <Link
+              href={ROUTES.SERVICE_PROVIDER.WAIVER}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
+            >
+              <strong>furlink Waiver</strong>
+            </Link>
+          )}
+          {' '}including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
