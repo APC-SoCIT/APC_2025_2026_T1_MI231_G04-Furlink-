@@ -61,6 +61,13 @@ export interface Booking {
   refund_reason?: string;
   booking_review?: string | null;
   
-  // Embedded relation
+  // Embedded relations
   booking_pet_info?: BookingPetInfo[];
+  // User profile information from joined profiles table
+  profiles?: {
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    mobile_number?: string;
+  };
 }

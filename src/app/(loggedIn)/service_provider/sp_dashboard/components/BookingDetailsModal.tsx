@@ -16,29 +16,22 @@ export default function BookingDetailsModal({
 }: BookingDetailsModalProps) {
   const supabase = createClientComponentClient();
 
-  // Common UI State
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRefunding, setIsRefunding] = useState(false);
 
-  // Rejection State
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
 
-  // Approval Note State
   const [approvalNote, setApprovalNote] = useState('');
   const [showApproveInput, setShowApproveInput] = useState(false);
 
-  // Completion / No-Show State
   const [showCompleteInput, setShowCompleteInput] = useState(false);
   const [completionOutcome, setCompletionOutcome] = useState<'service_completed' | 'no_show'>('service_completed');
-  // NEW: State to manage inline confirmation for no-shows
   const [isConfirmingNoShow, setIsConfirmingNoShow] = useState(false);
   
-  // Employee Assignment State (Per Pet)
   const [employees, setEmployees] = useState<any[]>([]);
   const [petEmployeeAssignments, setPetEmployeeAssignments] = useState<Record<string, string>>({});
 
-  // Fetch employees for both 'paid' and 'approved' Upcoming bookings
   useEffect(() => {
     if ((selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') && selectedBooking.sp_id) {
       const fetchEmployees = async () => {
@@ -87,7 +80,6 @@ export default function BookingDetailsModal({
   };
 
   const handleCompleteOrNoShow = async () => {
-    // If No-Show, handle the two-step inline confirmation
     if (completionOutcome === 'no_show') {
       if (!isConfirmingNoShow) {
         setIsConfirmingNoShow(true);
@@ -106,7 +98,6 @@ export default function BookingDetailsModal({
       return;
     }
 
-    // Standard Service Completed Logic
     const pets = selectedBooking.booking_pet_info || [];
     const missingAssignments = pets.some(pet => !petEmployeeAssignments[pet.id]);
     if (missingAssignments) {
@@ -217,6 +208,18 @@ export default function BookingDetailsModal({
           <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem' }}>
             <p style={{ fontSize: '0.75rem', color: '#1e3a8a', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '0.5rem' }}>Note to Pet Owner</p>
             <p style={{ fontSize: '0.875rem', color: '#1e40af', margin: 0, whiteSpace: 'pre-wrap' }}>{selectedBooking.booking_comment}</p>
+          </div>
+        )}
+
+        {/* UPDATED: Pet Owner Details Section rendering DB columns */}
+        {selectedBooking.profiles && (
+          <div style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+            <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.875rem', color: '#1e3a8a', textTransform: 'uppercase' }}>Pet Owner Details</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.875rem', color: '#334155' }}>
+              <p><strong>Name:</strong> {selectedBooking.profiles.first_name} {selectedBooking.profiles.last_name}</p>
+              <p><strong>Username:</strong> {selectedBooking.profiles.username || 'N/A'}</p>
+              <p><strong>Contact:</strong> {selectedBooking.profiles.mobile_number || 'N/A'}</p>
+            </div>
           </div>
         )}
 
@@ -348,7 +351,6 @@ export default function BookingDetailsModal({
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Booking Outcome:</label>
                     <select
                       value={completionOutcome}
-                      // Reset the confirmation state if they toggle dropdown options
                       onChange={(e) => {
                         setCompletionOutcome(e.target.value as 'service_completed' | 'no_show');
                         setIsConfirmingNoShow(false);
@@ -386,7 +388,6 @@ export default function BookingDetailsModal({
                         Warning: Marking this as a No-Show will finalize the booking. The customer will not be able to rate the service.
                       </p>
                       
-                      {/* NEW: Inline confirmation text replaces the browser alert popup */}
                       {isConfirmingNoShow && (
                         <p style={{ fontSize: '0.875rem', color: '#b91c1c', marginTop: '0.5rem', fontWeight: 'bold' }}>
                           Are you sure you want to mark this booking as a Customer No-Show?
@@ -405,7 +406,6 @@ export default function BookingDetailsModal({
                     </button>
                     <button 
                       onClick={() => { 
-                        // If they are in the middle of confirming a no-show, Cancel just steps back from the confirmation
                         if (isConfirmingNoShow) {
                           setIsConfirmingNoShow(false);
                         } else {

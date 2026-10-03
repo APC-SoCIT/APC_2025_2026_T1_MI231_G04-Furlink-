@@ -1,5 +1,5 @@
 'use client';
-
+ 
 import React, { useState } from 'react';
 import {
   FaFileAlt,
@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fa';
 import { PetFormData, ServiceOption } from '../types';
 import { CancellationPolicyNotice } from './CancellationPolicyNotice';
-
+ 
 interface SummaryModalProps {
   petForms: PetFormData[];
   availableServices: ServiceOption[];
@@ -22,7 +22,7 @@ interface SummaryModalProps {
   onClose: () => void;
   onConfirm: () => void;
 }
-
+ 
 export const SummaryModal: React.FC<SummaryModalProps> = ({
   petForms,
   availableServices,
@@ -34,7 +34,7 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
   onConfirm,
 }) => {
   const [showPaymentBreakdown, setShowPaymentBreakdown] = useState(false);
-
+ 
   return (
     <div className="modal-backdrop">
       <div className="summary-modal-card">
@@ -47,7 +47,7 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
             <FaTimes />
           </button>
         </div>
-
+ 
         <div className="summary-modal-body">
           {petForms.map((pet, pIdx) => {
             const petTotal = pet.selectedServices.reduce((sum, s) => sum + s.price, 0);
@@ -62,7 +62,7 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
                     <span className="summary-pet-total-val">₱{petTotal.toFixed(2)}</span>
                   </div>
                 </div>
-
+ 
                 <div className="summary-pet-info-grid">
                   <div>Type: <strong>{pet.petType}</strong></div>
                   <div>Breed: <strong>{pet.breed || 'N/A'}</strong></div>
@@ -71,7 +71,7 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
                   <div>Weight: <strong>{pet.weight ? `${pet.weight} kg` : 'N/A'}</strong></div>
                   <div>Size: <strong>{pet.calculatedSize.toUpperCase()}</strong></div>
                 </div>
-
+ 
                 <div className="summary-services-box">
                   <div className="availed-title">AVAILED SERVICES:</div>
                   {pet.selectedServices.map((sItem, sIndex) => {
@@ -84,11 +84,11 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
                     );
                   })}
                 </div>
-
+ 
                 <div className="summary-behaviors">
                   Behaviors: {pet.behaviors.length > 0 ? pet.behaviors.join(' / ') : 'None selected'}
                 </div>
-
+ 
                 {pet.aiHaircutUrl && (
                   <div className="summary-ai-haircut-box">
                     <div className="summary-ai-haircut-label">
@@ -97,7 +97,7 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
                     <img src={pet.aiHaircutUrl} alt={`${pet.petName || 'Pet'} AI haircut preview`} className="summary-ai-haircut-img" />
                   </div>
                 )}
-
+ 
                 <div className={`summary-consent-badge ${pet.emergencyConsent ? 'approved' : 'declined'}`}>
                   <FaExclamationCircle />
                   <span>Emergency Transport Consent: {pet.emergencyConsent ? 'APPROVED' : 'DECLINED'}</span>
@@ -105,9 +105,9 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
               </div>
             );
           })}
-
+ 
           <hr className="summary-divider" />
-
+ 
           <div className="paymongo-supported-methods">
             <div className="payment-notice-header">
               <FaCreditCard className="pay-icon" />
@@ -117,22 +117,21 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
               <span className="pay-badge gcash">GCash</span>
               <span className="pay-badge maya">Maya</span>
               <span className="pay-badge card">Cards</span>
-              <span className="pay-badge qrph">QR Ph</span>
             </div>
           </div>
-
+ 
           <div className="summary-financials">
             <div className="financial-row total-row">
               <span>Total Service Amount (VAT Inclusive):</span>
               <span className="amount-bold">₱{grandTotal.toFixed(2)}</span>
             </div>
-
+ 
             <div className="breakdown-toggle-box">
               <button className="toggle-breakdown-btn" onClick={() => setShowPaymentBreakdown(!showPaymentBreakdown)}>
                 <span>See payment breakdown</span>
                 <FaChevronDown className={`chevron-icon ${showPaymentBreakdown ? 'open' : ''}`} />
               </button>
-
+ 
               {showPaymentBreakdown && (
                 <div className="payment-breakdown-details">
                   {petForms.map((p, idx) => (
@@ -150,10 +149,10 @@ export const SummaryModal: React.FC<SummaryModalProps> = ({
               )}
             </div>
           </div>
-
+ 
           <CancellationPolicyNotice totalAmount={grandTotal} />
         </div>
-
+ 
         <div className="summary-modal-footer">
           <button className="btn-back-edit" onClick={onClose} disabled={isSubmitting}>
             Back to Edit

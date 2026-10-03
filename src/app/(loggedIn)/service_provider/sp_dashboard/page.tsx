@@ -18,25 +18,15 @@ export default function ServiceProviderDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
   
-  // State for the sub-filter in the "All Bookings" tab
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  
-  // State for sorting the "New Requests" tab
   const [newRequestsSort, setNewRequestsSort] = useState<'urgent' | 'latest'>('urgent');
-  
-  // State for sorting the "Upcoming" tab
   const [upcomingSort, setUpcomingSort] = useState<'chronological' | 'farthest'>('chronological');
-  
-  // UPDATED: Added 'no_show' to the allowed types for the Completed tab filter
   const [completedStatusFilter, setCompletedStatusFilter] = useState<'all' | 'to_rate' | 'rated' | 'no_show'>('all');
-
-  // State for sorting the "Cancelled" tab
   const [cancelledSort, setCancelledSort] = useState<'booking_date' | 'refund_date'>('booking_date');
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Reset sub-filters whenever the user switches main tabs
   useEffect(() => {
     setStatusFilter('all');
     setNewRequestsSort('urgent');
@@ -67,10 +57,17 @@ export default function ServiceProviderDashboardPage() {
         return;
       }
 
+      // UPDATED: Added profiles join with exact columns
       const { data, error } = await supabase
         .from("booking_info")
         .select(`
           *,
+          profiles (
+            first_name,
+            last_name,
+            username,
+            mobile_number
+          ),
           booking_pet_info (
             *,
             booking_service_info (*)
@@ -141,9 +138,7 @@ export default function ServiceProviderDashboardPage() {
   const TAB_CARDS: { label: string; value: BookingStatus | 'all'; filter: string[] }[] = [
     { label: 'New Requests', value: 'pending_sp_response', filter: ['pending_sp_response'] },
     { label: 'Upcoming', value: 'paid', filter: ['approved', 'paid'] },
-    // UPDATED: Moved 'no_show' into the Completed tab
     { label: 'Completed', value: 'rated', filter: ['to_rate', 'rated', 'no_show'] },
-    // UPDATED: Removed 'no_show' from Cancelled tab
     { label: 'Cancelled', value: 'cancelled', filter: ['cancelled', 'rejected', 'cancelled_by_po', 'processing', 'to_refund', 'refunded'] },
   ];
 
@@ -304,7 +299,6 @@ export default function ServiceProviderDashboardPage() {
               </select>
             )}
 
-            {/* UPDATED: Added No-Show option to the Completed tab filter */}
             {activeTab === 'rated' && (
               <select 
                 value={completedStatusFilter}
