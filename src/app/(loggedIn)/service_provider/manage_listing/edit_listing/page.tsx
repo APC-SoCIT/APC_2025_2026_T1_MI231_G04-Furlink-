@@ -33,46 +33,48 @@ export default function EditListingPage() {
     const fetchServices = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) throw new Error("Authentication required.");
 
-        const { data: generalData } = await supabase
+        const { data: generalData, error: generalError } = await supabase
           .from('sp_general_info')
           .select('id')
           .eq('profiles_id', user.id)
           .single();
 
-        if (generalData) {
-          setSpId(generalData.id);
+        if (generalError || !generalData) {
+          throw new Error("Could not fetch provider profile.");
+        }
 
-          const { data: srvData, error } = await supabase
-            .from('sp_services')
-            .select(`*, sp_service_options(*)`)
-            .eq('sp_id', generalData.id);
+        setSpId(generalData.id);
 
-          if (error) throw error;
+        const { data: srvData, error } = await supabase
+          .from('sp_services')
+          .select(`*, sp_service_options(*)`)
+          .eq('sp_id', generalData.id);
 
-          if (srvData && srvData.length > 0) {
-            const loadedServices = srvData.map((s: any) => ({
-              id: s.id,
-              type: s.service_type,
-              name: s.service_name,
-              description: s.service_description,
-              notes: s.service_notes || "",
-              haircutIncluded: s.service_haircut_included,
-              pricing: (s.sp_service_options || []).map((p: any) => ({
-                id: p.id,
-                petType: p.pet_type,
-                size: p.pet_size,
-                minWeight: p.pet_min_weight_range === 0 ? "" : p.pet_min_weight_range.toString(),
-                maxWeight: p.pet_max_weight_range === 999 ? "" : p.pet_max_weight_range.toString(),
-                price: p.service_price.toString()
-              }))
-            }));
-            setServices(loadedServices);
-          }
+        if (error) throw new Error("Failed to load services data.");
+
+        if (srvData && srvData.length > 0) {
+          const loadedServices = srvData.map((s: any) => ({
+            id: s.id,
+            type: s.service_type,
+            name: s.service_name,
+            description: s.service_description,
+            notes: s.service_notes || "",
+            haircutIncluded: s.service_haircut_included,
+            pricing: (s.sp_service_options || []).map((p: any) => ({
+              id: p.id,
+              petType: p.pet_type,
+              size: p.pet_size,
+              minWeight: p.pet_min_weight_range === 0 ? "" : p.pet_min_weight_range.toString(),
+              maxWeight: p.pet_max_weight_range === 999 ? "" : p.pet_max_weight_range.toString(),
+              price: p.service_price.toString()
+            }))
+          }));
+          setServices(loadedServices);
         }
       } catch (err: any) {
-        setErrorMessage("Failed to load services.");
+        setErrorMessage(err?.message || "An unexpected error occurred while loading services.");
       } finally {
         setIsLoading(false);
       }
@@ -91,6 +93,7 @@ export default function EditListingPage() {
     
     if (services.length === 0) {
       setErrorMessage("Please add at least one service.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -118,7 +121,7 @@ export default function EditListingPage() {
     setIsSaving(true);
 
     try {
-      if (!spId) throw new Error("Provider ID not found.");
+      if (!spId) throw new Error("Provider profile ID is missing. Cannot save changes.");
 
       const currentServiceIds = services.map((s: any) => s.id).filter(Boolean);
       const currentOptionIds = services.flatMap((s: any) => s.pricing.map((p: any) => p.id)).filter(Boolean);
@@ -139,7 +142,7 @@ export default function EditListingPage() {
         const { error: optDelErr } = await supabase.from('sp_service_options').delete().in('id', optionsToDelete);
         if (optDelErr) {
           if (optDelErr.code === '23503') throw new Error("Cannot remove pricing options that have been booked by pet owners. Please keep them listed.");
-          throw optDelErr;
+          throw new Error("Failed to delete removed pricing options.");
         }
       }
 
@@ -147,7 +150,7 @@ export default function EditListingPage() {
         const { error: srvDelErr } = await supabase.from('sp_services').delete().in('id', servicesToDelete);
         if (srvDelErr) {
           if (srvDelErr.code === '23503') throw new Error("Cannot remove services that have active or historical bookings. Please keep them listed.");
-          throw srvDelErr;
+          throw new Error("Failed to delete removed services.");
         }
       }
 
@@ -169,7 +172,7 @@ export default function EditListingPage() {
           .select()
           .single();
 
-        if (srvErr) throw srvErr;
+        if (srvErr) throw new Error(`Failed to save service: ${service.name}`);
 
         for (const opt of (service as any).pricing) {
           const optId = (opt as any).id;
@@ -187,13 +190,13 @@ export default function EditListingPage() {
             .from('sp_service_options')
             .upsert(optPayload, { onConflict: 'id' });
 
-          if (optErr) throw optErr;
+          if (optErr) throw new Error("Failed to save pricing options.");
         }
       }
 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to update services.");
+      setErrorMessage(err?.message || "An unexpected error occurred during save.");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setIsSaving(false);
@@ -207,11 +210,12 @@ export default function EditListingPage() {
   return (
     <div className="manage-listing-page-layout">
       <div className="manage-listing-container">
-        <div style={{ maxWidth: '800px', margin: '0 auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        {/* STRUCTURAL FIX: Increased maxWidth from 800px to 1100px so the two-column grid has enough room on desktop view */}
+        <div style={{ maxWidth: '1100px', margin: '0 auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
             <h2 style={{ color: '#0a217a', margin: 0 }}>Edit Services Menu</h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button type="button" onClick={() => addService("individual_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Individual</button>
               <button type="button" onClick={() => addService("packaged_service")} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0E2679', background: 'white', color: '#0E2679', cursor: 'pointer', fontWeight: '700' }}>+ Package</button>
             </div>
@@ -235,14 +239,19 @@ export default function EditListingPage() {
                   removeService={removeService}
                   validationErrors={validationErrors}
                 >
-                  <PricingTable
-                    service={service}
-                    serviceIndex={si}
-                    updatePricing={updatePricing}
-                    removePricingRow={removePricingRow}
-                    addPricingRow={addPricingRow}
-                    validationErrors={validationErrors}
-                  />
+                  {/* MOBILE & SPACING FIX: minWidth bumped to 650px. Forces scrollbar on small screens instead of collapsing inputs */}
+                  <div style={{ flex: 1, minWidth: 0, width: '100%', overflowX: 'auto', paddingBottom: '10px' }}>
+                    <div style={{ minWidth: '650px', paddingRight: '10px' }}>
+                      <PricingTable
+                        service={service}
+                        serviceIndex={si}
+                        updatePricing={updatePricing}
+                        removePricingRow={removePricingRow}
+                        addPricingRow={addPricingRow}
+                        validationErrors={validationErrors}
+                      />
+                    </div>
+                  </div>
                 </ServiceCard>
               ))}
               
@@ -253,7 +262,7 @@ export default function EditListingPage() {
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
               <button 
                 type="button" 
                 onClick={() => router.push("/service_provider/manage_listing")} 

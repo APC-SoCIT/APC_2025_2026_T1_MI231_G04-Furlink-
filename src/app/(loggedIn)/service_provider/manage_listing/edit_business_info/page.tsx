@@ -46,7 +46,7 @@ export default function EditBusinessInfoPage() {
     const fetchListingData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) throw new Error("Authentication required.");
 
         const { data, error } = await supabase
           .from('sp_general_info')
@@ -54,7 +54,7 @@ export default function EditBusinessInfoPage() {
           .eq('profiles_id', user.id)
           .single();
 
-        if (error) throw error;
+        if (error) throw new Error("Could not fetch business information.");
 
         if (data) {
           const mobile = data.business_contact?.startsWith('+63')
@@ -81,7 +81,8 @@ export default function EditBusinessInfoPage() {
           }
         }
       } catch (err: any) {
-        setErrorMessage("Failed to load business info.");
+        // UI-based error handling instead of console logs
+        setErrorMessage(err?.message || "Failed to load business info.");
       } finally {
         setIsLoading(false);
       }
@@ -131,10 +132,13 @@ export default function EditBusinessInfoPage() {
   const handleLocateFromAddress = async () => {
     const queryParts = [formData.houseStreet, formData.barangay, formData.city, formData.province, "Philippines"].filter(Boolean);
     if (queryParts.length <= 1) {
-      alert("Please fill in at least a city, province, or street address first.");
+      // Replaced native alert with UI error state for better UX
+      setErrorMessage("Please fill in at least a city, province, or street address to sync the map.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
+    setErrorMessage(null);
     setIsGeocoding(true);
     const coords = await forwardGeocode(queryParts.join(", "));
     setIsGeocoding(false);
@@ -142,7 +146,8 @@ export default function EditBusinessInfoPage() {
     if (coords) {
       setLocation(coords);
     } else {
-      alert("Address not found on map. You can still pinpoint your location by clicking directly on the map.");
+      setErrorMessage("Address not found on map. You can still pinpoint your location by clicking directly on the map.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -153,7 +158,7 @@ export default function EditBusinessInfoPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user session found");
+      if (!user) throw new Error("No user session found. Please log in again.");
 
       const { error } = await supabase
         .from('sp_general_info')
@@ -173,11 +178,12 @@ export default function EditBusinessInfoPage() {
         })
         .eq('profiles_id', user.id);
 
-      if (error) throw error;
+      if (error) throw new Error("Failed to save updates to the database.");
 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to update business information.");
+      setErrorMessage(err?.message || "An unexpected error occurred while saving.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setIsSaving(false);
     }
@@ -226,23 +232,24 @@ export default function EditBusinessInfoPage() {
               <input type="text" name="houseStreet" value={formData.houseStreet} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div className="listing-field-group" style={{ flex: 1 }}>
+            {/* Added flexWrap and flexible flex basis for mobile responsiveness */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="listing-field-group" style={{ flex: '1 1 200px' }}>
                 <label>Barangay</label>
                 <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
               </div>
-              <div className="listing-field-group" style={{ flex: 1 }}>
+              <div className="listing-field-group" style={{ flex: '1 1 200px' }}>
                 <label>City</label>
                 <input type="text" name="city" value={formData.city} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div className="listing-field-group" style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="listing-field-group" style={{ flex: '1 1 200px' }}>
                 <label>Province</label>
                 <input type="text" name="province" value={formData.province} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
               </div>
-              <div className="listing-field-group" style={{ flex: 1 }}>
+              <div className="listing-field-group" style={{ flex: '1 1 200px' }}>
                 <label>Postal Code</label>
                 <input type="text" name="postalCode" value={formData.postalCode} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
               </div>
@@ -276,9 +283,9 @@ export default function EditBusinessInfoPage() {
                 Click anywhere on the map or type coordinates below to automatically resolve the address.
               </p>
 
-              {/* Manual Coordinate Inputs */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
-                <div style={{ flex: 1 }}>
+              {/* Manual Coordinate Inputs - Added flexWrap for mobile scaling */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 200px' }}>
                   <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px' }}>Latitude</label>
                   <input
                     type="number"
@@ -290,7 +297,7 @@ export default function EditBusinessInfoPage() {
                     style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
                   />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: '1 1 200px' }}>
                   <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px' }}>Longitude</label>
                   <input
                     type="number"
