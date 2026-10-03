@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PetFormData, ServiceOption } from '../types';
 import { saveBooking } from '../services/bookingService';
@@ -20,7 +20,7 @@ interface Args {
 
   cooldownUntil: number | null;
   timeRemaining: string;
-  registerAttempt: () => void;
+  registerAttempt: (bookingId: string) => void;
 
   setShowFailedModal: Dispatch<SetStateAction<boolean>>;
   setShowSummaryModal: Dispatch<SetStateAction<boolean>>;
@@ -51,86 +51,104 @@ export function useBookingActions({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingPayLater, setIsSavingPayLater] = useState(false);
 
-const ensureBooking = async (): Promise<string | null> => {
-    // 1. If a temporary hold ID already exists from the widget, reuse and update it
-    if (activeBookingId) {
-      const { error: updateErr } = await supabase
-        .from('booking_info')
-        .update({
-          pet_count: petForms.length,
-          booking_total_amount: grandTotal,
-        })
-        .eq('id', activeBookingId);
+  // Remembers which booking this page session created and what the form looked like
+  // when it was saved, so a retry only reuses it if the form hasn't changed.
+  const savedRef = useRef<{ bookingId: string; signature: string } | null>(null);
 
-      if (!updateErr) {
-        // Attach pet info records to the held booking
-        for (const pet of petForms) {
-          const p = pet as any;
-          await supabase.from('booking_pet_info').insert([
-            {
-              booking_info_id: activeBookingId,
-              pet_name: p.name || p.petName || 'Pet',
-              pet_type: p.type || p.petType || 'dog',
-              pet_breed: p.breed || p.petBreed || '',
-              pet_size: p.size || p.petSize || '',
-              pet_weight: p.weight || p.petWeight || 0,
-              service_id: p.selectedServiceId || p.selectedServices?.[0] || null,
-            },
-          ]);
-        }
-        return activeBookingId;
+  // The booking last created for THIS slot in this browser tab. If the user leaves
+  // PayMongo with the browser Back button the page reloads without a booking_id, and
+  // the old 'to pay' booking would otherwise keep holding the slot next to the new one.
+  const draftKey = `furlink_draft_booking:${spId}:${dateStr}:${timeSlot}`;
+
+  const releaseStaleDraft = async () => {
+    try {
+      const staleId = window.sessionStorage.getItem(draftKey);
+      if (staleId) {
+        await supabase
+          .from('booking_info')
+          .update({ booking_status: 'cancelled' })
+          .eq('id', staleId)
+          .eq('booking_status', 'to pay'); // never touches a paid / approved booking
+        window.sessionStorage.removeItem(draftKey);
       }
+    } catch {
+      /* sessionStorage unavailable: nothing to release */
+    }
+  };
+
+  const getFormSignature = () =>
+    JSON.stringify({ petForms, grandTotal, spId, dateStr, timeSlot }, (_k, v) =>
+      typeof File !== 'undefined' && v instanceof File ? `file:${v.name}:${v.size}` : v,
+    );
+
+  /**
+   * Makes sure the whole booking form is saved (booking, pets, services, documents)
+   * with status 'to pay' BEFORE the user is sent to PayMongo. If payment fails or is
+   * abandoned the booking therefore still exists as 'to pay'. Returns null when the
+   * slot is full.
+   */
+  const ensureBooking = async (): Promise<string | null> => {
+    const signature = getFormSignature();
+
+    // Same session, form unchanged: already saved, reuse it.
+    if (savedRef.current && savedRef.current.signature === signature) {
+      return savedRef.current.bookingId;
+    }
+
+    // Returned from PayMongo (booking id came from the URL): the page reloaded, so the
+    // form in memory is blank. The booking was fully saved before payment; reuse it
+    // untouched instead of overwriting it with empty form data.
+    if (activeBookingId && !savedRef.current) {
+      return activeBookingId;
+    }
+
+    // Form was edited after an earlier save in this session: release the old hold.
+    if (savedRef.current) {
+      await supabase
+        .from('booking_info')
+        .update({ booking_status: 'cancelled' })
+        .eq('id', savedRef.current.bookingId);
+      savedRef.current = null;
+      setActiveBookingId(null);
     }
 
     const user = await getFreshUser();
     if (!user) throw new Error('User authentication failed. Please log in again.');
 
+    await releaseStaleDraft();
+
+    let createdId = null as string | null;
     try {
-      // 2. Fallback: Insert new booking if no widget draft hold exists
-      const totalPetsCount = petForms.length;
-      const { data: booking, error: bookingError } = await supabase
-        .from('booking_info')
-        .insert([
-          {
-            profiles_id: user.id,
-            sp_id: spId,
-            booking_date: dateStr,
-            booking_timeslot: timeSlot,
-            booking_status: 'pending_sp_response',
-            pet_count: totalPetsCount,
-            booking_total_amount: grandTotal,
-          },
-        ])
-        .select()
-        .single();
-
-      if (bookingError) throw new Error(bookingError.message);
-      const bookingId = booking.id;
-      setActiveBookingId(bookingId);
-
-      for (const pet of petForms) {
-        const p = pet as any;
-        await supabase.from('booking_pet_info').insert([
-          {
-            booking_info_id: bookingId,
-            pet_name: p.name || p.petName || 'Pet',
-            pet_type: p.type || p.petType || 'dog',
-            pet_breed: p.breed || p.petBreed || '',
-            pet_size: p.size || p.petSize || '',
-            pet_weight: p.weight || p.petWeight || 0,
-            service_id: p.selectedServiceId || p.selectedServices?.[0] || null,
-          },
-        ]);
+      const bookingId = await saveBooking({
+        supabase,
+        userId: user.id,
+        spId,
+        dateStr,
+        timeSlot,
+        grandTotal,
+        petForms,
+        availableServices,
+        bookingStatus: 'to pay',
+        onBookingCreated: (id) => {
+          createdId = id;
+          setActiveBookingId(id);
+        },
+      });
+      savedRef.current = { bookingId, signature };
+      try {
+        window.sessionStorage.setItem(draftKey, bookingId);
+      } catch {
+        /* ignore */
       }
-
       return bookingId;
     } catch (err: any) {
-      const msg = err.message || '';
-      // Intercept database capacity trigger exceptions cleanly
-      if (msg.toLowerCase().includes('fully booked') || msg.toLowerCase().includes('capacity') || msg.toLowerCase().includes('slot')) {
+      if (createdId) setActiveBookingId(null); // saveBooking already cancelled the row
+      const msg = (err.message || '').toLowerCase();
+      // Database capacity trigger exceptions
+      if (msg.includes('fully booked') || msg.includes('capacity') || msg.includes('slot')) {
         return null;
       }
-      throw new Error(msg || 'Failed to secure slot.');
+      throw new Error(err.message || 'Failed to save booking.');
     }
   };
 
@@ -182,7 +200,7 @@ const ensureBooking = async (): Promise<string | null> => {
         throw new Error(result.error || 'Failed to initialize payment.');
       }
 
-      registerAttempt();
+      registerAttempt(bookingId);
 
       window.location.href = result.checkoutUrl;
       setShowSummaryModal(false);

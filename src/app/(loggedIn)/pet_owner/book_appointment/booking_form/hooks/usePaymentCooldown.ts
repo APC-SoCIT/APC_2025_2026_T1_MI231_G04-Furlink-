@@ -1,20 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  getPaymentAttemptState,
+  recordPaymentAttempt,
+} from '@/lib/paymentAttempts';
 
-const MAX_ATTEMPTS = 3;
-const COOLDOWN_MS = 60 * 60 * 1000;
-
-export function usePaymentCooldown() {
+export function usePaymentCooldown(bookingId: string | null) {
   const [paymentAttempts, setPaymentAttempts] = useState(0);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState('');
+
+  // Load this booking's saved state whenever the booking changes
+  useEffect(() => {
+    const state = getPaymentAttemptState(bookingId);
+    setPaymentAttempts(state.attempts);
+    setCooldownUntil(state.cooldownUntil);
+    setTimeRemaining('');
+  }, [bookingId]);
 
   useEffect(() => {
     if (!cooldownUntil) return;
     const interval = setInterval(() => {
       const diff = cooldownUntil - Date.now();
       if (diff <= 0) {
-        setCooldownUntil(null);
-        setPaymentAttempts(0);
+        // Reads the store, which also clears the expired entry
+        const state = getPaymentAttemptState(bookingId);
+        setCooldownUntil(state.cooldownUntil);
+        setPaymentAttempts(state.attempts);
         setTimeRemaining('');
         clearInterval(interval);
       } else {
@@ -25,14 +36,17 @@ export function usePaymentCooldown() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [cooldownUntil]);
+  }, [cooldownUntil, bookingId]);
 
-  /** Call after a checkout session is successfully created. */
-  const registerAttempt = () => {
-    const next = paymentAttempts + 1;
-    setPaymentAttempts(next);
-    if (next >= MAX_ATTEMPTS) setCooldownUntil(Date.now() + COOLDOWN_MS);
-  };
+  /** Call after a checkout session is successfully created for `id`. */
+  const registerAttempt = useCallback((id: string) => {
+    const state = recordPaymentAttempt(id);
+    // Only touch the UI state if it is the booking this form is showing
+    if (id === bookingId) {
+      setPaymentAttempts(state.attempts);
+      setCooldownUntil(state.cooldownUntil);
+    }
+  }, [bookingId]);
 
   return { paymentAttempts, cooldownUntil, timeRemaining, registerAttempt };
 }

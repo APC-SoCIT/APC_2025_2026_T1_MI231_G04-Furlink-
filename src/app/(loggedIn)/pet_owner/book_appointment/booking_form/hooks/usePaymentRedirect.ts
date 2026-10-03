@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useEffect } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { clearPaymentAttempts } from '@/lib/paymentAttempts';
 
 interface Args {
   supabase: SupabaseClient;
@@ -10,10 +11,6 @@ interface Args {
   setShowSummaryModal: Dispatch<SetStateAction<boolean>>;
 }
 
-/**
- * Handles the ?status= redirect from PayMongo: verifies the payment server-side
- * (syncing paymongo_session_id / paymongo_payment_id) and opens the right modal.
- */
 export function usePaymentRedirect({
   supabase,
   statusParam,
@@ -35,6 +32,7 @@ export function usePaymentRedirect({
                 .update({ booking_status: 'pending_sp_response' })
                 .eq('id', activeBookingId);
             }
+            clearPaymentAttempts(activeBookingId);
           } catch (err) {
             console.error('Error during payment success synchronization:', err);
           }

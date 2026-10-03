@@ -29,6 +29,11 @@ import PaymentSuccessModal from './modals/PaymentSuccessModal';
 import PaymentFailedModal from './modals/PaymentFailedModal';
 import SubmitRatingModal from './modals/SubmitRatingModal';
 import CancelBookingModal from './modals/CancelBookingModal';
+import {
+  getPaymentAttemptState,
+  recordPaymentAttempt,
+  clearPaymentAttempts,
+} from '@/lib/paymentAttempts';
 
 // Unpaid ('to pay') bookings are auto-cancelled once less than this long remains before the booking start
 const UNPAID_AUTO_CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -66,22 +71,15 @@ export default function ManageBookingsPage() {
   const [isSavingPayLater, setIsSavingPayLater] = useState<boolean>(false);
   const [failedBookingId, setFailedBookingId] = useState<string | null>(null);
 
+  // Attempts and cooldown belong to ONE booking: the one being paid / that just failed.
+  const paymentBookingId = failedBookingId || selectedBooking?.id || null;
+
   useEffect(() => {
-    const savedAttempts = localStorage.getItem('payment_attempts');
-    const savedCooldown = localStorage.getItem('payment_cooldown_until');
-    
-    if (savedAttempts) setPaymentAttempts(parseInt(savedAttempts, 10));
-    if (savedCooldown) {
-      const cooldownTime = parseInt(savedCooldown, 10);
-      if (Date.now() < cooldownTime) {
-        setCooldownUntil(cooldownTime);
-      } else {
-        localStorage.removeItem('payment_cooldown_until');
-        localStorage.setItem('payment_attempts', '0');
-        setPaymentAttempts(0);
-      }
-    }
-  }, []);
+    const state = getPaymentAttemptState(paymentBookingId);
+    setPaymentAttempts(state.attempts);
+    setCooldownUntil(state.cooldownUntil);
+    setTimeRemaining('');
+  }, [paymentBookingId]);
 
   useEffect(() => {
     if (!cooldownUntil) return;
@@ -89,10 +87,10 @@ export default function ManageBookingsPage() {
     const interval = setInterval(() => {
       const remaining = cooldownUntil - Date.now();
       if (remaining <= 0) {
-        setCooldownUntil(null);
-        setPaymentAttempts(0);
-        localStorage.removeItem('payment_cooldown_until');
-        localStorage.setItem('payment_attempts', '0');
+        // Reading the store also clears this booking's expired entry
+        const state = getPaymentAttemptState(paymentBookingId);
+        setCooldownUntil(state.cooldownUntil);
+        setPaymentAttempts(state.attempts);
         clearInterval(interval);
       } else {
         const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
@@ -102,7 +100,7 @@ export default function ManageBookingsPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [cooldownUntil]);
+  }, [cooldownUntil, paymentBookingId]);
 
   const getStatusesForTab = (tab: BookingTab): string[] => {
     switch (tab) {
@@ -225,6 +223,14 @@ export default function ManageBookingsPage() {
     const queryParams = new URLSearchParams(window.location.search);
     const status = queryParams.get('status');
     const bookingId = queryParams.get('booking_id');
+    const tabParam = queryParams.get('tab');
+
+    // e.g. /pet_owner/manage_bookings?tab=to_pay opens straight on that category
+    const VALID_TABS: BookingTab[] = ['awaiting_approval', 'to_pay', 'upcoming', 'cancelled', 'refund', 'completed'];
+    if (tabParam && (VALID_TABS as string[]).includes(tabParam)) {
+      setActiveTab(tabParam as BookingTab);
+      if (!status) window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
     if (bookingId) {
       setFailedBookingId(bookingId);
@@ -241,7 +247,7 @@ export default function ManageBookingsPage() {
           }
 
           setShowSuccessModal(true);
-          localStorage.setItem('payment_attempts', '0');
+          clearPaymentAttempts(bookingId);
           setPaymentAttempts(0);
 
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -256,6 +262,7 @@ export default function ManageBookingsPage() {
       verifyAndStorePayment();
     } else if ((status === 'failed' || status === 'cancelled') && bookingId) {
       setShowFailedModal(true);
+      setActiveTab('to_pay'); // an unpaid booking lives in the To Pay category
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [fetchBookings]);
@@ -283,6 +290,8 @@ export default function ManageBookingsPage() {
   );
 
   const handleOpenDetails = (booking: BookingRecord) => {
+    // Payment limits follow the booking being viewed, not a previously failed one
+    setFailedBookingId(null);
     setSelectedBooking(booking);
     setShowDetailsModal(true);
   };
@@ -342,11 +351,6 @@ export default function ManageBookingsPage() {
   };
 
   const handlePayNow = async (bookingId?: string) => {
-    if (cooldownUntil && Date.now() < cooldownUntil) {
-      alert('Payment attempts are temporarily locked due to multiple failed tries. Please wait for the cooldown or choose Pay Later.');
-      return;
-    }
-
     const targetBookingId = bookingId || failedBookingId || selectedBooking?.id;
 
     if (!targetBookingId) {
@@ -354,15 +358,19 @@ export default function ManageBookingsPage() {
       return;
     }
 
-    const newAttempts = paymentAttempts + 1;
-    setPaymentAttempts(newAttempts);
-    localStorage.setItem('payment_attempts', newAttempts.toString());
+    // Limits are per booking: only THIS booking's attempts / cooldown matter
+    const bookingState = getPaymentAttemptState(targetBookingId);
+    if (bookingState.cooldownUntil && Date.now() < bookingState.cooldownUntil) {
+      const remainingMs = bookingState.cooldownUntil - Date.now();
+      const mins = Math.floor(remainingMs / 60000);
+      const secs = Math.floor((remainingMs % 60000) / 1000);
 
-    if (newAttempts >= 3) {
-      const cooldownTime = Date.now() + 60 * 60 * 1000;
-      setCooldownUntil(cooldownTime);
-      localStorage.setItem('payment_cooldown_until', cooldownTime.toString());
-      setShowFailedModal(true);
+      setFailedBookingId(targetBookingId);
+      setCooldownUntil(bookingState.cooldownUntil);
+      setPaymentAttempts(bookingState.attempts);
+      setTimeRemaining(`${mins}m ${secs}s`);
+      setShowDetailsModal(false);
+      setShowFailedModal(true); // locked state of the modal explains the cooldown / Pay Later
       return;
     }
 
@@ -405,6 +413,12 @@ export default function ManageBookingsPage() {
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(result.error || 'Failed to initialize payment session.');
       }
+
+      // Count the attempt only now that PayMongo is really being opened. The limit is
+      // reached after the 3rd redirect; the 4th click is the one that gets blocked.
+      const updated = recordPaymentAttempt(targetBookingId);
+      setPaymentAttempts(updated.attempts);
+      if (updated.cooldownUntil) setCooldownUntil(updated.cooldownUntil);
 
       window.location.href = result.checkoutUrl;
     } catch (err: any) {
@@ -716,7 +730,7 @@ export default function ManageBookingsPage() {
         />
       )}
 
-      {/* Reschedule Picker Modal **/}
+      {/* Reschedule Picker Modal */}
       {showRescheduleModal && selectedBooking && (
         <RescheduleModal
           bookingId={selectedBooking.id}

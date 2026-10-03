@@ -50,7 +50,7 @@ function BookingFormContent() {
   } = useBookingParams();
   const [activeBookingId, setActiveBookingId] = useActiveBookingId(bookingIdParam);
   const modals = useBookingModals();
-  const cooldown = usePaymentCooldown();
+  const cooldown = usePaymentCooldown(activeBookingId);
 
   usePaymentRedirect({
     supabase,
@@ -193,7 +193,7 @@ function BookingFormContent() {
         <PayLaterSuccessModal
           onRedirect={() => {
             modals.setShowPayLaterSuccessModal(false);
-            router.push('/pet_owner/manage_bookings');
+            router.push('/pet_owner/manage_bookings?tab=to_pay');
           }}
         />
       )}
