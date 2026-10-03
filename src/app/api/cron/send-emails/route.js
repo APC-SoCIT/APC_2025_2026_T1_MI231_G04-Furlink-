@@ -20,6 +20,7 @@ const transporter = nodemailer.createTransport({
 
 /**
  * Standard Furlink Branded Email Template Wrapper
+ */
 function wrapEmailTemplate(brandTitleHtml, bodyContentHtml) {
   return `
 <!DOCTYPE html>
@@ -361,14 +362,6 @@ function getEmailContent(item) {
 }
 
 export async function POST(request) {
-  // Reject callers that don't present the shared secret (set WEBHOOK_SECRET in Vercel
-  // and send it as the x-webhook-secret header from the Supabase Database Webhook).
-  // Fails closed: if WEBHOOK_SECRET is not configured, every request is rejected.
-  const expectedSecret = process.env.WEBHOOK_SECRET;
-  if (!expectedSecret || request.headers.get('x-webhook-secret') !== expectedSecret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const payload = await request.json();
     const item = payload.record;
