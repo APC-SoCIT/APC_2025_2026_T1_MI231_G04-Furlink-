@@ -419,7 +419,7 @@ export default function BookingWidget({
                 rel="noopener noreferrer"
                 style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
               >
-                <strong>Service Provider Waiver</strong>
+                <strong>Service Provider Waivers</strong>
               </a>
             </>
           )}
