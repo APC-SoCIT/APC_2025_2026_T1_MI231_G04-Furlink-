@@ -162,7 +162,7 @@ export default function AdminSignupPage() {
 
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setGateOtpToken(digitsOnly);
+    setOtpToken(digitsOnly);
   };
 
   const isFormValid = () => {
@@ -565,7 +565,7 @@ export default function AdminSignupPage() {
                 value={gateOtpToken}
                 onChange={(e) => {
                   const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setOtpToken(digitsOnly);
+                  setGateOtpToken(digitsOnly);
                 }}
                 maxLength={6}
                 required
