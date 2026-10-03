@@ -324,30 +324,10 @@ export default function ManageBookingsPage() {
     fetchBookings();
   };
 
-  const handleReschedule = async (newDate: string, newTimeslot: string) => {
-    if (!selectedBooking) return;
-
-    try {
-      const { error } = await supabase
-        .from('booking_info')
-        .update({
-          booking_date: newDate,
-          booking_timeslot: newTimeslot,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedBooking.id);
-
-      if (error) {
-        console.error('Error rescheduling booking:', error);
-        alert('Failed to reschedule booking. Please try again.');
-        return;
-      }
-
-      setShowRescheduleModal(false);
-      fetchBookings();
-    } catch (err) {
-      console.error('Unexpected error during rescheduling:', err);
-    }
+  // RescheduleModal already persists the new date/timeslot; just close and refresh.
+  const handleReschedule = async (_newDate: string, _newTimeslot: string) => {
+    setShowRescheduleModal(false);
+    fetchBookings();
   };
 
   const handlePayNow = async (bookingId?: string) => {
