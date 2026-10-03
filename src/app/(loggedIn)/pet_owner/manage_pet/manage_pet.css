@@ -432,6 +432,19 @@
   justify-content: center;
 }
 
+/* Can't-delete (pet has bookings) modal */
+.blocked-icon {
+  color: #ef4444 !important;
+}
+
+.blocked-hint {
+  margin: -4px 0 18px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #64748b;
+  text-align: center;
+}
+
 .delete-confirm-btn {
   background-color: #ef4444;
   color: #ffffff;
