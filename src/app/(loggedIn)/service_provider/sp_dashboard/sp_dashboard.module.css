@@ -1,12 +1,34 @@
 .container {
   max-width: 1200px;
-  margin: 2rem auto; /* Pushes the dashboard away from the header */
-  padding: 2rem;    /* Gives internal content more breathing room */
+  margin: 2rem auto; 
+  padding: 2rem;    
   font-family: sans-serif;
   color: #1e3a8a;
   background-color: #f8fafc;
   min-height: calc(100vh - 100px);
-  border-radius: 1.5rem; /* Matches the rounded aesthetic of your header */
+  border-radius: 1.5rem; 
+}
+
+/* NEW: Error Banner Styling */
+.errorBanner {
+  background-color: #fee2e2;
+  border: 1px solid #f87171;
+  color: #991b1b;
+  padding: 1rem 1.5rem;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dismissErrorBtn {
+  background: none;
+  border: none;
+  color: #991b1b;
+  font-weight: bold;
+  font-size: 1.25rem;
+  cursor: pointer;
 }
 
 /* Header & Revenue Card */
@@ -33,7 +55,7 @@
 .actionButtons {
   display: flex;
   gap: 1rem;
-  align-items: center; /* Ensures buttons align properly on the vertical axis */
+  align-items: center; 
 }
 .actionBtn {
   background: #1e3a8a;
@@ -44,11 +66,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center; /* Centers content vertically inside the button */
+  justify-content: center; 
   gap: 0.5rem;
   cursor: pointer;
   font-weight: bold;
-  box-sizing: border-box; /* Prevents padding from breaking layout dimensions */
+  box-sizing: border-box; 
 }
 .actionBtn:hover {
   background: #1d4ed8;
@@ -57,7 +79,6 @@
 /* Status Cards Grid */
 .tabsGrid {
   display: grid;
-  /* Updated from 6 to 5 to evenly distribute the remaining tabs */
   grid-template-columns: repeat(5, 1fr); 
   gap: 1rem;
   margin-bottom: 2rem;
@@ -154,34 +175,10 @@
   color: white;
 }
 
-/* Modal Styling */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(30, 58, 138, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 50;
-  padding: 1rem;
-}
-.modalContent {
-  background: white;
-  border-radius: 1.5rem;
-  max-width: 600px;
-  width: 100%;
-  padding: 2rem;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
 /* --- MOBILE & TABLET RESPONSIVE BREAKPOINTS --- */
-
 @media (max-width: 1024px) {
   .tabsGrid {
-    grid-template-columns: repeat(3, 1fr); /* 3 items per row on tablets */
+    grid-template-columns: repeat(3, 1fr); 
   }
 }
 
@@ -221,10 +218,21 @@
   }
 
   .tabsGrid {
-    grid-template-columns: repeat(2, 1fr); /* 2 items per row on mobile phones */
+    grid-template-columns: repeat(2, 1fr); 
   }
 
   .tabCount {
     font-size: 2rem;
+  }
+
+  /* Table Header formatting on mobile */
+  .tableHeaderBar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .tableHeaderBar select {
+    width: 100%;
   }
 }

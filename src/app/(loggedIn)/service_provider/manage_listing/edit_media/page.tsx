@@ -28,12 +28,15 @@ export default function EditMediaPage() {
   const [newPaymentQr, setNewPaymentQr] = useState<File | null>(null);
   const [newFacilities, setNewFacilities] = useState<File[]>([]);
 
+  // Image Modal State (for viewing facility images in a larger view)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
   // 1. Fetch current media and document URLs on load
   useEffect(() => {
     const fetchMedia = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) throw new Error("Authentication required.");
 
         const { data: generalInfo, error: genError } = await supabase
           .from('sp_general_info')
@@ -41,7 +44,7 @@ export default function EditMediaPage() {
           .eq('profiles_id', user.id)
           .single();
 
-        if (genError) throw genError;
+        if (genError || !generalInfo) throw new Error("Could not fetch provider profile data.");
 
         if (generalInfo) {
           setSpId(generalInfo.id);
@@ -55,7 +58,7 @@ export default function EditMediaPage() {
           setExistingFacilities(imgData || []);
         }
       } catch (err: any) {
-        setErrorMessage("Failed to load media.");
+        setErrorMessage(err?.message || "Failed to load media.");
       } finally {
         setIsLoading(false);
       }
@@ -76,7 +79,7 @@ export default function EditMediaPage() {
       .from(bucketName)
       .upload(filePath, file);
 
-    if (uploadError) throw uploadError;
+    if (uploadError) throw new Error(`Failed to upload file to ${bucketName}.`);
 
     const { data: { publicUrl } } = supabase.storage
       .from(bucketName)
@@ -93,7 +96,7 @@ export default function EditMediaPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !spId) throw new Error("Authentication error.");
+      if (!user || !spId) throw new Error("Authentication error. Please log in again.");
 
       // Upload new single documents if provided, targeting their specific buckets
       const waiverUrl = newWaiver ? await uploadFile(user.id, "sp-waiver", newWaiver) : generalData.business_waiver_url;
@@ -110,7 +113,7 @@ export default function EditMediaPage() {
         })
         .eq('id', spId);
 
-      if (genUpdateError) throw genUpdateError;
+      if (genUpdateError) throw new Error("Failed to update general business documents.");
 
       // Clean up removed facility images from the database
       if (facilitiesToDelete.length > 0) {
@@ -119,7 +122,7 @@ export default function EditMediaPage() {
           .delete()
           .in('id', facilitiesToDelete);
         
-        if (deleteError) throw deleteError;
+        if (deleteError) throw new Error("Failed to remove selected facility images.");
       }
 
       // Upload new facility images targeting the sp-facility-images bucket
@@ -139,20 +142,54 @@ export default function EditMediaPage() {
           .from('sp_img_facilities')
           .insert(facilityPayload);
 
-        if (facilityInsertError) throw facilityInsertError;
+        if (facilityInsertError) throw new Error("Failed to save new facility images.");
       }
 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to save media updates.");
+      setErrorMessage(err?.message || "An unexpected error occurred while saving media updates.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       setIsSaving(false);
     }
   };
 
   if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>Loading media...</div>;
   if (!generalData) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>Loading provider data...</div>;
+  
   return (
     <div className="manage-listing-page-layout">
+      {/* Lightbox / Modal for enlarged image view */}
+      {selectedImage && (
+        <div 
+          style={{ 
+            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', 
+            backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', 
+            zIndex: 9999, padding: '20px' 
+          }}
+          onClick={() => setSelectedImage(null)}
+        >
+          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
+            <img 
+              src={selectedImage} 
+              alt="Enlarged Facility" 
+              style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: '8px', objectFit: 'contain' }} 
+            />
+            <button 
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              style={{ 
+                position: 'absolute', top: '-15px', right: '-15px', background: '#fff', color: '#333', 
+                border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', 
+                fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                display: 'flex', justifyContent: 'center', alignItems: 'center'
+              }}
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="manage-listing-container">
         <div style={{ maxWidth: '800px', margin: '0 auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
           
@@ -168,27 +205,37 @@ export default function EditMediaPage() {
               
               <div className="listing-field-group" style={{ marginBottom: '15px' }}>
                 <label>Waiver Document</label>
-                <div style={{ fontSize: '13px', marginBottom: '10px' }}>
-                  Current: {generalData.business_waiver_url === "PLATFORM_DEFAULT_WAIVER" ? "Platform Default" : <a href={generalData.business_waiver_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a' }}>View Document</a>}
+                <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
+                  Current: {' '}
+                  {/* Updated condition to handle both the placeholder text and the actual PDF url being saved in the DB */}
+                  {generalData.business_waiver_url === "PLATFORM_DEFAULT_WAIVER" || generalData.business_waiver_url?.includes('furlink-standard-waiver.pdf') ? (
+                    <a href="/service_provider/waiver" target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>
+                      Platform Default
+                    </a>
+                  ) : (
+                    <a href={generalData.business_waiver_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>
+                      View Document
+                    </a>
+                  )}
                 </div>
-                <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setNewWaiver(e.target.files?.[0] || null)} style={{ fontSize: '13px' }} />
-                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Upload a new file to replace the current waiver.</span>
+                <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setNewWaiver(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current waiver.</span>
               </div>
 
               <div className="listing-field-group" style={{ marginBottom: '15px' }}>
                 <label>Business Permit</label>
-                <div style={{ fontSize: '13px', marginBottom: '10px' }}>
-                  Current: {generalData.business_permit_url ? <a href={generalData.business_permit_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a' }}>View Document</a> : "None"}
+                <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
+                  Current: {generalData.business_permit_url ? <a href={generalData.business_permit_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View Document</a> : "None"}
                 </div>
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setNewPermit(e.target.files?.[0] || null)} style={{ fontSize: '13px' }} />
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setNewPermit(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
               </div>
 
               <div className="listing-field-group">
                 <label>Payment QR Code</label>
-                <div style={{ fontSize: '13px', marginBottom: '10px' }}>
-                  Current: {generalData.business_payment_qr_url ? <a href={generalData.business_payment_qr_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a' }}>View QR</a> : "None"}
+                <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
+                  Current: {generalData.business_payment_qr_url ? <a href={generalData.business_payment_qr_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View QR</a> : "None"}
                 </div>
-                <input type="file" accept=".png,.jpg,.jpeg" onChange={(e) => setNewPaymentQr(e.target.files?.[0] || null)} style={{ fontSize: '13px' }} />
+                <input type="file" accept=".png,.jpg,.jpeg" onChange={(e) => setNewPaymentQr(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
               </div>
             </div>
 
@@ -199,11 +246,18 @@ export default function EditMediaPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
                 {existingFacilities.filter(f => !facilitiesToDelete.includes(f.id)).map(f => (
                   <div key={f.id} style={{ position: 'relative' }}>
-                    <img src={f.business_facility_images} alt="Facility" style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }} />
+                    <img 
+                      src={f.business_facility_images} 
+                      alt="Facility" 
+                      onClick={() => setSelectedImage(f.business_facility_images)} // Trigger Modal
+                      style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd', cursor: 'pointer' }} 
+                      title="Click to view larger"
+                    />
                     <button 
                       type="button" 
                       onClick={() => setFacilitiesToDelete([...facilitiesToDelete, f.id])}
                       style={{ position: 'absolute', top: '-5px', right: '-5px', background: '#d9534f', color: '#fff', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', fontWeight: 'bold' }}
+                      title="Remove image"
                     >
                       &times;
                     </button>
@@ -222,14 +276,14 @@ export default function EditMediaPage() {
                       setNewFacilities(Array.from(e.target.files));
                     }
                   }} 
-                  style={{ fontSize: '13px' }} 
+                  style={{ fontSize: '13px', width: '100%' }} 
                 />
-                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Select multiple files to upload new facility images.</span>
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Select multiple files to upload new facility images.</span>
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
               <button type="button" onClick={() => router.push("/service_provider/manage_listing")} style={{ background: '#e0ded6', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
               <button type="submit" disabled={isSaving} style={{ background: '#0a217a', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>{isSaving ? "Saving Media..." : "Save Changes"}</button>
             </div>

@@ -23,27 +23,32 @@ export default function EditHoursStaffPage() {
     const fetchData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) throw new Error("Authentication required.");
 
-        const { data: generalData } = await supabase
+        const { data: generalData, error: generalError } = await supabase
           .from('sp_general_info')
           .select('id')
           .eq('profiles_id', user.id)
           .single();
 
-        if (generalData) {
-          setSpId(generalData.id);
-
-          const [hoursRes, staffRes] = await Promise.all([
-            supabase.from('sp_operating_hours').select('*').eq('sp_id', generalData.id),
-            supabase.from('sp_employees_info').select('*').eq('sp_id', generalData.id)
-          ]);
-
-          setHours(hoursRes.data || []);
-          setStaff(staffRes.data || []);
+        if (generalError || !generalData) {
+          throw new Error("Could not fetch provider profile.");
         }
+
+        setSpId(generalData.id);
+
+        const [hoursRes, staffRes] = await Promise.all([
+          supabase.from('sp_operating_hours').select('*').eq('sp_id', generalData.id),
+          supabase.from('sp_employees_info').select('*').eq('sp_id', generalData.id)
+        ]);
+
+        if (hoursRes.error) throw new Error("Failed to load operating hours.");
+        if (staffRes.error) throw new Error("Failed to load staff information.");
+
+        setHours(hoursRes.data || []);
+        setStaff(staffRes.data || []);
       } catch (err: any) {
-        setErrorMessage("Failed to load hours and staff.");
+        setErrorMessage(err?.message || "An unexpected error occurred while loading data.");
       } finally {
         setIsLoading(false);
       }
@@ -52,14 +57,12 @@ export default function EditHoursStaffPage() {
     fetchData();
   }, [supabase]);
 
-  // Handlers for Hours
   const handleHourChange = (index: number, field: string, value: any) => {
     const updated = [...hours];
     updated[index][field] = value;
     setHours(updated);
   };
 
-  // Handlers for Staff
   const handleStaffChange = (index: number, field: string, value: string) => {
     const updated = [...staff];
     updated[index][field] = value;
@@ -74,16 +77,14 @@ export default function EditHoursStaffPage() {
     setStaff(staff.filter((_, i) => i !== index));
   };
 
-  // Submit Logic
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setErrorMessage(null);
 
     try {
-      if (!spId) throw new Error("Provider ID not found.");
+      if (!spId) throw new Error("Provider profile ID is missing. Cannot save changes.");
 
-      // Clean payloads (remove DB-generated IDs and timestamps)
       const hoursPayload = hours.map(h => ({
         sp_id: spId,
         day_of_week: h.day_of_week,
@@ -100,26 +101,26 @@ export default function EditHoursStaffPage() {
         employee_position: s.employee_position,
       }));
 
-      // 1. Delete existing records
-      await Promise.all([
-        supabase.from('sp_operating_hours').delete().eq('sp_id', spId),
-        supabase.from('sp_employees_info').delete().eq('sp_id', spId)
-      ]);
+      const { error: hoursDelErr } = await supabase.from('sp_operating_hours').delete().eq('sp_id', spId);
+      if (hoursDelErr) throw new Error("Failed to overwrite old operating hours.");
 
-      // 2. Insert new records
+      const { error: staffDelErr } = await supabase.from('sp_employees_info').delete().eq('sp_id', spId);
+      if (staffDelErr) throw new Error("Failed to overwrite old staff information.");
+
       if (hoursPayload.length > 0) {
         const { error } = await supabase.from('sp_operating_hours').insert(hoursPayload);
-        if (error) throw error;
+        if (error) throw new Error("Failed to save new operating hours.");
       }
 
       if (staffPayload.length > 0) {
         const { error } = await supabase.from('sp_employees_info').insert(staffPayload);
-        if (error) throw error;
+        if (error) throw new Error("Failed to save new staff information.");
       }
 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to update hours and staff.");
+      setErrorMessage(err?.message || "An unexpected error occurred during save.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setIsSaving(false);
     }
@@ -143,18 +144,32 @@ export default function EditHoursStaffPage() {
               <h3 style={{ color: '#0a217a', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Operating Hours</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {hours.map((h, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fdfdfd', padding: '10px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                    <div style={{ width: '120px', fontWeight: 'bold', textTransform: 'capitalize', color: '#333' }}>
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '15px', background: '#fdfdfd', padding: '15px', borderRadius: '8px', border: '1px solid #e0e0e0', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 80px', minWidth: '80px', fontWeight: 'bold', textTransform: 'capitalize', color: '#333' }}>
                       {h.day_of_week}
                     </div>
-                    <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                      <input type="time" value={h.opening_time} onChange={(e) => handleHourChange(index, 'opening_time', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} required />
-                      <span>to</span>
-                      <input type="time" value={h.closing_time} onChange={(e) => handleHourChange(index, 'closing_time', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} required />
+                    
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: '1 1 200px', minWidth: '200px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Open</label>
+                        <input type="time" value={h.opening_time} onChange={(e) => handleHourChange(index, 'opening_time', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                      </div>
+                      <span style={{ marginTop: '16px', fontSize: '13px', color: '#555' }}>to</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Close</label>
+                        <input type="time" value={h.closing_time} onChange={(e) => handleHourChange(index, 'closing_time', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '5px', marginLeft: 'auto' }}>
-                      <input type="number" placeholder="Mins" value={h.slot_interval} onChange={(e) => handleHourChange(index, 'slot_interval', e.target.value)} style={{ width: '70px', padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} required />
-                      <input type="number" placeholder="Capacity" value={h.slot_capacity} onChange={(e) => handleHourChange(index, 'slot_capacity', e.target.value)} style={{ width: '70px', padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} required />
+
+                    <div style={{ display: 'flex', gap: '15px', flex: '1 1 200px', minWidth: '200px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Duration (Mins)</label>
+                        <input type="number" placeholder="60" value={h.slot_interval} onChange={(e) => handleHourChange(index, 'slot_interval', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Capacity (Pets/Slot)</label>
+                        <input type="number" placeholder="1" value={h.slot_capacity} onChange={(e) => handleHourChange(index, 'slot_capacity', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -170,17 +185,16 @@ export default function EditHoursStaffPage() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {staff.map((s, index) => (
-                  <div key={index} style={{ display: 'flex', gap: '10px', background: '#fdfdfd', padding: '15px', borderRadius: '8px', border: '1px solid #e0e0e0', position: 'relative' }}>
-                    <div className="listing-field-group" style={{ flex: 1, padding: 0, border: 'none' }}>
+                  <div key={index} style={{ display: 'flex', gap: '10px', background: '#fdfdfd', padding: '25px 15px 15px 15px', borderRadius: '8px', border: '1px solid #e0e0e0', position: 'relative', flexWrap: 'wrap' }}>
+                    <div className="listing-field-group" style={{ flex: '1 1 150px', padding: 0, border: 'none' }}>
                       <label style={{ marginBottom: '4px' }}>First Name</label>
-                      <input type="text" value={s.employee_first_name} onChange={(e) => handleStaffChange(index, 'employee_first_name', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                      <input type="text" value={s.employee_first_name} onChange={(e) => handleStaffChange(index, 'employee_first_name', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc', width: '100%' }} />
                     </div>
-                    <div className="listing-field-group" style={{ flex: 1, padding: 0, border: 'none' }}>
+                    <div className="listing-field-group" style={{ flex: '1 1 150px', padding: 0, border: 'none' }}>
                       <label style={{ marginBottom: '4px' }}>Last Name</label>
-                      <input type="text" value={s.employee_last_name} onChange={(e) => handleStaffChange(index, 'employee_last_name', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                      <input type="text" value={s.employee_last_name} onChange={(e) => handleStaffChange(index, 'employee_last_name', e.target.value)} required style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc', width: '100%' }} />
                     </div>
-                    {/* DROPDOWN FOR POSITION */}
-                    <div className="listing-field-group" style={{ flex: 1, padding: 0, border: 'none' }}>
+                    <div className="listing-field-group" style={{ flex: '1 1 150px', padding: 0, border: 'none' }}>
                       <label style={{ marginBottom: '4px' }}>Position</label>
                       <select 
                         value={s.employee_position} 
@@ -189,15 +203,12 @@ export default function EditHoursStaffPage() {
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', width: '100%' }}
                       >
                         <option value="" disabled>Select Position</option>
-                        
-                        {/* ⚠️ COPY AND PASTE YOUR EXACT <option> TAGS FROM YOUR ONBOARDING PAGE HERE ⚠️ */}
                         <option value="pet_stylist">Pet Stylist</option>
                         <option value="business_owner">Business Owner</option>
                         <option value="staff">Staff</option>
-
                       </select>
                     </div>
-                    <button type="button" onClick={() => removeStaff(index)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '18px', cursor: 'pointer' }}>&times;</button>
+                    <button type="button" onClick={() => removeStaff(index)} style={{ position: 'absolute', top: '5px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
                   </div>
                 ))}
                 {staff.length === 0 && <p style={{ fontSize: '14px', color: '#666' }}>No staff members added.</p>}
