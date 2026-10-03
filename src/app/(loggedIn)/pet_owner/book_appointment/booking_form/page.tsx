@@ -110,6 +110,7 @@ function BookingFormContent() {
       setShowFailedModal: modals.setShowFailedModal,
       setShowSummaryModal: modals.setShowSummaryModal,
       setShowPayLaterSuccessModal: modals.setShowPayLaterSuccessModal,
+      setShowCapacityModal: modals.setShowCapacityModal,
     });
 
   return (
