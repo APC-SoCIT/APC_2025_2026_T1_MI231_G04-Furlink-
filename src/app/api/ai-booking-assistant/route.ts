@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+// Vercel Hobby (free) plan: cap function runtime at 60s so AI calls aren't cut off by the default limit.
+export const maxDuration = 60;
+
 const GEMINI_CHAT_MODEL = 'gemini-3.8-flash';
 const OPENAI_CHAT_MODEL = 'gpt-4o-mini';
 const DEFAULT_AREA = 'Makati';
