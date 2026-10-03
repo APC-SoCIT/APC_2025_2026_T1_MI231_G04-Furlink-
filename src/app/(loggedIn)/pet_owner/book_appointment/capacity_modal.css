@@ -1,0 +1,9 @@
+.cap-wm-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 16px; }
+.cap-wm-card { background: #fff; border-radius: 16px; padding: 28px 24px 24px; max-width: 380px; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25); animation: cap-wm-pop 0.18s ease-out; }
+.cap-wm-icon { width: 56px; height: 56px; border-radius: 50%; background: #fef3c7; color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 14px; }
+.cap-wm-title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 8px; }
+.cap-wm-message { font-size: 14px; color: #475569; line-height: 1.5; margin: 0 0 20px; }
+.cap-wm-message strong { color: #1e293b; }
+.cap-wm-btn { width: 100%; padding: 11px; background: #f59e0b; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: background 0.15s; }
+.cap-wm-btn:hover { background: #d97706; }
+@keyframes cap-wm-pop { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }

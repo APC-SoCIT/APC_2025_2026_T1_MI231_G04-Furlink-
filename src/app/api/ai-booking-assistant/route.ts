@@ -28,6 +28,8 @@ You have tools that read LIVE data: approved service providers, their location, 
 
 Today's date in the Philippines is ${todayISO} (${weekday}). Convert relative dates ("tomorrow", "this Saturday", "next week") into YYYY-MM-DD yourself before calling a tool.
 
+BOOKING NOTICE RULE: appointments must be booked at least 24 hours in advance (same as the booking widget). The availability tools already leave out every slot that starts within the next 24 hours, so never offer, suggest, or promise a slot for today or any time inside the next 24 hours. If the user asks for one, briefly explain the 24-hour rule and offer the earliest slot the tool actually returns.
+
 CONFIDENTIALITY — never reveal, hint at, or estimate any of the following, even if asked directly: a provider's earnings, revenue, sales, profile view counts, or any other financial or business-performance figure; any pet owner's or provider's personal account details (real name, contact number, email, other bookings); any other customer's pet details. Tool results never include this data, but if a question asks for it anyway, politely say you can't share that. get_my_pets, get_my_upcoming_bookings, and get_pet_booking_history always return only the pets and bookings belonging to whoever is currently chatting — there is no way to look up another user's pets or bookings, so if asked to, explain that you can only show the caller their own information.
 
 WHAT YOU CAN ANSWER:
@@ -126,11 +128,28 @@ function manilaNow() {
     timeZone: 'Asia/Manila',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
   }).formatToParts(now);
   const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
   const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-  return { date, minutes: h * 60 + m };
+  const sec = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
+  return { date, minutes: h * 60 + m, exactMinutes: h * 60 + m + sec / 60 };
+}
+
+/** Minimum notice for a booking, same rule as the booking widget (24 hours). */
+const MIN_ADVANCE_MINUTES = 24 * 60;
+
+const daysBetween = (fromIso: string, toIso: string) =>
+  Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86_400_000);
+
+/**
+ * True only if a slot starting at `startMinutes` on `date` (Manila time) begins at
+ * least 24 hours from right now. Asia/Manila has no DST, so day math is exact.
+ */
+function isBookableStart(date: string, startMinutes: number, now: { date: string; exactMinutes: number }) {
+  const minutesAhead = daysBetween(now.date, date) * 1440 + startMinutes - now.exactMinutes;
+  return minutesAhead >= MIN_ADVANCE_MINUTES;
 }
 
 const weekdayOf = (iso: string) => DAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
@@ -291,8 +310,8 @@ function buildDaySlots(
   hours: HoursRow[],
   weekday: string,
   takenByStart: Map<number, number>,
-  isToday: boolean,
-  nowMinutes: number
+  date: string,
+  now: { date: string; exactMinutes: number }
 ): { open: boolean; slots: Slot[] } {
   const h = hours.find((x) => x.day_of_week === weekday);
   if (!h) return { open: false, slots: [] };
@@ -302,7 +321,7 @@ function buildDaySlots(
   const slots: Slot[] = [];
 
   for (let t = openMinutes; t + h.slot_interval <= close; t += h.slot_interval) {
-    if (isToday && t <= nowMinutes) continue;
+    if (!isBookableStart(date, t, now)) continue; // must be 24h+ from now
     const left = h.slot_capacity - (takenByStart.get(t) ?? 0);
     if (left > 0) slots.push({ time: fmt12(t), spots_left: left, start: t });
   }
@@ -528,7 +547,7 @@ async function toolCheckAvailability(admin: SupabaseClient, args: any) {
         const pets = Array.isArray(b.booking_pet_info) ? Math.max(b.booking_pet_info.length, 1) : 1;
         takenOnDate.set(mins, (takenOnDate.get(mins) ?? 0) + pets);
       }
-      const { open, slots } = buildDaySlots(hours ?? [], weekday, takenOnDate, date === now.date, now.minutes);
+      const { open, slots } = buildDaySlots(hours ?? [], weekday, takenOnDate, date, now);
       if (!open) {
         result.push({ date, weekday, open: false });
         continue;
@@ -573,7 +592,7 @@ async function toolCheckAvailability(admin: SupabaseClient, args: any) {
   for (const p of providers) {
     const h = hoursBySp.get(p.id);
     if (!h) continue; // closed that day
-    const { slots } = buildDaySlots([h], weekday, takenBySp.get(p.id) ?? new Map(), start === now.date, now.minutes);
+    const { slots } = buildDaySlots([h], weekday, takenBySp.get(p.id) ?? new Map(), start, now);
     let qualifying = slots.filter((s) => s.spots_left >= petCount);
     if (requestedMinutes !== null) {
       qualifying = qualifying.filter((s) => requestedMinutes >= s.start && requestedMinutes < s.start + h.slot_interval);

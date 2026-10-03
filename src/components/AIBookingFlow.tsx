@@ -36,7 +36,9 @@ type Step = 'loading' | 'no_pets' | 'criteria' | 'results' | 'pets' | 'services'
 const peso = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const prettyDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+// Bookings need 24h notice, so the earliest pickable date is the Manila date 24 hours from now.
+const earliestDateISO = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
 async function api<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const { data } = await supabase.auth.getSession();
@@ -118,7 +120,7 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
   const searchSlots = async () => {
     setError('');
     if (!providerChosen && !date) { setError('Please pick a date so I can look for providers.'); return; }
-    if (date && date < todayISO()) { setError('That date is in the past.'); return; }
+    if (date && date < earliestDateISO()) { setError('Bookings must be made at least 24 hours in advance. Please pick a later date.'); return; }
     setBusy(true);
     try {
       if (providerChosen) {
@@ -302,7 +304,7 @@ export default function AIBookingFlow({ onNavigate, onLayout }: Props) {
         )}
 
         <label className="ai-flow-label">{providerChosen ? 'Date (leave empty to see the next 7 days)' : 'Date'}
-          <input className="ai-flow-field" type="date" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input className="ai-flow-field" type="date" min={earliestDateISO()} value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
 
         {!providerChosen && (

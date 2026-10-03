@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
+import './capacity_modal.css';
 
 export type OperatingHour = {
   id: string;
@@ -28,7 +30,6 @@ type BookingWidgetProps = {
   spId: string;
   operatingHours?: OperatingHour[];
   existingBookings?: ExistingBooking[];
-  waiverUrl?: string | null;
   currentUserId: string;
 };
 
@@ -42,18 +43,13 @@ const ACTIVE_HOLD_STATUSES = [
   'processing'
 ];
 
-export default function BookingWidget({
-  spId,
-  operatingHours = [],
+export default function BookingWidget({ 
+  spId, 
+  operatingHours = [], 
   existingBookings = [],
-  waiverUrl = null,
-  currentUserId,
+  currentUserId 
 }: BookingWidgetProps) {
   const router = useRouter();
-
-  // Only show the waiver link when the provider has an actual uploaded waiver
-  // ("PLATFORM_DEFAULT_WAIVER" is a placeholder, not a link).
-  const hasWaiver = !!waiverUrl && /^https?:\/\//i.test(waiverUrl.trim());
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [nowTime, setNowTime] = useState<number>(0);
@@ -64,6 +60,8 @@ export default function BookingWidget({
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [numPets, setNumPets] = useState<number>(1);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
+  // Remaining capacity shown in the "capacity reached" modal (null = modal closed)
+  const [capacityModalLimit, setCapacityModalLimit] = useState<number | null>(null);
 
   useEffect(() => {
     const clientNow = new Date();
@@ -207,7 +205,7 @@ export default function BookingWidget({
       setNumPets(1);
     } else if (val > maxCapacity) {
       setNumPets(maxCapacity);
-      alert(`The maximum slot capacity remaining for this time slot is ${maxCapacity} pet(s).`);
+      setCapacityModalLimit(maxCapacity);
     } else {
       setNumPets(val);
     }
@@ -409,21 +407,8 @@ export default function BookingWidget({
             style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
           >
             <strong>Terms and Conditions</strong>
-          </Link>
-          {hasWaiver && (
-            <>
-              {' '}and the{' '}
-              <a
-                href={waiverUrl as string}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
-              >
-                <strong>Service Provider Waiver</strong>
-              </a>
-            </>
-          )}
-          {' '}including policies on down payments, cancellations, and pet safety.
+          </Link>{' '}
+          including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
@@ -434,6 +419,42 @@ export default function BookingWidget({
       >
         Complete Booking
       </button>
+
+      {capacityModalLimit !== null &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="cap-wm-overlay" onClick={() => setCapacityModalLimit(null)}>
+            <div
+              className="cap-wm-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cap-wm-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="cap-wm-icon">
+                <FaExclamationTriangle />
+              </div>
+              <h2 id="cap-wm-title" className="cap-wm-title">Capacity Reached</h2>
+              <p className="cap-wm-message">
+                {capacityModalLimit > 0 ? (
+                  <>
+                    The maximum slot capacity remaining for this time slot is{' '}
+                    <strong>
+                      {capacityModalLimit} pet{capacityModalLimit === 1 ? '' : 's'}
+                    </strong>
+                    .
+                  </>
+                ) : (
+                  <>There is no slot capacity remaining for this time slot.</>
+                )}
+              </p>
+              <button className="cap-wm-btn" onClick={() => setCapacityModalLimit(null)}>
+                Got it
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
