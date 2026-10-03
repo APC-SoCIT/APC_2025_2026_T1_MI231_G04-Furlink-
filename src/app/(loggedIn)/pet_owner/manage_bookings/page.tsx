@@ -716,7 +716,7 @@ export default function ManageBookingsPage() {
         />
       )}
 
-      {/* Reschedule Picker Modal */}
+      {/* Reschedule Picker Modal **/}
       {showRescheduleModal && selectedBooking && (
         <RescheduleModal
           bookingId={selectedBooking.id}
