@@ -13,15 +13,7 @@ export default function PlatformWaiverPage() {
     <div className="manage-listing-page-layout">
       <div className="manage-listing-container">
         <div style={{ maxWidth: '800px', margin: '40px auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          
-          {/* Back Button */}
-          <button 
-            type="button" 
-            onClick={() => router.back()} 
-            style={{ background: 'none', border: 'none', color: '#0E2679', fontWeight: 'bold', cursor: 'pointer', marginBottom: '20px', padding: 0, fontSize: '14px' }}
-          >
-            ← Back to Onboarding
-          </button>
+        
 
           <h2 style={{ color: '#0a217a', marginBottom: '8px' }}>Furlink Standard Service Provider Liability Waiver</h2>
           <p style={{ fontSize: '13px', color: '#666', marginBottom: '30px' }}>Last updated: October 2026</p>
