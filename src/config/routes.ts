@@ -24,6 +24,8 @@ export const ROUTES = {
     MANAGE_LISTING: "/service_provider/manage_listing",
     EDIT_LISTING: "/service_provider/manage_listing/edit_listing",
     EDIT_BUSINESS_INFO: "/service_provider/manage_listing/edit_business_info",
+    // Read-only Furlink standard waiver; any logged-in user may open it (see (loggedIn)/layout.tsx)
+    WAIVER: "/service_provider/waiver",
   },
   ADMIN: {
     ADMIN_DASHBOARD: "/admin/dashboard",
