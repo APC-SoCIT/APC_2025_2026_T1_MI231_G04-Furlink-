@@ -10,10 +10,14 @@ interface RescheduleModalProps {
   onSubmit: (newDate: string, newTimeslot: string) => void;
 }
 
+// Must match ACTIVE_HOLD_STATUSES in book_appointment/booking_widget.tsx
+const ACTIVE_HOLD_STATUSES = ['pending_sp_response', 'to pay', 'approved', 'paid', 'processing'];
+
 interface TimeslotDetail {
   timeString: string;
   availableSlots: number;
   isFull: boolean;
+  isCurrent?: boolean;
 }
 
 export default function RescheduleModal({
@@ -28,6 +32,10 @@ export default function RescheduleModal({
   const [selectedDate, setSelectedDate] = useState(currentDate);
   const [selectedTimeslot, setSelectedTimeslot] = useState(currentTimeslot);
   const [serviceProviderId, setServiceProviderId] = useState<string | null>(null);
+  // Number of pets on THIS booking (each pet consumes one unit of slot capacity)
+  const [petCount, setPetCount] = useState<number>(1);
+  // The booking's actual saved date/timeslot (read from DB so it's never stale)
+  const [ownSlot, setOwnSlot] = useState<{ date: string; timeslot: string } | null>(null);
   
   const [generatedSlots, setGeneratedSlots] = useState<TimeslotDetail[]>([]);
   const [isDayOpen, setIsDayOpen] = useState<boolean>(true);
@@ -52,7 +60,7 @@ export default function RescheduleModal({
     const fetchProviderInfo = async () => {
       const { data: bookingData, error: bookingError } = await supabase
         .from('booking_info')
-        .select('sp_id')
+        .select('sp_id, booking_date, booking_timeslot')
         .eq('id', bookingId)
         .single();
 
@@ -60,6 +68,13 @@ export default function RescheduleModal({
 
       const spId = bookingData.sp_id;
       setServiceProviderId(spId);
+      setOwnSlot({ date: bookingData.booking_date, timeslot: bookingData.booking_timeslot });
+
+      const { count: petsOnBooking } = await supabase
+        .from('booking_pet_info')
+        .select('id', { count: 'exact', head: true })
+        .eq('booking_info_id', bookingId);
+      setPetCount(Math.max(1, petsOnBooking || 1));
 
       const { data: opHoursData, error: opError } = await supabase
         .from('sp_operating_hours')
@@ -99,17 +114,22 @@ export default function RescheduleModal({
 
       setIsDayOpen(true);
 
+      // Count PETS (not bookings), including this booking's own pets in the slot
+      // it currently occupies, to match the booking widget's capacity logic.
       const { data: existingBookings } = await supabase
         .from('booking_info')
-        .select('booking_timeslot')
+        .select('booking_timeslot, booking_pet_info ( id )')
         .eq('sp_id', serviceProviderId)
         .eq('booking_date', selectedDate)
-        .in('booking_status', ['pending_sp_response', 'approved']);
+        .in('booking_status', ACTIVE_HOLD_STATUSES);
 
       const bookingCounts: Record<string, number> = {};
-      existingBookings?.forEach((b) => {
+      existingBookings?.forEach((b: any) => {
         if (b.booking_timeslot) {
-          bookingCounts[b.booking_timeslot] = (bookingCounts[b.booking_timeslot] || 0) + 1;
+          const pets = Array.isArray(b.booking_pet_info) && b.booking_pet_info.length > 0
+            ? b.booking_pet_info.length
+            : 1;
+          bookingCounts[b.booking_timeslot] = (bookingCounts[b.booking_timeslot] || 0) + pets;
         }
       });
 
@@ -133,11 +153,16 @@ export default function RescheduleModal({
 
         const bookedCount = bookingCounts[timeString] || 0;
         const availableSlots = Math.max(0, capacity - bookedCount);
+        const isCurrent =
+          ownSlot?.date === selectedDate && ownSlot?.timeslot === timeString;
 
         slots.push({
           timeString,
           availableSlots,
-          isFull: availableSlots === 0,
+          // Unavailable when the slot can't fit every pet on this booking
+          // (its own current slot already holds its pets, so it stays selectable)
+          isFull: !isCurrent && availableSlots < petCount,
+          isCurrent,
         });
 
         currentTotalMinutes += interval;
@@ -149,7 +174,7 @@ export default function RescheduleModal({
     } finally {
       setLoadingSlots(false);
     }
-  }, [serviceProviderId, selectedDate, supabase]);
+  }, [serviceProviderId, selectedDate, bookingId, petCount, ownSlot, supabase]);
 
   useEffect(() => {
     fetchAvailableSlots();
@@ -219,6 +244,10 @@ export default function RescheduleModal({
     }
     if (!selectedDate || !selectedTimeslot) {
       alert('Please select both a date and an available timeslot.');
+      return;
+    }
+    if (generatedSlots.find((s) => s.timeString === selectedTimeslot)?.isFull) {
+      alert(`That timeslot doesn't have enough capacity for ${petCount} pet${petCount === 1 ? '' : 's'}. Please pick another.`);
       return;
     }
 
@@ -392,7 +421,13 @@ export default function RescheduleModal({
                       >
                         <span className="slot-time">{slot.timeString}</span>
                         <span className="slot-remaining">
-                          {slot.isFull ? 'Full' : `${slot.availableSlots} left`}
+                          {slot.isCurrent
+                            ? `${slot.availableSlots} left (current)`
+                            : slot.availableSlots === 0
+                            ? 'Full'
+                            : slot.isFull
+                              ? `${slot.availableSlots} left (need ${petCount})`
+                              : `${slot.availableSlots} left`}
                         </span>
                       </button>
                     );

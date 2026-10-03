@@ -17,6 +17,8 @@ interface SaveBookingArgs {
   grandTotal: number;
   petForms: PetFormData[];
   availableServices: ServiceOption[];
+  /** Status the booking row is created with. Defaults to 'pending_sp_response'. */
+  bookingStatus?: string;
   /** Called as soon as the booking row exists, before pets are saved. */
   onBookingCreated: (bookingId: string) => void;
 }
@@ -32,7 +34,10 @@ function normalizeSize(calculatedSize: string, petType: string): string {
 
 async function createBookingRecord(
   supabase: SupabaseClient,
-  args: Pick<SaveBookingArgs, 'userId' | 'spId' | 'dateStr' | 'timeSlot' | 'grandTotal'>,
+  args: Pick<SaveBookingArgs, 'userId' | 'spId' | 'dateStr' | 'timeSlot' | 'grandTotal'> & {
+    bookingStatus: string;
+    petCount: number;
+  },
 ): Promise<string> {
   const { data, error } = await supabase
     .from('booking_info')
@@ -41,7 +46,8 @@ async function createBookingRecord(
       sp_id: args.spId,
       booking_date: args.dateStr,
       booking_timeslot: args.timeSlot,
-      booking_status: 'pending_sp_response',
+      booking_status: args.bookingStatus,
+      pet_count: args.petCount,
       booking_total_amount: args.grandTotal,
     })
     .select()
@@ -163,24 +169,41 @@ async function insertBookingServices(
   if (error) throw new Error(error.message);
 }
 
-/** Creates the booking and everything attached to it. Returns the new booking id. */
+/**
+ * Creates the booking and everything attached to it (registered pets, per-booking
+ * pet info, services, uploaded documents). Returns the new booking id.
+ * If any step after the booking row is created fails, the row is cancelled so it
+ * doesn't keep holding the slot, and the original error is re-thrown.
+ */
 export async function saveBooking(args: SaveBookingArgs): Promise<string> {
   const { supabase, userId, petForms, availableServices, onBookingCreated } = args;
 
-  const bookingId = await createBookingRecord(supabase, args);
+  const bookingId = await createBookingRecord(supabase, {
+    ...args,
+    bookingStatus: args.bookingStatus ?? 'pending_sp_response',
+    petCount: petForms.length,
+  });
   onBookingCreated(bookingId);
 
-  for (const pet of petForms) {
-    const docs = await uploadPetDocuments(supabase, userId, pet);
-    const registeredPetId = await ensureRegisteredPet(supabase, userId, pet, docs);
-    const bookingPetInfoId = await insertBookingPetInfo(
-      supabase,
-      bookingId,
-      registeredPetId,
-      pet,
-      docs,
-    );
-    await insertBookingServices(supabase, bookingPetInfoId, pet, availableServices);
+  try {
+    for (const pet of petForms) {
+      const docs = await uploadPetDocuments(supabase, userId, pet);
+      const registeredPetId = await ensureRegisteredPet(supabase, userId, pet, docs);
+      const bookingPetInfoId = await insertBookingPetInfo(
+        supabase,
+        bookingId,
+        registeredPetId,
+        pet,
+        docs,
+      );
+      await insertBookingServices(supabase, bookingPetInfoId, pet, availableServices);
+    }
+  } catch (err) {
+    await supabase
+      .from('booking_info')
+      .update({ booking_status: 'cancelled' })
+      .eq('id', bookingId);
+    throw err;
   }
 
   return bookingId;

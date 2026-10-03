@@ -53,10 +53,26 @@ export const norm = (s: unknown) =>
 export function manilaNow() {
   const now = new Date();
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(now);
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(now);
   const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
   const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-  return { date, minutes: h * 60 + m };
+  const sec = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
+  return { date, minutes: h * 60 + m, exactMinutes: h * 60 + m + sec / 60 };
+}
+
+/** Minimum notice for a booking, same rule as the booking widget (24 hours). */
+export const MIN_ADVANCE_MINUTES = 24 * 60;
+
+const daysBetween = (fromIso: string, toIso: string) =>
+  Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86_400_000);
+
+/**
+ * True only if a slot starting at `startMinutes` on `date` (Manila time) begins at
+ * least 24 hours from right now. Asia/Manila has no DST, so day math is exact.
+ */
+export function isBookableStart(date: string, startMinutes: number, now: { date: string; exactMinutes: number }) {
+  const minutesAhead = daysBetween(now.date, date) * 1440 + startMinutes - now.exactMinutes;
+  return minutesAhead >= MIN_ADVANCE_MINUTES;
 }
 
 export const weekdayOf = (iso: string) => DAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
@@ -129,13 +145,13 @@ export function filterByArea(providers: any[], rawArea?: string) {
 export type HoursRow = { sp_id?: string; day_of_week: string; opening_time: string; closing_time: string; slot_interval: number; slot_capacity: number };
 export type Slot = { start: number; time: string; spots_left: number };
 
-export function buildDaySlots(h: HoursRow | undefined, isToday: boolean, nowMinutes: number, taken: Map<number, number>) {
+export function buildDaySlots(h: HoursRow | undefined, date: string, now: { date: string; exactMinutes: number }, taken: Map<number, number>) {
   if (!h) return { open: false, slots: [] as Slot[] };
   const open = toMinutes(h.opening_time)!;
   const close = toMinutes(h.closing_time)!;
   const slots: Slot[] = [];
   for (let t = open; t + h.slot_interval <= close; t += h.slot_interval) {
-    if (isToday && t <= nowMinutes) continue;
+    if (!isBookableStart(date, t, now)) continue; // must be 24h+ from now
     const left = h.slot_capacity - (taken.get(t) ?? 0);
     if (left > 0) slots.push({ start: t, time: fmt12(t), spots_left: left });
   }

@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { FaMapMarkerAlt, FaClock, FaExternalLinkAlt } from "react-icons/fa";
 import BookingWidget from "./booking_widget";
 import ServiceLocationMap from "./ServiceLocationMap";
+import ReviewsSection, { type Review } from "./ReviewsSection";
 import "./book_appointment.css";
 
 type PageProps = {
@@ -115,6 +116,16 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
     booking_status: b.booking_status,
     pet_count: Array.isArray(b.booking_pet_info) ? b.booking_pet_info.length : 1,
   }));
+
+  // 6. Fetch customer reviews (rated bookings) for this service provider
+  const { data: rawReviews } = await supabase
+    .from("booking_info")
+    .select("id, booking_date, booking_overall_rating, booking_staff_rating, booking_review")
+    .eq("sp_id", spId)
+    .not("booking_overall_rating", "is", null)
+    .order("booking_date", { ascending: false });
+
+  const reviews: Review[] = (rawReviews || []) as Review[];
 
   // Format full street address
   const fullAddress = [
@@ -262,6 +273,8 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
                 })
               )}
             </div>
+
+            <ReviewsSection reviews={reviews} />
           </div>
 
           <aside className="booking-sidebar-col">
@@ -270,6 +283,7 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               operatingHours={operatingHours || []}
               existingBookings={existingBookings}
               currentUserId={session.user.id}
+              waiverUrl={spInfo.business_waiver_url}
             />
           </aside>
         </div>
