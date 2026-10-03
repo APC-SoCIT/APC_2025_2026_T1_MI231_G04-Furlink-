@@ -25,11 +25,15 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
 
     const fetchExistingFiles = async () => {
       try {
-        const { data: generalData } = await supabase
+        const { data: generalData, error: generalError } = await supabase
           .from("sp_general_info")
           .select("business_waiver_url, business_permit_url, business_payment_qr_url, id")
           .eq("profiles_id", providerId)
           .maybeSingle();
+          
+        if (generalError && generalError.code !== 'PGRST116') {
+          throw new Error("Failed to load existing business documents.");
+        }
 
         if (generalData) {
           if (generalData.business_waiver_url && generalData.business_waiver_url !== "PLATFORM_DEFAULT_WAIVER") {
@@ -48,10 +52,12 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
           }
 
           // Fetch facility images using the resolved generalData.id (the sp_id)
-          const { data: facilityData } = await supabase
+          const { data: facilityData, error: facilityError } = await supabase
             .from("sp_img_facilities")
             .select("id, business_facility_images")
             .eq("sp_id", generalData.id);
+            
+          if (facilityError) throw new Error("Failed to load existing facility images.");
 
           if (facilityData) {
             setExistingFacilityImages(facilityData.map((item: any) => ({
@@ -60,13 +66,14 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
             })));
           }
         }
-      } catch (err) {
-        console.error("Error fetching existing files:", err);
+      } catch (err: any) {
+        // UI Error Handling instead of console.error
+        setFieldError("general", err?.message || "Failed to retrieve existing files.");
       }
     };
 
     fetchExistingFiles();
-  }, [providerId, supabase]);
+  }, [providerId, supabase, setFieldError]);
 
   // Single File Select Handler with Size & MIME Type validation
   const handleFileSelect = (
@@ -146,13 +153,15 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
   const removeExistingFile = async (type: string, id: string, fileUrl: string) => {
     try {
       if (type === "image") {
-        await supabase.from("sp_img_facilities").delete().eq("id", id);
+        const { error } = await supabase.from("sp_img_facilities").delete().eq("id", id);
+        if (error) throw new Error("Failed to delete facility image.");
         setExistingFacilityImages((prev: any[]) => prev.filter((img: any) => img.id !== id));
       } else if (type === "payment") {
         setExistingPaymentChannels([]);
       }
-    } catch (err) {
-      console.error("Error removing file record:", err);
+    } catch (err: any) {
+      // UI Error Handling instead of console.error
+      setFieldError("general", err?.message || "Failed to remove the selected file.");
     }
   };
 
@@ -172,7 +181,7 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
         .from(bucketName)
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) throw new Error(`Failed to upload ${file.name}.`);
 
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
@@ -180,9 +189,9 @@ export function useFileUploads(supabase: any, providerId: string | null, { setFi
 
       return publicUrl;
     } catch (err: any) {
-      console.error("Storage upload failed:", err);
-      // Throw the error so the main submission process stops immediately and triggers a rollback!
-      throw new Error(`Failed to upload ${file.name}. Ensure it's a valid format and size.`);
+      // Throwing the error directly allows page.tsx to catch it and trigger a rollback, 
+      // avoiding a console.error while still handling the failure properly.
+      throw new Error(err?.message || `Failed to upload ${file.name}. Ensure it's a valid format and size.`);
     }
   };
 
