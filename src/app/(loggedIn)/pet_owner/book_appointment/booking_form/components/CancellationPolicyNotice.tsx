@@ -1,15 +1,13 @@
 import React from 'react';
 
-const REFUND_PERCENT = 30;
-const FORFEIT_PERCENT = 100 - REFUND_PERCENT; // 70
+const REFUND_PERCENT = 25;
+const FORFEIT_PERCENT = 100 - REFUND_PERCENT;
 
 const formatPeso = (amount: number) =>
   `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface Props {
-  /** Optional: when provided, the notice also shows the exact peso amounts. */
   totalAmount?: number;
-  /** Short one-line version, for use next to the "Proceed to Summary" button. */
   compact?: boolean;
 }
 
