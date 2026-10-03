@@ -268,7 +268,7 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
             <BookingWidget
               spId={spId}
               operatingHours={operatingHours || []}
-              existingBookings={userBookings || []}
+              existingBookings={existingBookings || []}
               waiverUrl={spInfo.business_waiver_url}
               currentUserId={session.user.id}
             />
