@@ -28,8 +28,6 @@ You have tools that read LIVE data: approved service providers, their location, 
 
 Today's date in the Philippines is ${todayISO} (${weekday}). Convert relative dates ("tomorrow", "this Saturday", "next week") into YYYY-MM-DD yourself before calling a tool.
 
-BOOKING NOTICE RULE: appointments must be booked at least 24 hours in advance (same as the booking widget). The availability tools already leave out every slot that starts within the next 24 hours, so never offer, suggest, or promise a slot for today or any time inside the next 24 hours. If the user asks for one, briefly explain the 24-hour rule and offer the earliest slot the tool actually returns.
-
 CONFIDENTIALITY — never reveal, hint at, or estimate any of the following, even if asked directly: a provider's earnings, revenue, sales, profile view counts, or any other financial or business-performance figure; any pet owner's or provider's personal account details (real name, contact number, email, other bookings); any other customer's pet details. Tool results never include this data, but if a question asks for it anyway, politely say you can't share that. get_my_pets, get_my_upcoming_bookings, and get_pet_booking_history always return only the pets and bookings belonging to whoever is currently chatting — there is no way to look up another user's pets or bookings, so if asked to, explain that you can only show the caller their own information.
 
 WHAT YOU CAN ANSWER:
@@ -48,7 +46,7 @@ WHAT YOU CAN ANSWER:
 - Anything else about the platform/booking process in general → answer from the static facts above; no tool needed.
 PROVIDER NAME FOLLOW-UPS: provider_name matching is fuzzy server-side (typos, a dropped or extra word, partial names all work), so pass through whatever name-like text the user gives you — don't wait for an exact name. If you just told the user you couldn't find their provider, or asked them to confirm which one they meant, and their next message is just a name (no new question), that name is the provider_name for whatever they were originally asking about (contact, hours, services, location, availability) — call that SAME tool again with it. Never reinterpret a shop name as an area or a service_keyword and call search_providers instead; a provider's name is not a service.
 
-Out of scope: anything not about pet grooming or this platform. Politely decline those.
+UNAVAILABLE SHOPS: a shop whose account is suspended is temporarily unavailable and the tools never return it. If the user asks about or wants to book a shop you cannot find, say it may be temporarily unavailable and offer other shops instead. Never try to book with such a shop.\n\nOut of scope: anything not about pet grooming or this platform. Politely decline those.
 You cannot change or cancel bookings — point the user to the Manage Bookings page for that. BOOKING A SERVICE: when the user wants to book (\"book a service\", \"I want to book\", \"book my dog\"), reply with ONE short friendly sentence saying you'll walk them through it, and end with [[ACTION:BOOK]]. That button opens a guided booking inside this chat which checks their pets, finds slots, lists services and prices, and creates the booking. Never collect booking details yourself, never say a booking was made, and never promise a price or slot for a booking — the guided flow does all of that. You also cannot register a new pet or upload files on the user's behalf (get_my_pets only reads pets that already exist) — for that, point the user to the "Manage Pet" page.
 
 REDIRECT BUTTONS: the app can render two kinds of button beneath your reply. Use them instead of ever pasting a raw URL or an internal page path as text.
@@ -74,7 +72,7 @@ function getAdminClient(): SupabaseClient | null {
  * Checks the caller is a logged-in, active pet owner.
  * `profiles` is a view, so querying it with the user's token works.
  */
-async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: string; userId?: string }> {
+async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: string; userId?: string; suspended?: boolean }> {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return { ok: false, reason: 'no_token: client did not send a session token' };
 
@@ -90,6 +88,9 @@ async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: 
   const { data: userData, error: userErr } = await userClient.auth.getUser(token);
   if (userErr || !userData?.user) return { ok: false, reason: `invalid_session: ${userErr?.message ?? 'no user'}` };
 
+  // Lift this user's suspension if it has already run out, so it never blocks them wrongly
+  await userClient.rpc('lift_expired_suspensions', { p_user: userData.user.id });
+
   const { data: profile, error: profErr } = await userClient
     .from('profiles')
     .select('role, status')
@@ -98,6 +99,7 @@ async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: 
 
   if (profErr) return { ok: false, reason: `profile_query_failed: ${profErr.message}` };
   if (!profile) return { ok: false, reason: 'profile_not_found' };
+  if (profile.status === 'suspended') return { ok: false, reason: 'account_status_suspended', suspended: true };
   if (profile.status !== 'active') return { ok: false, reason: `account_status_${profile.status}` };
   if (!['pet_owner', 'both_sp_po'].includes(profile.role ?? '')) {
     return { ok: false, reason: `role_${profile.role ?? 'none'}_not_pet_owner` };
@@ -128,28 +130,11 @@ function manilaNow() {
     timeZone: 'Asia/Manila',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
     hour12: false,
   }).formatToParts(now);
   const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
   const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-  const sec = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
-  return { date, minutes: h * 60 + m, exactMinutes: h * 60 + m + sec / 60 };
-}
-
-/** Minimum notice for a booking, same rule as the booking widget (24 hours). */
-const MIN_ADVANCE_MINUTES = 24 * 60;
-
-const daysBetween = (fromIso: string, toIso: string) =>
-  Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86_400_000);
-
-/**
- * True only if a slot starting at `startMinutes` on `date` (Manila time) begins at
- * least 24 hours from right now. Asia/Manila has no DST, so day math is exact.
- */
-function isBookableStart(date: string, startMinutes: number, now: { date: string; exactMinutes: number }) {
-  const minutesAhead = daysBetween(now.date, date) * 1440 + startMinutes - now.exactMinutes;
-  return minutesAhead >= MIN_ADVANCE_MINUTES;
+  return { date, minutes: h * 60 + m };
 }
 
 const weekdayOf = (iso: string) => DAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
@@ -208,12 +193,15 @@ function summarizeHours(rows: { day_of_week: string; opening_time: string; closi
 const PROVIDER_COLUMNS =
   'id, business_name, business_street, business_barangay, business_city, business_province, business_region, business_email, business_contact, business_social_media_url, business_google_map_url';
 
+// Shops whose owner account is suspended are unavailable: never list, quote or book with them.
 async function fetchApprovedProviders(admin: SupabaseClient) {
-  const { data, error } = await admin
-    .from('sp_general_info')
-    .select(PROVIDER_COLUMNS)
-    .eq('registration_status', 'approved')
-    .limit(300);
+  await admin.rpc('lift_expired_suspensions');
+  const { data: suspendedRows } = await admin.from('profiles').select('id').eq('status', 'suspended');
+  const suspended = (suspendedRows ?? []).map((p: { id: string }) => p.id);
+
+  let q = admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.limit(300);
   if (error) throw new Error(error.message);
   return data ?? [];
 }
@@ -310,8 +298,8 @@ function buildDaySlots(
   hours: HoursRow[],
   weekday: string,
   takenByStart: Map<number, number>,
-  date: string,
-  now: { date: string; exactMinutes: number }
+  isToday: boolean,
+  nowMinutes: number
 ): { open: boolean; slots: Slot[] } {
   const h = hours.find((x) => x.day_of_week === weekday);
   if (!h) return { open: false, slots: [] };
@@ -321,7 +309,7 @@ function buildDaySlots(
   const slots: Slot[] = [];
 
   for (let t = openMinutes; t + h.slot_interval <= close; t += h.slot_interval) {
-    if (!isBookableStart(date, t, now)) continue; // must be 24h+ from now
+    if (isToday && t <= nowMinutes) continue;
     const left = h.slot_capacity - (takenByStart.get(t) ?? 0);
     if (left > 0) slots.push({ time: fmt12(t), spots_left: left, start: t });
   }
@@ -547,7 +535,7 @@ async function toolCheckAvailability(admin: SupabaseClient, args: any) {
         const pets = Array.isArray(b.booking_pet_info) ? Math.max(b.booking_pet_info.length, 1) : 1;
         takenOnDate.set(mins, (takenOnDate.get(mins) ?? 0) + pets);
       }
-      const { open, slots } = buildDaySlots(hours ?? [], weekday, takenOnDate, date, now);
+      const { open, slots } = buildDaySlots(hours ?? [], weekday, takenOnDate, date === now.date, now.minutes);
       if (!open) {
         result.push({ date, weekday, open: false });
         continue;
@@ -592,7 +580,7 @@ async function toolCheckAvailability(admin: SupabaseClient, args: any) {
   for (const p of providers) {
     const h = hoursBySp.get(p.id);
     if (!h) continue; // closed that day
-    const { slots } = buildDaySlots([h], weekday, takenBySp.get(p.id) ?? new Map(), start, now);
+    const { slots } = buildDaySlots([h], weekday, takenBySp.get(p.id) ?? new Map(), start === now.date, now.minutes);
     let qualifying = slots.filter((s) => s.spots_left >= petCount);
     if (requestedMinutes !== null) {
       qualifying = qualifying.filter((s) => requestedMinutes >= s.start && requestedMinutes < s.start + h.slot_interval);
@@ -868,11 +856,11 @@ const toGeminiContents = (messages: IncomingMessage[]) =>
   messages.map((msg) => ({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.content }] }));
 
 // Plain chat
-async function callGemini(messages: IncomingMessage[], apiKey: string) {
+async function callGemini(messages: IncomingMessage[], apiKey: string, extraSystem?: string) {
   const response = await fetch(geminiUrl(apiKey), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system_instruction: { parts: [{ text: SYSTEM_PROMPT }] }, contents: toGeminiContents(messages) }),
+    body: JSON.stringify({ system_instruction: { parts: [{ text: extraSystem ? `${SYSTEM_PROMPT}\n\n${extraSystem}` : SYSTEM_PROMPT }] }, contents: toGeminiContents(messages) }),
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Gemini API error (${response.status}): ${await response.text().catch(() => '')}`);
@@ -939,11 +927,11 @@ async function callGeminiWithTools(messages: IncomingMessage[], apiKey: string, 
 }
 
 // --- OpenAI fallback: plain chat, static facts only ---
-async function callOpenAI(messages: IncomingMessage[], apiKey: string) {
+async function callOpenAI(messages: IncomingMessage[], apiKey: string, extraSystem?: string) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: OPENAI_CHAT_MODEL, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages] }),
+    body: JSON.stringify({ model: OPENAI_CHAT_MODEL, messages: [{ role: 'system', content: extraSystem ? `${SYSTEM_PROMPT}\n\n${extraSystem}` : SYSTEM_PROMPT }, ...messages] }),
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`OpenAI API error (${response.status}): ${await response.text().catch(() => '')}`);
@@ -1059,6 +1047,17 @@ export async function POST(req: NextRequest) {
   let debug: string | undefined;
   let liveModeAttempted = false;
 
+  // A suspended pet owner can still chat, but must not be helped to book. The server verifies the
+  // suspension itself; the client flag alone is never trusted.
+  let suspendedNote: string | undefined;
+  if (body?.suspendedView === true) {
+    const suspendedCheck = await checkPetOwner(req);
+    if (suspendedCheck.suspended) {
+      suspendedNote =
+        "IMPORTANT: This user's account is currently suspended. They cannot make new bookings by any means until the suspension ends. Do not help them book, do not walk them through booking steps and do not suggest a booking. If they ask to book, politely say their account is suspended and they cannot book right now. They can still view their bookings, pets and account, and you may answer general questions.";
+    }
+  }
+
   // Live-data mode: only if the client says pet owner view AND the server verifies it.
   if (geminiKey && body?.petOwnerView === true) {
     const admin = getAdminClient();
@@ -1067,6 +1066,11 @@ export async function POST(req: NextRequest) {
       console.error('[ai-assistant]', debug);
     } else {
       const check = await checkPetOwner(req);
+      if (check.suspended) {
+        return NextResponse.json({
+          reply: "Your account is currently suspended, so I can't help with new bookings until the suspension ends. You can still view your bookings, pets and account.",
+        });
+      }
       if (!check.ok) {
         debug = `Live mode disabled: ${check.reason}`;
         console.error('[ai-assistant]', debug);
@@ -1108,7 +1112,7 @@ export async function POST(req: NextRequest) {
 
   if (!reply && geminiKey) {
     try {
-      reply = await callGemini(messages, geminiKey);
+      reply = await callGemini(messages, geminiKey, suspendedNote);
     } catch (err) {
       console.error('Gemini chat request failed, trying fallback:', err);
     }
@@ -1116,7 +1120,7 @@ export async function POST(req: NextRequest) {
 
   if (!reply && openaiKey) {
     try {
-      reply = await callOpenAI(messages, openaiKey);
+      reply = await callOpenAI(messages, openaiKey, suspendedNote);
     } catch (err) {
       console.error('OpenAI chat fallback failed:', err);
     }

@@ -4,9 +4,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ROUTES } from '@/config/routes';
 import { FaChevronLeft, FaChevronRight, FaExclamationTriangle } from 'react-icons/fa';
 import './capacity_modal.css';
+import { useAccountStatus } from '@/context/AccountStatusContext';
 
 export type OperatingHour = {
   id: string;
@@ -32,7 +32,6 @@ type BookingWidgetProps = {
   operatingHours?: OperatingHour[];
   existingBookings?: ExistingBooking[];
   currentUserId: string;
-  waiverUrl?: string | null;
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -49,14 +48,9 @@ export default function BookingWidget({
   spId, 
   operatingHours = [], 
   existingBookings = [],
-  currentUserId,
-  waiverUrl = null
+  currentUserId 
 }: BookingWidgetProps) {
   const router = useRouter();
-
-  const trimmedWaiver = (waiverUrl ?? '').trim();
-  const hasProviderWaiver =
-    /^https?:\/\//i.test(trimmedWaiver) && !trimmedWaiver.includes('furlink-standard-waiver.pdf');
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [nowTime, setNowTime] = useState<number>(0);
@@ -67,6 +61,7 @@ export default function BookingWidget({
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [numPets, setNumPets] = useState<number>(1);
   const [agreedTerms, setAgreedTerms] = useState<boolean>(false);
+  const { isSuspended } = useAccountStatus();
   // Remaining capacity shown in the "capacity reached" modal (null = modal closed)
   const [capacityModalLimit, setCapacityModalLimit] = useState<number | null>(null);
 
@@ -228,7 +223,7 @@ export default function BookingWidget({
     agreedTerms;
 
   const handleCompleteBooking = () => {
-    if (!isBookingValid || !selectedDate) return;
+    if (isSuspended || !isBookingValid || !selectedDate) return;
 
     const yyyy = selectedDate.getFullYear();
     const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
@@ -414,38 +409,23 @@ export default function BookingWidget({
             style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
           >
             <strong>Terms and Conditions</strong>
-          </Link>
-          {' '}and the{' '}
-          {hasProviderWaiver ? (
-            <a
-              href={trimmedWaiver}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
-            >
-              <strong>Service Provider Waiver</strong>
-            </a>
-          ) : (
-            <Link
-              href={ROUTES.SERVICE_PROVIDER.WAIVER}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
-            >
-              <strong>furlink Waiver</strong>
-            </Link>
-          )}
-          {' '}including policies on down payments, cancellations, and pet safety.
+          </Link>{' '}
+          including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
       <button
-        disabled={!isBookingValid}
-        className={`complete-booking-btn ${isBookingValid ? 'active' : ''}`}
+        disabled={!isBookingValid || isSuspended}
+        className={`complete-booking-btn ${isBookingValid && !isSuspended ? 'active' : ''}`}
         onClick={handleCompleteBooking}
       >
         Complete Booking
       </button>
+      {isSuspended && (
+        <p style={{ color: '#b45309', fontSize: 13, fontWeight: 600, textAlign: 'center', marginTop: 8 }}>
+          Your account is suspended, so you can&apos;t make new bookings right now.
+        </p>
+      )}
 
       {capacityModalLimit !== null &&
         typeof document !== 'undefined' &&

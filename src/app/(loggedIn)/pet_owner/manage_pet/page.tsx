@@ -78,6 +78,8 @@ export default function ManagePetPage() {
   // Delete Modal State
   const [deletingPet, setDeletingPet] = useState<PetProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Shown when a pet can't be deleted because it still has booking records
+  const [blockedPet, setBlockedPet] = useState<PetProfile | null>(null);
 
   // Files
   const [vaccineFile, setVaccineFile] = useState<File | null>(null);
@@ -356,19 +358,41 @@ export default function ManagePetPage() {
   // Delete Pet Handler
   const handleDeletePet = async () => {
     if (!deletingPet) return;
+    const pet = deletingPet;
 
     try {
       setDeleting(true);
+
+      // A pet that is linked to any booking (any status) can't be deleted:
+      // booking_pet_info.registered_pet_id references po_registered_pet.
+      const { count, error: countError } = await supabase
+        .from("booking_pet_info")
+        .select("id", { count: "exact", head: true })
+        .eq("registered_pet_id", pet.id);
+
+      if (!countError && (count ?? 0) > 0) {
+        setDeletingPet(null);
+        setBlockedPet(pet);
+        return;
+      }
+
       const { error } = await supabase
         .from("po_registered_pet")
         .delete()
-        .eq("id", deletingPet.id);
+        .eq("id", pet.id);
 
       if (error) {
-        alert("Error deleting pet profile: " + error.message);
+        // Foreign key violation (23503) = the pet is still referenced by a booking
+        if (error.code === "23503" || /foreign key/i.test(error.message)) {
+          setDeletingPet(null);
+          setBlockedPet(pet);
+        } else {
+          console.error("Error deleting pet profile:", error);
+          alert("Error deleting pet profile: " + error.message);
+        }
       } else {
         setDeletingPet(null);
-        setSuccessMessage(`${deletingPet.pet_name}'s profile has been deleted.`);
+        setSuccessMessage(`${pet.pet_name}'s profile has been deleted.`);
         setShowSuccessModal(true);
         fetchPets();
       }
@@ -739,6 +763,37 @@ export default function ManagePetPage() {
                 className="delete-confirm-btn"
               >
                 {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CANNOT DELETE (PET HAS BOOKINGS) MODAL */}
+      {blockedPet && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <FaExclamationCircle className="popup-icon blocked-icon" />
+            <h2 className="popup-title">Unable to Delete Pet Profile</h2>
+            <p className="popup-message">
+              <strong>{blockedPet.pet_name}</strong> has existing booking records, so this profile can&apos;t be deleted.
+            </p>
+            <p className="blocked-hint">
+              Bookings that are pending, completed, or cancelled keep a record of the pet they were made for.
+            </p>
+            <div className="modal-actions full-width">
+              <button onClick={() => setBlockedPet(null)} className="cancel-btn">
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  const pet = blockedPet;
+                  setBlockedPet(null);
+                  handleOpenHistory(pet);
+                }}
+                className="submit-btn"
+              >
+                View Booking History
               </button>
             </div>
           </div>

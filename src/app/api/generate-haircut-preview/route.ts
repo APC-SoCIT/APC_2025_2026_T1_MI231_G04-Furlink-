@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Vercel Hobby (free) plan: cap function runtime at 60s so image generation isn't cut off by the default limit.
+export const maxDuration = 60;
  
 const OPENAI_FALLBACK_SIZE = '1024x1024';
 const OPENAI_FALLBACK_MODEL = 'gpt-image-1.5';
