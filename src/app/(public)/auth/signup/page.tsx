@@ -531,7 +531,7 @@ export default function SignupPage() {
             className={errors.terms ? "checkbox-required" : ""}
           />
           <label htmlFor="termsCheckbox">
-            I agree to the <Link href="/terms" className="terms-link">Terms and Conditions</Link> and <Link href="/privacy" className="terms-link">Privacy Policy</Link> of furlink <span className="required-asterisk">*</span>
+            I agree to the <Link href="/terms_and_conditions" className="terms-link">Terms and Conditions</Link> and <Link href="/privacy_policy" className="terms-link">Privacy Policy</Link> of furlink <span className="required-asterisk">*</span>
           </label>
         </div>
 
