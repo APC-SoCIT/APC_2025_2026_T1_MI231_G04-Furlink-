@@ -1054,7 +1054,7 @@ export async function POST(req: NextRequest) {
     const suspendedCheck = await checkPetOwner(req);
     if (suspendedCheck.suspended) {
       suspendedNote =
-        "IMPORTANT: This user's account is currently suspended. They cannot make new bookings by any means until the suspension ends. Do not help them book, do not walk them through booking steps and do not suggest a booking. If they ask to book, politely say their account is suspended and they cannot book right now. They can still view their bookings, pets and account, and you may answer general questions.";
+        "IMPORTANT: This user's account is currently suspended. They cannot make new bookings by any means until the suspension ends. Do not help them book, do not walk them through booking steps and do not suggest a booking. If they ask to book, politely say their account is suspended and they cannot book right now. They can still view their bookings, pets and account, and you may answer general questions. While suspended they also cannot cancel or reschedule bookings that are awaiting provider approval or already approved; if they ask, tell them this politely. They can still cancel a booking that is unpaid (To Pay).";
     }
   }
 

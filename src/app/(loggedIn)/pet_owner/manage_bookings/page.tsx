@@ -486,6 +486,13 @@ export default function ManageBookingsPage() {
       return;
     }
 
+    // A suspended account cannot cancel bookings that are awaiting approval or approved
+    if (isSuspended && selectedBooking.booking_status !== 'to pay') {
+      alert('Your account is suspended, so you cannot cancel this booking right now.');
+      setShowCancelModal(false);
+      return;
+    }
+
     setIsCancelling(true);
 
     try {

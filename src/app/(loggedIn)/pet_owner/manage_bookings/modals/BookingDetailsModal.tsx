@@ -12,14 +12,18 @@ import {
 } from 'react-icons/fa';
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
+import { useAccountStatus } from '@/context/AccountStatusContext';
 
 // Tabs from which the pet owner is still allowed to cancel the booking.
 // to_pay: No refund (payment not completed)
 // awaiting_approval/upcoming: 25% refund to PO, 75% to SP
 const CANCELLABLE_TABS: BookingTab[] = ['to_pay', 'awaiting_approval', 'upcoming'];
 
-// Tabs where reschedule is allowed (awaiting approval OR approved bookings)
-const RESCHEDULABLE_TABS: BookingTab[] = ['awaiting_approval', 'upcoming'];
+// Tabs where reschedule is allowed: only while the booking is awaiting provider approval
+const RESCHEDULABLE_TABS: BookingTab[] = ['awaiting_approval'];
+
+// A suspended account cannot cancel or reschedule bookings that are awaiting approval or approved
+const LOCKED_WHEN_SUSPENDED: BookingTab[] = ['awaiting_approval', 'upcoming'];
 
 interface BookingDetailsModalProps {
   selectedBooking: BookingRecord;
@@ -40,6 +44,9 @@ export default function BookingDetailsModal(
     onCancelBooking,
   }: BookingDetailsModalProps
 ) {
+  const { isSuspended } = useAccountStatus();
+  const lockedBySuspension = isSuspended && LOCKED_WHEN_SUSPENDED.includes(activeTab);
+
   return (
     <div className="modal-backdrop">
       <div className="summary-modal-card">
@@ -301,15 +308,21 @@ export default function BookingDetailsModal(
             </button>
           )}
 
-          {/* Reschedule button for upcoming (approved) bookings */}
-          {RESCHEDULABLE_TABS.includes(activeTab) && (
+          {lockedBySuspension && (
+            <p style={{ width: '100%', margin: 0, fontSize: 12, color: '#b45309', fontWeight: 600, textAlign: 'center' }}>
+              Your account is suspended, so you can&apos;t cancel or reschedule this booking right now.
+            </p>
+          )}
+
+          {/* Reschedule: only while awaiting approval, and not while suspended */}
+          {RESCHEDULABLE_TABS.includes(activeTab) && !lockedBySuspension && (
             <button className="btn-primary-action" onClick={onReschedule} style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
               <FaSync /> Reschedule
             </button>
           )}
 
-          {/* Pet owner can only self-cancel while the booking is still unpaid (To Pay) */}
-          {CANCELLABLE_TABS.includes(activeTab) && (
+          {/* Cancel: To Pay, Awaiting Approval or Approved; awaiting/approved are locked while suspended */}
+          {CANCELLABLE_TABS.includes(activeTab) && !lockedBySuspension && (
             <button className="btn-cancel-booking" onClick={onCancelBooking}>
               Cancel Booking
             </button>

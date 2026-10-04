@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useAccountStatus } from '@/context/AccountStatusContext';
 import { FaTimes, FaCalendarAlt, FaClock, FaChevronLeft, FaChevronRight, FaCheckCircle } from 'react-icons/fa';
 
 interface RescheduleModalProps {
@@ -28,6 +29,7 @@ export default function RescheduleModal({
   onSubmit,
 }: RescheduleModalProps) {
   const supabase = createClientComponentClient();
+  const { isSuspended } = useAccountStatus();
 
   const [selectedDate, setSelectedDate] = useState(currentDate);
   const [selectedTimeslot, setSelectedTimeslot] = useState(currentTimeslot);
@@ -238,6 +240,10 @@ export default function RescheduleModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSuspended) {
+      alert('Your account is suspended, so you cannot reschedule this booking right now.');
+      return;
+    }
     if (!isDayOpen) {
       alert('Cannot select a date when the service provider is closed.');
       return;
@@ -263,8 +269,12 @@ export default function RescheduleModal({
         .eq('id', bookingId);
 
       if (error) {
-        console.error('Supabase reschedule update error:', error);
-        alert('Failed to update booking schedule in database. Please try again.');
+        console.error('Supabase reschedule update error:', error.message, error.code, error.details);
+        alert(
+          error.message?.includes('ACCOUNT_SUSPENDED') || error.message?.includes('RESCHEDULE_NOT_ALLOWED')
+            ? error.message.replace(/^[A-Z_]+:\s*/, '')
+            : 'Failed to update booking schedule in database. Please try again.'
+        );
         setIsSubmitting(false);
         return;
       }
