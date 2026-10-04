@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fa';
 import './manage_bookings.css';
 import './tab_counters.css';
+import { useAccountStatus } from '@/context/AccountStatusContext';
 
 import { BookingTab, BookingRecord, SortOrder, StatusFilter } from './types/booking';
 import {
@@ -41,6 +42,7 @@ const UNPAID_AUTO_CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export default function ManageBookingsPage() {
   const supabase = createClientComponentClient();
+  const { isSuspended } = useAccountStatus();
 
   const [activeTab, setActiveTab] = useState<BookingTab>('awaiting_approval');
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -329,6 +331,8 @@ export default function ManageBookingsPage() {
   };
 
   const handleOpenRatingModal = (booking: BookingRecord) => {
+    // Suspended accounts are read-only: they cannot leave ratings or reviews
+    if (isSuspended) return;
     setRatingBooking(booking);
     setShowRatingModal(true);
   };
@@ -732,7 +736,14 @@ export default function ManageBookingsPage() {
                       {item.booking_status === 'to_rate' && (
                         <button
                           className="row-action-btn"
-                          style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}
+                          style={{
+                            backgroundColor: '#1e3a8a',
+                            color: '#ffffff',
+                            opacity: isSuspended ? 0.5 : 1,
+                            cursor: isSuspended ? 'not-allowed' : 'pointer',
+                          }}
+                          disabled={isSuspended}
+                          title={isSuspended ? 'Your account is suspended, so you cannot leave ratings right now.' : undefined}
                           onClick={() => handleOpenRatingModal(item)}
                         >
                           Rate Service
