@@ -27,6 +27,9 @@ export default function EditBusinessInfoPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Guard state to prevent Leaflet's "appendChild" and instance reuse errors during React Strict Mode / HMR
+  const [isMounted, setIsMounted] = useState(false);
 
   const [formData, setFormData] = useState({
     businessName: "",
@@ -43,6 +46,8 @@ export default function EditBusinessInfoPage() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
+    setIsMounted(true); // Signal that the component is fully painted in the browser DOM
+
     const fetchListingData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -81,7 +86,6 @@ export default function EditBusinessInfoPage() {
           }
         }
       } catch (err: any) {
-        // UI-based error handling instead of console logs
         setErrorMessage(err?.message || "Failed to load business info.");
       } finally {
         setIsLoading(false);
@@ -93,6 +97,14 @@ export default function EditBusinessInfoPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // Prevent accidental input of letters in the mobile field to keep data clean
+    if (name === "businessMobile") {
+      const numbersOnly = value.replace(/\D/g, "");
+      if (numbersOnly.length <= 10) setFormData(prev => ({ ...prev, [name]: numbersOnly }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -132,7 +144,6 @@ export default function EditBusinessInfoPage() {
   const handleLocateFromAddress = async () => {
     const queryParts = [formData.houseStreet, formData.barangay, formData.city, formData.province, "Philippines"].filter(Boolean);
     if (queryParts.length <= 1) {
-      // Replaced native alert with UI error state for better UX
       setErrorMessage("Please fill in at least a city, province, or street address to sync the map.");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -160,13 +171,16 @@ export default function EditBusinessInfoPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user session found. Please log in again.");
 
+      // Ensure the number is stripped of any accidental formatting before prepending the strict +63 required by the database constraint
+      const cleanedMobile = formData.businessMobile.replace(/^\+63/, '').replace(/\D/g, '');
+
       const { error } = await supabase
         .from('sp_general_info')
         .update({
           business_name: formData.businessName,
           business_bio: formData.description,
           business_email: formData.businessEmail,
-          business_contact: `+63${formData.businessMobile}`,
+          business_contact: `+63${cleanedMobile}`, // Fixes the sp_general_info_business_contact_check constraint violation
           business_street: formData.houseStreet,
           business_barangay: formData.barangay,
           business_city: formData.city,
@@ -178,11 +192,17 @@ export default function EditBusinessInfoPage() {
         })
         .eq('profiles_id', user.id);
 
-      if (error) throw new Error("Failed to save updates to the database.");
+      // Now correctly passes the exact database error message up to the UI if a constraint fails
+      if (error) throw new Error(error.message || "Failed to save update, kindly re-check your input.");
 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
-      setErrorMessage(err?.message || "An unexpected error occurred while saving.");
+      // Translate raw network fetch errors into friendly UI guidance
+      const friendlyMessage = err?.message === 'Failed to fetch'
+        ? 'Network error: Unable to connect to the server. Please check your internet connection and try again.'
+        : (err?.message || 'An unexpected error occurred while saving.');
+
+      setErrorMessage(friendlyMessage);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setIsSaving(false);
@@ -224,7 +244,19 @@ export default function EditBusinessInfoPage() {
 
             <div className="listing-field-group">
               <label>Business Mobile</label>
-              <input type="text" name="businessMobile" value={formData.businessMobile} onChange={handleChange} required style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: '10px', color: '#666', fontWeight: 600 }}>+63</span>
+                <input 
+                  type="tel" 
+                  name="businessMobile" 
+                  value={formData.businessMobile} 
+                  onChange={handleChange} 
+                  required 
+                  maxLength={10}
+                  placeholder="920 667 2166"
+                  style={{ width: '100%', padding: '10px 10px 10px 42px', borderRadius: '6px', border: '1px solid #0a217a' }} 
+                />
+              </div>
             </div>
 
             <div className="listing-field-group">
@@ -232,7 +264,6 @@ export default function EditBusinessInfoPage() {
               <input type="text" name="houseStreet" value={formData.houseStreet} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #0a217a' }} />
             </div>
 
-            {/* Added flexWrap and flexible flex basis for mobile responsiveness */}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <div className="listing-field-group" style={{ flex: '1 1 200px' }}>
                 <label>Barangay</label>
@@ -283,7 +314,7 @@ export default function EditBusinessInfoPage() {
                 Click anywhere on the map or type coordinates below to automatically resolve the address.
               </p>
 
-              {/* Manual Coordinate Inputs - Added flexWrap for mobile scaling */}
+              {/* Manual Coordinate Inputs */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 200px' }}>
                   <label style={{ fontSize: '12px', color: '#555', display: 'block', marginBottom: '4px' }}>Latitude</label>
@@ -311,7 +342,10 @@ export default function EditBusinessInfoPage() {
                 </div>
               </div>
 
-              <LocationPicker position={location} setPosition={handleLocationSelect} />
+              {/* Only render the MapContainer when the DOM is fully ready to prevent SSR hydration crashes */}
+              {isMounted && (
+                <LocationPicker position={location} setPosition={handleLocationSelect} />
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>

@@ -63,6 +63,22 @@ export default function EditHoursStaffPage() {
     setHours(updated);
   };
 
+  // 1. Add new operating hour row function
+  const addHourRow = () => {
+    setHours([...hours, { 
+      day_of_week: "Monday", 
+      opening_time: "09:00", 
+      closing_time: "17:00", 
+      slot_interval: 60, 
+      slot_capacity: 1 
+    }]);
+  };
+
+  // 2. Remove operating hour row function
+  const removeHourRow = (index: number) => {
+    setHours(hours.filter((_, i) => i !== index));
+  };
+
   const handleStaffChange = (index: number, field: string, value: string) => {
     const updated = [...staff];
     updated[index][field] = value;
@@ -141,12 +157,34 @@ export default function EditHoursStaffPage() {
             
             {/* Hours Section */}
             <div>
-              <h3 style={{ color: '#0a217a', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Operating Hours</h3>
+              {/* 3. Updated Header with Add Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>
+                <h3 style={{ color: '#0a217a', margin: 0 }}>Operating Hours</h3>
+                <button type="button" onClick={addHourRow} style={{ background: '#0a217a', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>+ Add Schedule</button>
+              </div>
+              
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {hours.map((h, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '15px', background: '#fdfdfd', padding: '15px', borderRadius: '8px', border: '1px solid #e0e0e0', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 80px', minWidth: '80px', fontWeight: 'bold', textTransform: 'capitalize', color: '#333' }}>
-                      {h.day_of_week}
+                  // 4. Added relative positioning and adjusted padding for the close button
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '15px', background: '#fdfdfd', padding: '25px 15px 15px 15px', borderRadius: '8px', border: '1px solid #e0e0e0', position: 'relative', flexWrap: 'wrap' }}>
+                    
+                    {/* 5. Converted Day text into a Select Dropdown */}
+                    <div style={{ flex: '1 1 120px', minWidth: '120px' }}>
+                      <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600, display: 'block' }}>Day</label>
+                      <select 
+                        value={h.day_of_week} 
+                        onChange={(e) => handleHourChange(index, 'day_of_week', e.target.value)} 
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', textTransform: 'capitalize', background: '#fff' }} 
+                        required
+                      >
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                      </select>
                     </div>
                     
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: '1 1 200px', minWidth: '200px' }}>
@@ -171,8 +209,12 @@ export default function EditHoursStaffPage() {
                         <input type="number" placeholder="1" value={h.slot_capacity} onChange={(e) => handleHourChange(index, 'slot_capacity', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
                       </div>
                     </div>
+
+                    {/* 6. Added Removal Button */}
+                    <button type="button" onClick={() => removeHourRow(index)} style={{ position: 'absolute', top: '5px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }} title="Remove Schedule">&times;</button>
                   </div>
                 ))}
+                {hours.length === 0 && <p style={{ fontSize: '14px', color: '#666' }}>No operating hours added.</p>}
               </div>
             </div>
 
@@ -208,7 +250,7 @@ export default function EditHoursStaffPage() {
                         <option value="staff">Staff</option>
                       </select>
                     </div>
-                    <button type="button" onClick={() => removeStaff(index)} style={{ position: 'absolute', top: '5px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+                    <button type="button" onClick={() => removeStaff(index)} style={{ position: 'absolute', top: '5px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }} title="Remove Staff">&times;</button>
                   </div>
                 ))}
                 {staff.length === 0 && <p style={{ fontSize: '14px', color: '#666' }}>No staff members added.</p>}

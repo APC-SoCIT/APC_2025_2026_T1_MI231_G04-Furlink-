@@ -57,8 +57,10 @@ export function useValidation() {
           else newErrors.businessName = "This business name is already registered.";
           isValid = false;
         }
-      } catch (err) {
-        console.error("Error checking business name:", err);
+      } catch (err: any) {
+        // Replaced console.error with UI-friendly error handling
+        newErrors.businessName = "Unable to verify business name availability.";
+        isValid = false;
       }
     }
 
@@ -109,7 +111,43 @@ export function useValidation() {
       isValid = false;
     }
 
-    // 3. File Validation
+    // 3. Operating Hours Validation (Added Strict Checks)
+    if (!businessInfo.operatingHours || businessInfo.operatingHours.length === 0) {
+      newErrors.operatingHours = "At least one operating schedule is required.";
+      isValid = false;
+    } else {
+      let hasAtLeastOneDay = false;
+      
+      businessInfo.operatingHours.forEach((slot: any, idx: number) => {
+        // Must select at least one day per slot block
+        if (slot.days && slot.days.length > 0) {
+          hasAtLeastOneDay = true;
+        } else {
+          newErrors[`operatingHours_${idx}_days`] = "Please select at least one day.";
+          isValid = false;
+        }
+
+        // Must have valid capacity
+        if (!slot.capacityPerSlot || slot.capacityPerSlot <= 0) {
+          newErrors[`operatingHours_${idx}_capacity`] = "Capacity must be at least 1.";
+          isValid = false;
+        }
+
+        // Must have valid times
+        if (!slot.startTime || !slot.endTime) {
+          newErrors[`operatingHours_${idx}_time`] = "Start and end times are required.";
+          isValid = false;
+        }
+      });
+
+      // Global check: Ensure the business is open at least one day overall
+      if (!hasAtLeastOneDay) {
+        newErrors.operatingHours = "You must select at least one operating day.";
+        isValid = false;
+      }
+    }
+
+    // 4. File Validation
     if (!fileState.hasPermit) {
       newErrors.businessPermitFile = "Business Permit is required";
       isValid = false;
@@ -125,7 +163,7 @@ export function useValidation() {
       isValid = false;
     }
 
-    // 4. Employee Validation (Enforcing Minimum 2)
+    // 5. Employee Validation (Enforcing Minimum 2)
     if (employees.length < 2) {
       newErrors.employees = "You must add at least two employees.";
       isValid = false;
