@@ -8,6 +8,7 @@ import {
   FaExclamationCircle,
   FaStar,
   FaStore,
+  FaSync,
 } from 'react-icons/fa';
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
@@ -15,6 +16,9 @@ import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../util
 // Tabs from which the pet owner is still allowed to cancel the booking.
 // Once a booking is awaiting approval or approved, only the service provider side can change it.
 const CANCELLABLE_TABS: BookingTab[] = ['to_pay'];
+
+// Tabs where reschedule is allowed (awaiting approval OR approved bookings)
+const RESCHEDULABLE_TABS: BookingTab[] = ['awaiting_approval', 'upcoming'];
 
 interface BookingDetailsModalProps {
   selectedBooking: BookingRecord;
@@ -25,14 +29,16 @@ interface BookingDetailsModalProps {
   onCancelBooking: () => void;
 }
 
-export default function BookingDetailsModal({
-  selectedBooking,
-  activeTab,
-  onClose,
-  onPayNow,
-  onReschedule,
-  onCancelBooking,
-}: BookingDetailsModalProps) {
+export default function BookingDetailsModal(
+  {
+    selectedBooking,
+    activeTab,
+    onClose,
+    onPayNow,
+    onReschedule,
+    onCancelBooking,
+  }: BookingDetailsModalProps
+) {
   return (
     <div className="modal-backdrop">
       <div className="summary-modal-card">
@@ -74,27 +80,49 @@ export default function BookingDetailsModal({
           )}
 
           {/* Conditional Rating & Review Section */}
-          {(selectedBooking.booking_overall_rating || selectedBooking.booking_staff_rating || selectedBooking.booking_review) && (
-            <div style={{
-              backgroundColor: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
-              padding: '16px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e3a8a', fontWeight: 600 }}>
+          {(selectedBooking.booking_overall_rating ||
+            selectedBooking.booking_staff_rating ||
+            selectedBooking.booking_review) && (
+            <div
+              style={{
+                backgroundColor: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                color: '#334155',
+                padding: '16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#1e3a8a',
+                  fontWeight: 600,
+                }}
+              >
                 <FaStar style={{ color: '#f59e0b' }} /> Customer Rating & Review
               </div>
               <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b' }}>
                 {selectedBooking.booking_overall_rating && (
-                  <span>Overall Rating: <strong style={{ color: '#1e293b' }}>{selectedBooking.booking_overall_rating} / 5 ★</strong></span>
+                  <span>
+                    Overall Rating:{' '}
+                    <strong style={{ color: '#1e293b' }}>
+                      {selectedBooking.booking_overall_rating} / 5 ★
+                    </strong>
+                  </span>
                 )}
                 {selectedBooking.booking_staff_rating && (
-                  <span>Staff Rating: <strong style={{ color: '#1e293b' }}>{selectedBooking.booking_staff_rating} / 5 ★</strong></span>
+                  <span>
+                    Staff Rating:{' '}
+                    <strong style={{ color: '#1e293b' }}>
+                      {selectedBooking.booking_staff_rating} / 5 ★
+                    </strong>
+                  </span>
                 )}
               </div>
               {selectedBooking.booking_review && (
@@ -109,17 +137,19 @@ export default function BookingDetailsModal({
           )}
 
           {selectedBooking.booking_comment && (
-            <div style={{
-              backgroundColor: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '8px'
-            }}>
+            <div
+              style={{
+                backgroundColor: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                color: '#334155',
+                padding: '12px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px',
+              }}
+            >
               <FaCommentAlt style={{ marginTop: '2px', color: '#1e3a8a' }} />
               <div>
                 <strong>Booking Comment/Notes:</strong> {selectedBooking.booking_comment}
@@ -129,10 +159,7 @@ export default function BookingDetailsModal({
 
           {selectedBooking.booking_pet_info?.map((pet, pIdx) => {
             const petTotal =
-              pet.booking_service_info?.reduce(
-                (sum, s) => sum + Number(s.booking_price || 0),
-                0
-              ) || 0;
+              pet.booking_service_info?.reduce((sum, s) => sum + Number(s.booking_price || 0), 0) || 0;
 
             return (
               <div key={pet.id} className="summary-pet-card">
@@ -147,39 +174,50 @@ export default function BookingDetailsModal({
                 </div>
 
                 <div className="summary-pet-info-grid">
-                  <div>Type: <strong>{pet.booking_pet_type?.toUpperCase()}</strong></div>
-                  <div>Breed: <strong>{pet.booking_breed || 'N/A'}</strong></div>
-                  <div>Gender: <strong>{pet.booking_gender?.toUpperCase()}</strong></div>
-                  <div>Birth Date: <strong>{pet.booking_date_of_birth || 'N/A'}</strong></div>
-                  <div>Weight: <strong>{pet.booking_weight ? `${pet.booking_weight} kg` : 'N/A'}</strong></div>
-                  <div>Size: <strong>{pet.booking_calculated_size?.toUpperCase()}</strong></div>
+                  <div>
+                    Type: <strong>{pet.booking_pet_type?.toUpperCase()}</strong>
+                  </div>
+                  <div>
+                    Breed: <strong>{pet.booking_breed || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    Gender: <strong>{pet.booking_gender?.toUpperCase()}</strong>
+                  </div>
+                  <div>
+                    Birth Date: <strong>{pet.booking_date_of_birth || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    Weight: <strong>{pet.booking_weight ? `${pet.booking_weight} kg` : 'N/A'}</strong>
+                  </div>
+                  <div>
+                    Size: <strong>{pet.booking_calculated_size?.toUpperCase()}</strong>
+                  </div>
                 </div>
 
                 {pet.booking_ai_haircut_url && (
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '12px',
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '8px',
-                      color: '#166534',
-                      fontWeight: 600,
-                      fontSize: '13px'
-                    }}>
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '12px',
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '8px',
+                        color: '#166534',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                      }}
+                    >
                       <FaMagic /> AI Haircut Style Reference:
                     </div>
-                    <a
-                      href={pet.booking_ai_haircut_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: 'inline-block' }}
-                    >
+                    <a href={pet.booking_ai_haircut_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
                       <img
                         src={pet.booking_ai_haircut_url}
                         alt="AI Haircut Reference"
@@ -188,7 +226,7 @@ export default function BookingDetailsModal({
                           maxHeight: '140px',
                           objectFit: 'cover',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1'
+                          border: '1px solid #cbd5e1',
                         }}
                       />
                     </a>
@@ -220,9 +258,7 @@ export default function BookingDetailsModal({
 
                 <div className="summary-behaviors">
                   Behaviors:{' '}
-                  {pet.booking_behavior && pet.booking_behavior.length > 0
-                    ? pet.booking_behavior.join(' / ')
-                    : 'None specified'}
+                  {pet.booking_behavior && pet.booking_behavior.length > 0 ? pet.booking_behavior.join(' / ') : 'None specified'}
                 </div>
 
                 <div className={`summary-consent-badge ${pet.booking_emergency_consent ? 'approved' : 'declined'}`}>
@@ -240,9 +276,7 @@ export default function BookingDetailsModal({
           <div className="summary-financials">
             <div className="financial-row total-row">
               <span>Total Amount (VAT Inclusive):</span>
-              <span className="amount-bold">
-                ₱{Number(selectedBooking.booking_total_amount || 0).toFixed(2)}
-              </span>
+              <span className="amount-bold">₱{Number(selectedBooking.booking_total_amount || 0).toFixed(2)}</span>
             </div>
 
             {/* Refund tab: show what is being / was returned (booking_info.refund_amount) */}
@@ -261,28 +295,23 @@ export default function BookingDetailsModal({
 
         <div className="summary-modal-footer">
           {activeTab === 'to_pay' && (
-            <button
-              className="btn-primary-action"
-              onClick={() => onPayNow(selectedBooking.id)}
-            >
+            <button className="btn-primary-action" onClick={() => onPayNow(selectedBooking.id)}>
               Pay Now
             </button>
           )}
 
-          {/* Rescheduling is not available to pet owners: awaiting-approval bookings are locked */}
+          {/* Reschedule button for upcoming (approved) bookings */}
+          {RESCHEDULABLE_TABS.includes(activeTab) && (
+            <button className="btn-primary-action" onClick={onReschedule} style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+              <FaSync /> Reschedule
+            </button>
+          )}
 
           {/* Pet owner can only self-cancel while the booking is still unpaid (To Pay) */}
           {CANCELLABLE_TABS.includes(activeTab) && (
             <button className="btn-cancel-booking" onClick={onCancelBooking}>
               Cancel Booking
             </button>
-          )}
-          {(activeTab === 'awaiting_approval' || activeTab === 'upcoming') && (
-            <p style={{ width: '100%', margin: 0, fontSize: 12, color: '#64748b', textAlign: 'center' }}>
-              {activeTab === 'awaiting_approval'
-                ? 'Bookings that are awaiting approval can no longer be cancelled or rescheduled.'
-                : 'Approved bookings can no longer be cancelled.'}
-            </p>
           )}
 
           <button className="btn-close-modal" onClick={onClose}>
