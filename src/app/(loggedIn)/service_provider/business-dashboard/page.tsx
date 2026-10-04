@@ -203,7 +203,7 @@ export default function BusinessDashboardPage() {
     // Only count revenue from VALID services (test services already removed in filter above)
     const revenueGeneratingServices = filteredServices.filter((s: any) => revenuePetIds.has(s.booking_pet_info_id));
     
-    // FIX: Calculate total revenue dynamically 
+    // Calculate total revenue dynamically 
     const grossRevenue = revenueGeneratingServices.reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
     
     // Calculate previous period revenue for trend (approximate via booking ratio if services aren't date-stamped)
@@ -371,6 +371,7 @@ export default function BusinessDashboardPage() {
             customDateEnd={customDateEnd}
             setCustomDateEnd={setCustomDateEnd}
             bookedServices={dynamicMetrics.realServiceBreakdown} 
+            bookings={filteredBookings} // FIX: Added bookings prop to pass into the Sidebar
           />
 
           <div className={styles.contentArea}>
