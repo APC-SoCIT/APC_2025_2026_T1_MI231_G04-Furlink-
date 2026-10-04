@@ -185,22 +185,26 @@ export default function BusinessInfoForm({
 
         <div className="form-group operating-hours-container">
           <label>Operating Hours & Slot Capacity*</label>
+          {validationErrors.operatingHours && <small className="error" style={{ display: 'block', marginBottom: '10px' }}>{validationErrors.operatingHours}</small>}
+          
           {businessInfo.operatingHours.map((slot: any, i: number) => (
             <div key={i} className="operating-slot-enhanced">
               <div className="day-buttons">
                 {DAYS_OF_WEEK_FULL.map((d, idx) => (
-                  <button key={d} type="button" className={`day-btn ${slot.days.includes(d) ? "active" : ""} ${isDayDisabled(i, d) ? "disabled" : ""}`} onClick={() => toggleDay(i, d)} disabled={isDayDisabled(i, d)}>{DAYS_OF_WEEK_SHORT[idx]}</button>
+                  <button key={d} type="button" className={`day-btn ${slot.days.includes(d) ? "active" : ""} ${isDayDisabled(i, d) ? "disabled" : ""} ${validationErrors[`operatingHours_${i}_days`] ? "input-error" : ""}`} onClick={() => toggleDay(i, d)} disabled={isDayDisabled(i, d)}>{DAYS_OF_WEEK_SHORT[idx]}</button>
                 ))}
               </div>
+              {validationErrors[`operatingHours_${i}_days`] && <small className="error" style={{ display: 'block', marginTop: '4px' }}>{validationErrors[`operatingHours_${i}_days`]}</small>}
 
               <div className="time-config-row-single">
                 <div className="input-unit">
                   <label>Hours:</label>
-                  <div className="time-inputs-compact">
+                  <div className={`time-inputs-compact ${validationErrors[`operatingHours_${i}_time`] ? "input-error" : ""}`}>
                     <input type="time" value={slot.startTime} onChange={(e) => handleTimeChange(i, "startTime", e.target.value)} />
                     <span>-</span>
                     <input type="time" value={slot.endTime} onChange={(e) => handleTimeChange(i, "endTime", e.target.value)} />
                   </div>
+                  {validationErrors[`operatingHours_${i}_time`] && <small className="error" style={{ display: 'block', marginTop: '4px' }}>{validationErrors[`operatingHours_${i}_time`]}</small>}
                 </div>
                 <div className="input-unit">
                   <label>Slot Every:</label>
@@ -213,13 +217,14 @@ export default function BusinessInfoForm({
                 </div>
                 <div className="input-unit">
                   <label>Capacity:</label>
-                  <div className="capacity-input-compact">
+                  <div className={`capacity-input-compact ${validationErrors[`operatingHours_${i}_capacity`] ? "input-error" : ""}`}>
                     <input type="number" min="1" value={slot.capacityPerSlot} onChange={(e) => handleTimeChange(i, "capacityPerSlot", parseInt(e.target.value) || 1)} />
                     <span>pets</span>
                   </div>
+                  {validationErrors[`operatingHours_${i}_capacity`] && <small className="error" style={{ display: 'block', marginTop: '4px' }}>{validationErrors[`operatingHours_${i}_capacity`]}</small>}
                 </div>
                 {businessInfo.operatingHours.length > 1 && (
-                  <button type="button" onClick={() => removeTimeSlot(i)} className="remove-inline-btn" title="Remove Schedule">🗑️</button>
+                  <button type="button" onClick={() => removeTimeSlot(i)} className="remove-inline-btn" title="Remove Schedule">🗑️️</button>
                 )}
               </div>
             </div>
