@@ -21,7 +21,7 @@ export default function Footer() {
         
         <div className="footer-right">
           {/* Facebook Icon */}
-          <a href="https://www.facebook.com/people/Furbnb/61576298152992/" aria-label="Facebook" className="social-icon-link">
+          <a href="https://www.facebook.com/profile.php?id=61576298152992" aria-label="Facebook" className="social-icon-link">
             <svg 
               width="24" 
               height="24" 
@@ -34,7 +34,7 @@ export default function Footer() {
           </a>
 
           {/* Instagram Icon */}
-          <a href="https://www.instagram.com/furbnb_startup?fbclid=IwY2xjawTHCcJleHRuA2FlbQIxMABicmlkETE2VmlIMFlaVFdHUTl1eHROc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHgd_GJEGmgMhFm2tNxFqvIxBmYfypB9H9YykZFNQpdAuM4Jl1tbIrpi4X93Z_aem_WnbVkzjTUFar5M0Rq5ZO1w" aria-label="Instagram" className="social-icon-link">
+          <a href="https://www.instagram.com/furlink_startup/" aria-label="Instagram" className="social-icon-link">
             <svg 
               width="24" 
               height="24" 
