@@ -14,8 +14,9 @@ import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
 
 // Tabs from which the pet owner is still allowed to cancel the booking.
-// Once a booking is awaiting approval or approved, only the service provider side can change it.
-const CANCELLABLE_TABS: BookingTab[] = ['to_pay'];
+// to_pay: No refund (payment not completed)
+// awaiting_approval/upcoming: 25% refund to PO, 75% to SP
+const CANCELLABLE_TABS: BookingTab[] = ['to_pay', 'awaiting_approval', 'upcoming'];
 
 // Tabs where reschedule is allowed (awaiting approval OR approved bookings)
 const RESCHEDULABLE_TABS: BookingTab[] = ['awaiting_approval', 'upcoming'];
