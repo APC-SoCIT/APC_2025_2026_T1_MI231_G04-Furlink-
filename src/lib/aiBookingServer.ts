@@ -102,19 +102,35 @@ export const PROVIDER_COLUMNS = 'id, business_name, business_street, business_ba
 export const addressOf = (p: any) =>
   [p.business_street, p.business_barangay, p.business_city, p.business_province].filter(Boolean).join(', ');
 
+/**
+ * Owners of service providers whose account is currently suspended. Those shops are treated as
+ * unavailable: the assistant must not list them, quote them or book with them.
+ * Lifts any suspension that has already run out first.
+ */
+export async function suspendedProviderOwnerIds(admin: SupabaseClient): Promise<string[]> {
+  await admin.rpc('lift_expired_suspensions');
+  const { data } = await admin.from('profiles').select('id').eq('status', 'suspended');
+  return (data ?? []).map((p: { id: string }) => p.id);
+}
+
 export async function fetchApprovedProviders(admin: SupabaseClient) {
-  const { data, error } = await admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved').limit(300);
+  const suspended = await suspendedProviderOwnerIds(admin);
+  let q = admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.limit(300);
   if (error) throw new Error(error.message);
   return data ?? [];
 }
 
 export async function fetchApprovedProvider(admin: SupabaseClient, spId: string) {
-  const { data, error } = await admin
+  const suspended = await suspendedProviderOwnerIds(admin);
+  let q = admin
     .from('sp_general_info')
     .select(PROVIDER_COLUMNS)
     .eq('id', spId)
-    .eq('registration_status', 'approved')
-    .maybeSingle();
+    .eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }

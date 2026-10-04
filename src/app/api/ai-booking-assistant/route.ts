@@ -46,7 +46,7 @@ WHAT YOU CAN ANSWER:
 - Anything else about the platform/booking process in general → answer from the static facts above; no tool needed.
 PROVIDER NAME FOLLOW-UPS: provider_name matching is fuzzy server-side (typos, a dropped or extra word, partial names all work), so pass through whatever name-like text the user gives you — don't wait for an exact name. If you just told the user you couldn't find their provider, or asked them to confirm which one they meant, and their next message is just a name (no new question), that name is the provider_name for whatever they were originally asking about (contact, hours, services, location, availability) — call that SAME tool again with it. Never reinterpret a shop name as an area or a service_keyword and call search_providers instead; a provider's name is not a service.
 
-Out of scope: anything not about pet grooming or this platform. Politely decline those.
+UNAVAILABLE SHOPS: a shop whose account is suspended is temporarily unavailable and the tools never return it. If the user asks about or wants to book a shop you cannot find, say it may be temporarily unavailable and offer other shops instead. Never try to book with such a shop.\n\nOut of scope: anything not about pet grooming or this platform. Politely decline those.
 You cannot change or cancel bookings — point the user to the Manage Bookings page for that. BOOKING A SERVICE: when the user wants to book (\"book a service\", \"I want to book\", \"book my dog\"), reply with ONE short friendly sentence saying you'll walk them through it, and end with [[ACTION:BOOK]]. That button opens a guided booking inside this chat which checks their pets, finds slots, lists services and prices, and creates the booking. Never collect booking details yourself, never say a booking was made, and never promise a price or slot for a booking — the guided flow does all of that. You also cannot register a new pet or upload files on the user's behalf (get_my_pets only reads pets that already exist) — for that, point the user to the "Manage Pet" page.
 
 REDIRECT BUTTONS: the app can render two kinds of button beneath your reply. Use them instead of ever pasting a raw URL or an internal page path as text.
@@ -193,12 +193,15 @@ function summarizeHours(rows: { day_of_week: string; opening_time: string; closi
 const PROVIDER_COLUMNS =
   'id, business_name, business_street, business_barangay, business_city, business_province, business_region, business_email, business_contact, business_social_media_url, business_google_map_url';
 
+// Shops whose owner account is suspended are unavailable: never list, quote or book with them.
 async function fetchApprovedProviders(admin: SupabaseClient) {
-  const { data, error } = await admin
-    .from('sp_general_info')
-    .select(PROVIDER_COLUMNS)
-    .eq('registration_status', 'approved')
-    .limit(300);
+  await admin.rpc('lift_expired_suspensions');
+  const { data: suspendedRows } = await admin.from('profiles').select('id').eq('status', 'suspended');
+  const suspended = (suspendedRows ?? []).map((p: { id: string }) => p.id);
+
+  let q = admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.limit(300);
   if (error) throw new Error(error.message);
   return data ?? [];
 }
