@@ -196,7 +196,8 @@
 
 .metricsGrid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 5 cards in a row to match reference */
+  /* Updated from 5 to 4 columns to cleanly fill the space without Listing Visitors */
+  grid-template-columns: repeat(4, 1fr); 
   gap: 0.4rem;
 }
 

@@ -1,12 +1,65 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import styles from '../business-dashboard.module.css';
 
-export default function ReviewsSidebarWidget() {
-  const recentComments = [
-    { id: 1, name: 'Reina Rei', text: '"The service is great!"', date: '8/18/2026', rating: 5 },
-    { id: 2, name: 'furbnb', text: '"it was okay"', date: '8/17/2026', rating: 3 },
-    { id: 3, name: 'furbnb', text: '"Great service!"', date: '8/16/2026', rating: 5 },
-  ];
+interface ReviewsSidebarWidgetProps {
+  bookings: any[];
+}
+
+export default function ReviewsSidebarWidget({ bookings = [] }: ReviewsSidebarWidgetProps) {
+  
+  // Calculate dynamic review statistics based on live booking_info data
+  const { totalReviews, avgOverall, avgStaff, recentComments } = useMemo(() => {
+    // Filter bookings that actually have an overall rating
+    const ratedBookings = bookings.filter(b => typeof b.booking_overall_rating === 'number' && b.booking_overall_rating > 0);
+    
+    let sumOverall = 0;
+    let sumStaff = 0;
+    let staffCount = 0;
+    
+    ratedBookings.forEach(b => {
+      sumOverall += b.booking_overall_rating;
+      
+      if (typeof b.booking_staff_rating === 'number' && b.booking_staff_rating > 0) {
+        sumStaff += b.booking_staff_rating;
+        staffCount++;
+      }
+    });
+
+    const calculatedTotal = ratedBookings.length;
+    const calculatedOverall = calculatedTotal > 0 ? (sumOverall / calculatedTotal).toFixed(1) : '0.0';
+    const calculatedStaff = staffCount > 0 ? (sumStaff / staffCount).toFixed(1) : '0.0';
+
+    // Get the most recent 3 comments that have a review text
+    const commentsList = ratedBookings
+      .filter(b => b.booking_review || b.booking_comment)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 3)
+      .map((b) => {
+        const p = b.profiles;
+        const customerName = p?.username 
+          || (p?.first_name && p?.last_name ? `${p.first_name} ${p.last_name}` : null) 
+          || p?.first_name 
+          || `Customer ${b.profiles_id?.substring(0, 4) || b.id?.substring(0, 4)}`;
+
+        const dateObj = b.updated_at ? new Date(b.updated_at) : new Date(b.created_at);
+        const formattedDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}/${dateObj.getFullYear()}`;
+
+        return {
+          id: b.id,
+          name: customerName,
+          text: `"${b.booking_review || b.booking_comment}"`,
+          date: formattedDate,
+          rating: b.booking_overall_rating
+        };
+      });
+
+    return {
+      totalReviews: calculatedTotal,
+      avgOverall: calculatedOverall,
+      avgStaff: calculatedStaff,
+      recentComments: commentsList
+    };
+  }, [bookings]);
 
   const renderStars = (rating: number, size: string = '1rem') => {
     return (
@@ -38,15 +91,14 @@ export default function ReviewsSidebarWidget() {
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.5rem' }}>
-        {/* Reduced font size by two steps from 3.5rem to 2.5rem */}
         <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1e3a8a', lineHeight: 1 }}>
-          4.0
+          {avgOverall}
         </div>
         <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
-          {renderStars(4, '1.25rem')}
+          {renderStars(Math.round(Number(avgOverall)), '1.25rem')}
         </div>
         <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-          8 reviews
+          {totalReviews} reviews
         </div>
       </div>
 
@@ -68,7 +120,7 @@ export default function ReviewsSidebarWidget() {
           <span style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Overall</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#1e3a8a' }} />
-            <span style={{ background: '#fef08a', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, color: '#1e3a8a', fontSize: '0.85rem' }}>4.0</span>
+            <span style={{ background: '#fef08a', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, color: '#1e3a8a', fontSize: '0.85rem' }}>{avgOverall}</span>
           </div>
         </div>
 
@@ -87,7 +139,7 @@ export default function ReviewsSidebarWidget() {
           <span style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>Staff</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#1e3a8a' }} />
-            <span style={{ background: '#fef08a', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, color: '#1e3a8a', fontSize: '0.85rem' }}>4.0</span>
+            <span style={{ background: '#fef08a', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, color: '#1e3a8a', fontSize: '0.85rem' }}>{avgStaff}</span>
           </div>
         </div>
 
@@ -107,22 +159,28 @@ export default function ReviewsSidebarWidget() {
           Recent Comments
         </h4>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {recentComments.map((review) => (
-            <div key={review.id} style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.95rem' }}>{review.name}</span>
-                {renderStars(review.rating, '0.75rem')}
+        {recentComments.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {recentComments.map((review) => (
+              <div key={review.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.95rem' }}>{review.name}</span>
+                  {renderStars(review.rating, '0.75rem')}
+                </div>
+                <div style={{ fontStyle: 'italic', fontSize: '0.9rem', color: '#334155', marginTop: '4px' }}>
+                  {review.text}
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
+                  {review.date}
+                </div>
               </div>
-              <div style={{ fontStyle: 'italic', fontSize: '0.9rem', color: '#334155', marginTop: '4px' }}>
-                {review.text}
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
-                {review.date}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center' }}>
+            No comments available yet.
+          </div>
+        )}
       </div>
 
     </div>
