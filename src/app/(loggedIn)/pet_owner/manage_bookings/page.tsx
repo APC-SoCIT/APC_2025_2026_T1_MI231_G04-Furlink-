@@ -13,6 +13,7 @@ import {
   FaCalendarTimes,
 } from 'react-icons/fa';
 import './manage_bookings.css';
+import './tab_counters.css';
 
 import { BookingTab, BookingRecord, SortOrder, StatusFilter } from './types/booking';
 import {
@@ -44,6 +45,16 @@ export default function ManageBookingsPage() {
   const [activeTab, setActiveTab] = useState<BookingTab>('awaiting_approval');
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Number of bookings in each category (shown as a badge on the tab icons)
+  const [tabCounts, setTabCounts] = useState<Record<BookingTab, number>>({
+    awaiting_approval: 0,
+    to_pay: 0,
+    upcoming: 0,
+    cancelled: 0,
+    refund: 0,
+    completed: 0,
+  });
 
   // List filters (apply to the active category)
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
@@ -162,6 +173,27 @@ export default function ManageBookingsPage() {
           })
           .in('id', overdueIds);
       }
+
+      // Count the user's bookings per category (runs after the auto-cancel above so it is accurate)
+      const { data: statusRows } = await supabase
+        .from('booking_info')
+        .select('booking_status')
+        .eq('profiles_id', user.id);
+
+      const counts: Record<BookingTab, number> = {
+        awaiting_approval: 0,
+        to_pay: 0,
+        upcoming: 0,
+        cancelled: 0,
+        refund: 0,
+        completed: 0,
+      };
+      const allTabs = Object.keys(counts) as BookingTab[];
+      (statusRows || []).forEach((row: { booking_status: string }) => {
+        const tab = allTabs.find((t) => getStatusesForTab(t).includes(row.booking_status));
+        if (tab) counts[tab] += 1;
+      });
+      setTabCounts(counts);
 
       // Fetch bookings corresponding to active tab
       const targetStatuses = getStatusesForTab(activeTab);
@@ -501,7 +533,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'awaiting_approval' ? 'active' : ''}`}
             onClick={() => setActiveTab('awaiting_approval')}
           >
-            <div className="tab-icon-circle"><FaClock /></div>
+            <div className="tab-icon-circle">
+              <FaClock />
+              {tabCounts.awaiting_approval > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.awaiting_approval} bookings`}>
+                  {tabCounts.awaiting_approval > 99 ? '99+' : tabCounts.awaiting_approval}
+                </span>
+              )}
+            </div>
             <span className="tab-label">Awaiting Approval</span>
           </button>
 
@@ -509,7 +548,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'to_pay' ? 'active' : ''}`}
             onClick={() => setActiveTab('to_pay')}
           >
-            <div className="tab-icon-circle"><FaCreditCard /></div>
+            <div className="tab-icon-circle">
+              <FaCreditCard />
+              {tabCounts.to_pay > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.to_pay} bookings`}>
+                  {tabCounts.to_pay > 99 ? '99+' : tabCounts.to_pay}
+                </span>
+              )}
+            </div>
             <span className="tab-label">To Pay</span>
           </button>
 
@@ -517,7 +563,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'upcoming' ? 'active' : ''}`}
             onClick={() => setActiveTab('upcoming')}
           >
-            <div className="tab-icon-circle"><FaCut /></div>
+            <div className="tab-icon-circle">
+              <FaCut />
+              {tabCounts.upcoming > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.upcoming} bookings`}>
+                  {tabCounts.upcoming > 99 ? '99+' : tabCounts.upcoming}
+                </span>
+              )}
+            </div>
             <span className="tab-label">Upcoming</span>
           </button>
 
@@ -525,7 +578,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'cancelled' ? 'active' : ''}`}
             onClick={() => setActiveTab('cancelled')}
           >
-            <div className="tab-icon-circle"><FaTimesCircle /></div>
+            <div className="tab-icon-circle">
+              <FaTimesCircle />
+              {tabCounts.cancelled > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.cancelled} bookings`}>
+                  {tabCounts.cancelled > 99 ? '99+' : tabCounts.cancelled}
+                </span>
+              )}
+            </div>
             <span className="tab-label">Decline/Cancelled</span>
           </button>
 
@@ -533,7 +593,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'refund' ? 'active' : ''}`}
             onClick={() => setActiveTab('refund')}
           >
-            <div className="tab-icon-circle"><FaUndo /></div>
+            <div className="tab-icon-circle">
+              <FaUndo />
+              {tabCounts.refund > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.refund} bookings`}>
+                  {tabCounts.refund > 99 ? '99+' : tabCounts.refund}
+                </span>
+              )}
+            </div>
             <span className="tab-label">Refund</span>
           </button>
 
@@ -541,7 +608,14 @@ export default function ManageBookingsPage() {
             className={`tab-card ${activeTab === 'completed' ? 'active' : ''}`}
             onClick={() => setActiveTab('completed')}
           >
-            <div className="tab-icon-circle"><FaCheckCircle /></div>
+            <div className="tab-icon-circle">
+              <FaCheckCircle />
+              {tabCounts.completed > 0 && (
+                <span className="tab-count-badge" aria-label={`${tabCounts.completed} bookings`}>
+                  {tabCounts.completed > 99 ? '99+' : tabCounts.completed}
+                </span>
+              )}
+            </div>
             <span className="tab-label">Completed</span>
           </button>
         </div>
