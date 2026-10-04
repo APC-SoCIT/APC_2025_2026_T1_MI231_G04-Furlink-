@@ -40,6 +40,7 @@ export interface BookingPetInfo {
   booking_ai_haircut_url?: string | null;
   booking_emergency_consent?: boolean | null;
   booking_calculated_size: string;
+  assigned_employee_id?: string | null;
   booking_service_info?: BookingServiceInfo[];
 }
 

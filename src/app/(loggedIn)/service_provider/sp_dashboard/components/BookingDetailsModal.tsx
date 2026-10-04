@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Booking, BookingStatus } from '../type';
-import { formatCurrency, formatStatus } from '../utils';
+// UPDATED: Imported formatDate and formatDateTime
+import { formatCurrency, formatStatus, formatDate, formatDateTime } from '../utils';
 import { useAccountStatus } from '@/context/AccountStatusContext';
 
 interface BookingDetailsModalProps {
@@ -23,6 +24,8 @@ export default function BookingDetailsModal({
 
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectError, setRejectError] = useState('');
+  const [isConfirmingReject, setIsConfirmingReject] = useState(false);
 
   const [approvalNote, setApprovalNote] = useState('');
   const [showApproveInput, setShowApproveInput] = useState(false);
@@ -35,7 +38,9 @@ export default function BookingDetailsModal({
   const [petEmployeeAssignments, setPetEmployeeAssignments] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if ((selectedBooking.booking_status === 'paid' || selectedBooking.booking_status === 'approved') && selectedBooking.sp_id) {
+    const validStatuses = ['paid', 'approved', 'to_rate', 'rated', 'completed'];
+    
+    if (validStatuses.includes(selectedBooking.booking_status) && selectedBooking.sp_id) {
       const fetchEmployees = async () => {
         const { data, error } = await supabase
           .from('sp_employees_info')
@@ -50,12 +55,21 @@ export default function BookingDetailsModal({
 
   const handleReject = () => {
     if (!rejectionReason.trim()) {
-      alert('Please enter a rejection reason');
+      setRejectError('Please enter a rejection reason.');
       return;
     }
+    
+    setRejectError('');
+    
+    if (!isConfirmingReject) {
+      setIsConfirmingReject(true);
+      return;
+    }
+
     handleUpdateStatus(selectedBooking.id, 'rejected', rejectionReason);
     setShowRejectInput(false);
     setRejectionReason('');
+    setIsConfirmingReject(false);
   };
 
   const handleApprove = async () => {
@@ -163,6 +177,8 @@ export default function BookingDetailsModal({
     setShowCompleteInput(false);
     setCompletionOutcome('service_completed');
     setIsConfirmingNoShow(false);
+    setIsConfirmingReject(false);
+    setRejectError('');
     setRejectionReason('');
     setApprovalNote('');
     setPetEmployeeAssignments({});
@@ -193,10 +209,11 @@ export default function BookingDetailsModal({
         </h3>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
-          <div><span style={{ color: '#64748b', display: 'block' }}>Date & Time</span><strong>{selectedBooking.booking_date} ({selectedBooking.booking_timeslot})</strong></div>
+          {/* UPDATED: Applied formatting to Booking Date and Created At */}
+          <div><span style={{ color: '#64748b', display: 'block' }}>Date & Time</span><strong>{formatDate(selectedBooking.booking_date)} ({selectedBooking.booking_timeslot})</strong></div>
           <div><span style={{ color: '#64748b', display: 'block' }}>Total Amount</span><strong>{formatCurrency(selectedBooking.booking_total_amount)}</strong></div>
           <div><span style={{ color: '#64748b', display: 'block' }}>Status</span><strong style={{ textTransform: 'capitalize' }}>{formatStatus(selectedBooking.booking_status)}</strong></div>
-          <div><span style={{ color: '#64748b', display: 'block' }}>Created At</span><strong>{new Date(selectedBooking.created_at).toLocaleString()}</strong></div>
+          <div><span style={{ color: '#64748b', display: 'block' }}>Created At</span><strong>{formatDateTime(selectedBooking.created_at)}</strong></div>
         </div>
 
         {selectedBooking.booking_rejection_reason && (
@@ -213,7 +230,6 @@ export default function BookingDetailsModal({
           </div>
         )}
 
-        {/* UPDATED: Pet Owner Details Section rendering DB columns */}
         {selectedBooking.profiles && (
           <div style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
             <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.875rem', color: '#1e3a8a', textTransform: 'uppercase' }}>Pet Owner Details</h4>
@@ -228,30 +244,42 @@ export default function BookingDetailsModal({
         <div style={{ marginBottom: '1.5rem' }}>
           <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Pet(s) & Services</h4>
           {selectedBooking.booking_pet_info && selectedBooking.booking_pet_info.length > 0 ? (
-            selectedBooking.booking_pet_info.map((pet) => (
-              <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
-                <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
-                  <p><strong>Breed:</strong> {pet.booking_breed}</p>
-                  <p><strong>Gender:</strong> {pet.booking_gender}</p>
-                  <p><strong>Weight:</strong> {pet.booking_weight} kg ({pet.booking_calculated_size})</p>
-                  <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
-                </div>
+            selectedBooking.booking_pet_info.map((pet) => {
+              const assignedEmp = pet.assigned_employee_id 
+                ? employees.find(e => e.id === pet.assigned_employee_id) 
+                : null;
 
-                {pet.booking_service_info && pet.booking_service_info.length > 0 && (
-                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
-                    <p style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Services:</p>
-                    <ul style={{ listStyleType: 'disc', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#475569' }}>
-                      {pet.booking_service_info.map((srv) => (
-                        <li key={srv.id}>
-                          {srv.booking_service_name} - {formatCurrency(srv.booking_price)}
-                        </li>
-                      ))}
-                    </ul>
+              return (
+                <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
+                  <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
+                    <p><strong>Breed:</strong> {pet.booking_breed}</p>
+                    <p><strong>Gender:</strong> {pet.booking_gender}</p>
+                    <p><strong>Weight:</strong> {pet.booking_weight} kg ({pet.booking_calculated_size})</p>
+                    <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
+                    
+                    {pet.assigned_employee_id && (
+                      <p style={{ gridColumn: '1 / -1', marginTop: '0.25rem', color: '#1e3a8a', background: '#eff6ff', padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #bfdbfe' }}>
+                        <strong>Assigned Staff:</strong> {assignedEmp ? `${assignedEmp.employee_first_name} ${assignedEmp.employee_last_name}` : 'Unknown'}
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
-            ))
+
+                  {pet.booking_service_info && pet.booking_service_info.length > 0 && (
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
+                      <p style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Services:</p>
+                      <ul style={{ listStyleType: 'disc', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#475569' }}>
+                        {pet.booking_service_info.map((srv) => (
+                          <li key={srv.id}>
+                            {srv.booking_service_name} - {formatCurrency(srv.booking_price)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <p style={{ color: '#64748b', fontSize: '0.875rem', fontStyle: 'italic' }}>No pet information attached.</p>
           )}
@@ -294,16 +322,57 @@ export default function BookingDetailsModal({
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Rejection Reason:</label>
                   <textarea
                     value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
+                    onChange={(e) => {
+                      setRejectionReason(e.target.value);
+                      if (rejectError) setRejectError('');
+                    }}
                     placeholder="Enter reason for rejection..."
-                    style={{ width: '100%', padding: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.75rem', 
+                      background: 'white', 
+                      border: `1px solid ${rejectError ? '#ef4444' : '#cbd5e1'}`, 
+                      borderRadius: '0.5rem', 
+                      fontSize: '0.875rem', 
+                      fontFamily: 'inherit', 
+                      resize: 'vertical' 
+                    }}
                     rows={3}
                   />
-                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
-                    <button onClick={handleReject} style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      Confirm Reject
+                  
+                  {rejectError && (
+                    <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.5rem', fontWeight: 'bold' }}>
+                      {rejectError}
+                    </p>
+                  )}
+
+                  {isConfirmingReject && !rejectError && (
+                    <div style={{ padding: '0.75rem', background: '#fee2e2', borderRadius: '0.5rem', marginTop: '1rem', border: '1px solid #fecaca' }}>
+                      <p style={{ fontSize: '0.875rem', color: '#b91c1c', margin: 0, fontWeight: 'bold' }}>
+                        Are you sure you want to reject this booking? The customer will be notified.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                    <button 
+                      onClick={handleReject} 
+                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}
+                    >
+                      {isConfirmingReject && !rejectError ? 'Yes, Reject Booking' : 'Confirm Reject'}
                     </button>
-                    <button onClick={() => { setShowRejectInput(false); setRejectionReason(''); }} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <button 
+                      onClick={() => { 
+                        if (isConfirmingReject) {
+                          setIsConfirmingReject(false);
+                        } else {
+                          setShowRejectInput(false); 
+                          setRejectionReason(''); 
+                          setRejectError('');
+                        }
+                      }} 
+                      style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem' }}
+                    >
                       Cancel
                     </button>
                   </div>
@@ -436,7 +505,6 @@ export default function BookingDetailsModal({
                   >
                     Mark as Completed
                   </button>
-                  {/* Approved bookings are locked in: the provider can complete them but not cancel them */}
                   {selectedBooking.booking_status === 'paid' && (
                     <button 
                       onClick={handleCancelAndRefund} 
