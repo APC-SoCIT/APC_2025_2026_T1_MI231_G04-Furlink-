@@ -8,9 +8,12 @@ import { ROUTES } from "@/config/routes";
 import HeaderLoggedIn from '@/components/HeaderLoggedIn';
 import SessionTimeoutModal from '@/components/SessionTimeoutModal';
 import { useSessionTimeout } from '@/hooks/useSessionTimeout';
+import { AccountStatusProvider } from '@/context/AccountStatusContext';
 
 export default function LoggedInLayout({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
+  const [isSuspended, setIsSuspended] = useState(false);
+  const [suspendedUntil, setSuspendedUntil] = useState<string | null>(null);
   const supabase = createClientComponentClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -27,28 +30,39 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
           return;
         }
 
-        // 2. Fetch user profile role and status
+        // 2. Lift this user's suspension if it has run out, then fetch role and status
+        await supabase.rpc("lift_expired_suspensions", { p_user: session.user.id });
+
         const { data: profile, error } = await supabase
           .from("profiles")
           .select("role, status")
           .eq("id", session.user.id)
           .single();
 
-        if (error || !profile || profile.status !== "active") {
+        // Suspended users stay logged in (read-only); only other statuses are signed out
+        if (error || !profile || (profile.status !== "active" && profile.status !== "suspended")) {
           await supabase.auth.signOut();
           router.replace(ROUTES.HOME);
           return;
         }
 
-        const role = profile.role; 
-
-        // The Furlink standard waiver is a read-only page that pet owners open from the
-        // booking widget. It lives under /service_provider, so let any active, logged-in
-        // user through instead of bouncing them to their own dashboard.
-        if (pathname === ROUTES.SERVICE_PROVIDER.WAIVER) {
-          setIsLoading(false);
-          return;
+        if (profile.status === "suspended") {
+          const { data: suspension } = await supabase
+            .from("user_suspensions")
+            .select("suspended_until")
+            .eq("user_id", session.user.id)
+            .eq("status", "active")
+            .order("suspended_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          setSuspendedUntil(suspension?.suspended_until ?? null);
+          setIsSuspended(true);
+        } else {
+          setIsSuspended(false);
+          setSuspendedUntil(null);
         }
+
+        const role = profile.role; 
 
         // 3. Admin-only pages check
         if (pathname.startsWith("/admin")) {
@@ -128,14 +142,26 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <>
+    <AccountStatusProvider value={{ isSuspended, suspendedUntil }}>
       <HeaderLoggedIn />
+      {isSuspended && (
+        <div
+          role="alert"
+          style={{ background: "#fef3c7", color: "#92400e", borderBottom: "1px solid #fcd34d", padding: "10px 16px", fontSize: 14, fontWeight: 600, textAlign: "center" }}
+        >
+          Your account is suspended
+          {suspendedUntil
+            ? ` until ${new Date(suspendedUntil).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`
+            : ""}
+          . You can still view your bookings, pets and account, but you cannot make or accept bookings.
+        </div>
+      )}
       <main className="main-wrapper">
         {children}
       </main>
       {showWarning && (
         <SessionTimeoutModal secondsLeft={secondsLeft} onStayLoggedIn={stayLoggedIn} />
       )}
-    </>
+    </AccountStatusProvider>
   );
 }

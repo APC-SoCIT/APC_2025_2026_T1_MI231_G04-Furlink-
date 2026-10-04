@@ -181,6 +181,8 @@ export default function AIBookingAssistant() {
   // pet_owner/both_sp_po account?). Public pages need no check at all, so they
   // render the generic widget immediately with no loading flash.
   const [petOwnerAllowed, setPetOwnerAllowed] = useState(false);
+  // Suspended pet owners keep the assistant for general questions, but cannot book through it
+  const [ownerSuspended, setOwnerSuspended] = useState(false);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -205,9 +207,15 @@ export default function AIBookingAssistant() {
         if (!cancelled) setPetOwnerAllowed(false);
         return;
       }
+      // Lift an expired suspension first so the status below is current
+      await supabase.rpc('lift_expired_suspensions', { p_user: user.id });
       const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', user.id).maybeSingle();
-      const allowed = !!profile && profile.status === 'active' && ['pet_owner', 'both_sp_po'].includes(profile.role ?? '');
-      if (!cancelled) setPetOwnerAllowed(allowed);
+      const roleOk = ['pet_owner', 'both_sp_po'].includes(profile?.role ?? '');
+      const allowed = !!profile && (profile.status === 'active' || profile.status === 'suspended') && roleOk;
+      if (!cancelled) {
+        setPetOwnerAllowed(allowed);
+        setOwnerSuspended(profile?.status === 'suspended');
+      }
     })();
 
     return () => {
@@ -216,7 +224,8 @@ export default function AIBookingAssistant() {
   }, [isPetOwnerPath]);
 
   // Confirmed live mode only once the /pet_owner role check above has actually passed.
-  const isPetOwnerView = isPetOwnerPath && petOwnerAllowed;
+  // Live booking mode is never available to a suspended account
+  const isPetOwnerView = isPetOwnerPath && petOwnerAllowed && !ownerSuspended;
 
   // Wipes the conversation (and any half-finished booking card). Bumping the
   // session id makes a reply that is still in flight get ignored.
@@ -273,7 +282,7 @@ export default function AIBookingAssistant() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
       // NEW: send the session token so the server can verify the user is a pet owner
-      if (isPetOwnerView) {
+      if (isPetOwnerView || ownerSuspended) {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -285,6 +294,7 @@ export default function AIBookingAssistant() {
         body: JSON.stringify({
           messages: historyForAI.map((m) => ({ role: m.role, content: m.content })),
           petOwnerView: isPetOwnerView,
+          suspendedView: ownerSuspended,
         }),
       });
 
@@ -390,6 +400,15 @@ export default function AIBookingAssistant() {
             </button>
           </div>
         </div>
+
+        {ownerSuspended && (
+          <div
+            role="alert"
+            style={{ background: '#fef3c7', color: '#92400e', padding: '8px 12px', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #fcd34d' }}
+          >
+            Your account is suspended, so you can&apos;t make bookings right now. You can still ask general questions.
+          </div>
+        )}
 
         <div className="ai-assistant-body" ref={scrollRef}>
           {messages.length === 0 && (

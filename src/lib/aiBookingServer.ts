@@ -13,7 +13,7 @@ export function getAdminClient(): SupabaseClient | null {
 }
 
 /** Verifies the caller is a logged-in, ACTIVE pet owner. userId comes only from the verified session. */
-export async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: string; userId?: string }> {
+export async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; reason?: string; userId?: string; suspended?: boolean }> {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return { ok: false, reason: 'no_token' };
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,12 +27,16 @@ export async function checkPetOwner(req: NextRequest): Promise<{ ok: boolean; re
   const { data: userData, error: userErr } = await userClient.auth.getUser(token);
   if (userErr || !userData?.user) return { ok: false, reason: 'invalid_session' };
 
+  // Lift this user's suspension if it has already run out, so it never blocks them wrongly
+  await userClient.rpc('lift_expired_suspensions', { p_user: userData.user.id });
+
   const { data: profile, error: profErr } = await userClient
     .from('profiles')
     .select('role, status')
     .eq('id', userData.user.id)
     .maybeSingle();
   if (profErr || !profile) return { ok: false, reason: 'profile_not_found' };
+  if (profile.status === 'suspended') return { ok: false, reason: 'account_status_suspended', suspended: true };
   if (profile.status !== 'active') return { ok: false, reason: `account_status_${profile.status}` };
   if (!['pet_owner', 'both_sp_po'].includes(profile.role ?? '')) return { ok: false, reason: 'not_pet_owner' };
   return { ok: true, userId: userData.user.id };
@@ -53,26 +57,10 @@ export const norm = (s: unknown) =>
 export function manilaNow() {
   const now = new Date();
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(now);
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(now);
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
   const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
   const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-  const sec = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
-  return { date, minutes: h * 60 + m, exactMinutes: h * 60 + m + sec / 60 };
-}
-
-/** Minimum notice for a booking, same rule as the booking widget (24 hours). */
-export const MIN_ADVANCE_MINUTES = 24 * 60;
-
-const daysBetween = (fromIso: string, toIso: string) =>
-  Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86_400_000);
-
-/**
- * True only if a slot starting at `startMinutes` on `date` (Manila time) begins at
- * least 24 hours from right now. Asia/Manila has no DST, so day math is exact.
- */
-export function isBookableStart(date: string, startMinutes: number, now: { date: string; exactMinutes: number }) {
-  const minutesAhead = daysBetween(now.date, date) * 1440 + startMinutes - now.exactMinutes;
-  return minutesAhead >= MIN_ADVANCE_MINUTES;
+  return { date, minutes: h * 60 + m };
 }
 
 export const weekdayOf = (iso: string) => DAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
@@ -114,19 +102,35 @@ export const PROVIDER_COLUMNS = 'id, business_name, business_street, business_ba
 export const addressOf = (p: any) =>
   [p.business_street, p.business_barangay, p.business_city, p.business_province].filter(Boolean).join(', ');
 
+/**
+ * Owners of service providers whose account is currently suspended. Those shops are treated as
+ * unavailable: the assistant must not list them, quote them or book with them.
+ * Lifts any suspension that has already run out first.
+ */
+export async function suspendedProviderOwnerIds(admin: SupabaseClient): Promise<string[]> {
+  await admin.rpc('lift_expired_suspensions');
+  const { data } = await admin.from('profiles').select('id').eq('status', 'suspended');
+  return (data ?? []).map((p: { id: string }) => p.id);
+}
+
 export async function fetchApprovedProviders(admin: SupabaseClient) {
-  const { data, error } = await admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved').limit(300);
+  const suspended = await suspendedProviderOwnerIds(admin);
+  let q = admin.from('sp_general_info').select(PROVIDER_COLUMNS).eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.limit(300);
   if (error) throw new Error(error.message);
   return data ?? [];
 }
 
 export async function fetchApprovedProvider(admin: SupabaseClient, spId: string) {
-  const { data, error } = await admin
+  const suspended = await suspendedProviderOwnerIds(admin);
+  let q = admin
     .from('sp_general_info')
     .select(PROVIDER_COLUMNS)
     .eq('id', spId)
-    .eq('registration_status', 'approved')
-    .maybeSingle();
+    .eq('registration_status', 'approved');
+  if (suspended.length) q = q.not('profiles_id', 'in', `(${suspended.join(',')})`);
+  const { data, error } = await q.maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }
@@ -145,13 +149,13 @@ export function filterByArea(providers: any[], rawArea?: string) {
 export type HoursRow = { sp_id?: string; day_of_week: string; opening_time: string; closing_time: string; slot_interval: number; slot_capacity: number };
 export type Slot = { start: number; time: string; spots_left: number };
 
-export function buildDaySlots(h: HoursRow | undefined, date: string, now: { date: string; exactMinutes: number }, taken: Map<number, number>) {
+export function buildDaySlots(h: HoursRow | undefined, isToday: boolean, nowMinutes: number, taken: Map<number, number>) {
   if (!h) return { open: false, slots: [] as Slot[] };
   const open = toMinutes(h.opening_time)!;
   const close = toMinutes(h.closing_time)!;
   const slots: Slot[] = [];
   for (let t = open; t + h.slot_interval <= close; t += h.slot_interval) {
-    if (!isBookableStart(date, t, now)) continue; // must be 24h+ from now
+    if (isToday && t <= nowMinutes) continue;
     const left = h.slot_capacity - (taken.get(t) ?? 0);
     if (left > 0) slots.push({ start: t, time: fmt12(t), spots_left: left });
   }

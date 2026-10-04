@@ -15,7 +15,6 @@ export default function ServiceProviderDashboardPage() {
   const supabase = createClientComponentClient();
   
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<BookingStatus | 'all'>('all');
   
@@ -43,8 +42,6 @@ export default function ServiceProviderDashboardPage() {
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      setErrorMessage(null); 
-
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("No authenticated user session found.");
 
@@ -55,12 +52,12 @@ export default function ServiceProviderDashboardPage() {
         .single();
 
       if (providerError || !providerData) {
-        // This is a known, expected business logic error, so a specific user message is fine.
-        setErrorMessage("Your account is not registered as an active Service Provider. Please complete your registration.");
+        console.warn("Current user is not registered as a service provider.");
         setBookings([]);
         return;
       }
 
+      // UPDATED: Added profiles join with exact columns
       const { data, error } = await supabase
         .from("booking_info")
         .select(`
@@ -82,9 +79,7 @@ export default function ServiceProviderDashboardPage() {
       if (error) throw error;
       setBookings(data || []);
     } catch (err: any) {
-      // UPDATED: Developer sees the raw error in the console, user sees a friendly UI banner.
-      console.error("Dashboard Data Fetch Error:", err);
-      setErrorMessage("We ran into a temporary issue loading your dashboard. Please refresh the page to try again.");
+      console.error("Error fetching bookings:", err?.message);
     } finally {
       setLoading(false);
     }
@@ -92,8 +87,13 @@ export default function ServiceProviderDashboardPage() {
 
   const handleUpdateStatus = async (id: string, newStatus: BookingStatus, reason?: string) => {
     try {
-      setErrorMessage(null);
       const targetBooking = bookings.find(b => b.id === id);
+
+      // Approved bookings are locked in: a provider can complete them but not cancel/reject them
+      if (targetBooking?.booking_status === 'approved' && (newStatus === 'cancelled' || newStatus === 'rejected')) {
+        alert('An approved booking can no longer be cancelled by the service provider.');
+        return;
+      }
       
       if ((newStatus === 'rejected' || newStatus === 'cancelled') && (targetBooking?.booking_status === 'paid' || targetBooking?.booking_status === 'approved' || targetBooking?.booking_status === 'pending_sp_response')) {
         const { error } = await supabase.functions.invoke('process-refund', {
@@ -104,7 +104,16 @@ export default function ServiceProviderDashboardPage() {
           },
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+          // Supabase only says "non-2xx"; the function's real message is in the response body
+          let detail = error.message;
+          try {
+            const body = await (error as any).context?.json?.();
+            detail = body?.error || body?.message || JSON.stringify(body) || detail;
+          } catch { /* body was not JSON */ }
+          console.error('process-refund failed:', detail);
+          throw new Error(detail);
+        }
 
         setBookings((prev) =>
           prev.map((b) => (b.id === id ? { ...b, booking_status: 'processing' as any, refund_reason: reason } : b))
@@ -137,9 +146,7 @@ export default function ServiceProviderDashboardPage() {
       
       setSelectedBooking(null);
     } catch (err: any) {
-      // UPDATED: Silent console log for debugging, friendly banner for the user.
-      console.error("Booking Status Update Error:", err);
-      setErrorMessage("We couldn't save your changes right now. Please check your connection and try again.");
+      alert("Failed to update status: " + (err.message || JSON.stringify(err)));
     }
   };
 
@@ -207,14 +214,6 @@ export default function ServiceProviderDashboardPage() {
   return (
     <div>
       <div className={styles.container}>
-        
-        {errorMessage && (
-          <div className={styles.errorBanner}>
-            <span>{errorMessage}</span>
-            <button className={styles.dismissErrorBtn} onClick={() => setErrorMessage(null)}>×</button>
-          </div>
-        )}
-
         <div className={styles.headerRow}>
           <div className={styles.revenueCard}>
             <div>
@@ -268,7 +267,7 @@ export default function ServiceProviderDashboardPage() {
         </div>
 
         <div className={styles.tableContainer}>
-          <div className={styles.tableHeaderBar}>
+          <div className={styles.tableHeaderBar} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontWeight: 'extrabold', textTransform: 'uppercase' }}>
               {activeTab === 'all' ? 'All Bookings' : activeTabConfig?.label}
             </h3>

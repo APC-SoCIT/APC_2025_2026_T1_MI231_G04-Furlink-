@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import {
-  getAdminClient, checkPetOwner, manilaNow, isBookableStart, weekdayOf, addDays, toMinutes, fmt12, slotLabel, norm, addressOf,
+  getAdminClient, checkPetOwner, manilaNow, weekdayOf, addDays, toMinutes, fmt12, slotLabel, norm, addressOf,
   fetchApprovedProviders, fetchApprovedProvider, filterByArea, buildDaySlots, tallyTaken, bestOption, displayableImageUrl,
   UUID_RE, ISO_DATE_RE, type HoursRow,
 } from '@/lib/aiBookingServer';
@@ -28,6 +28,9 @@ const RPC_ERRORS: Record<string, [string, number]> = {
 
 export async function POST(req: NextRequest) {
   const check = await checkPetOwner(req);
+  if (check.suspended) {
+    return bad('ACCOUNT_SUSPENDED: Your account is suspended, so you cannot make new bookings through the assistant until the suspension ends.', 403);
+  }
   if (!check.ok || !check.userId) return bad('Please log in as a pet owner to book.', 401);
   const admin = getAdminClient();
   if (!admin) return bad('Server is not configured.', 500);
@@ -109,7 +112,7 @@ async function actionAvailability(admin: SupabaseClient, body: any) {
     const date = addDays(start, i);
     const weekday = weekdayOf(date);
     const h = (hoursRes.data ?? []).find((x: any) => x.day_of_week === weekday) as HoursRow | undefined;
-    const { open, slots } = buildDaySlots(h, date, now, taken.get(`${provider.id}|${date}`) ?? new Map());
+    const { open, slots } = buildDaySlots(h, date === now.date, now.minutes, taken.get(`${provider.id}|${date}`) ?? new Map());
     out.push({ date, weekday, open, slots: slots.filter((s) => s.spots_left >= petCount) });
   }
   return NextResponse.json({ provider: { id: provider.id, name: provider.business_name, address: addressOf(provider) }, days: out });
@@ -164,7 +167,7 @@ async function actionFind(admin: SupabaseClient, body: any) {
   for (const p of providers) {
     const h = hoursBySp.get(p.id);
     if (!h) continue;
-    const { slots } = buildDaySlots(h, date, now, taken.get(`${p.id}|${date}`) ?? new Map());
+    const { slots } = buildDaySlots(h, date === now.date, now.minutes, taken.get(`${p.id}|${date}`) ?? new Map());
     let q = slots.filter((s) => s.spots_left >= petCount);
     if (wanted !== null) q = q.filter((s) => wanted >= s.start && wanted < s.start + h.slot_interval);
     if (q.length) matches.push({ id: p.id, name: p.business_name, address: addressOf(p), slots: q.slice(0, 12) });
@@ -291,7 +294,7 @@ async function actionCreate(admin: SupabaseClient, userId: string, body: any) {
   const provider = await fetchApprovedProvider(admin, body.spId);
   if (!provider) return bad('That provider is not available.', 404);
 
-  // The slot must be a real slot on that provider's grid and at least 24 hours away.
+  // The slot must be a real slot on that provider's grid, not in the past.
   const weekday = weekdayOf(date);
   const { data: h, error: hErr } = await admin
     .from('sp_operating_hours').select('opening_time, closing_time, slot_interval, slot_capacity')
@@ -302,8 +305,7 @@ async function actionCreate(admin: SupabaseClient, userId: string, body: any) {
   const close = toMinutes(h.closing_time)!;
   const onGrid = slotStart >= open && slotStart + h.slot_interval <= close && (slotStart - open) % h.slot_interval === 0;
   if (!onGrid) return bad('That time slot is not valid.');
-  // Same rule as the booking widget: the slot must start at least 24 hours from now.
-  if (!isBookableStart(date, slotStart, now)) return bad('Bookings must be made at least 24 hours in advance. Please pick a later time slot.', 409);
+  if (date === now.date && slotStart <= now.minutes) return bad('That time slot has already passed.', 409);
 
   const petIds = pets.map((p) => p.petId);
   const { data: aiRows, error: aErr } = await admin

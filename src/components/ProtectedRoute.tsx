@@ -35,7 +35,7 @@ export default function ProtectedRoute({ children, allowedRoles = [] }: Protecte
           .eq("id", session.user.id)
           .single();
 
-        if (error || !profile || profile.status !== "active") {
+        if (error || !profile || (profile.status !== "active" && profile.status !== "suspended")) {
           await supabase.auth.signOut();
           router.replace(ROUTES.AUTH.LOGIN);
           return;
