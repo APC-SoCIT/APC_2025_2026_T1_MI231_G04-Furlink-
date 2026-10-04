@@ -5,7 +5,8 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
-import { filterBookingsByStatus, formatCurrency, formatStatus } from "./utils";
+// UPDATED: Imported formatDate
+import { filterBookingsByStatus, formatCurrency, formatStatus, formatDate } from "./utils";
 import BookingDetailsModal from './components/BookingDetailsModal';
 import CalendarModal from './components/CalendarModal';
 import Footer from '@/components/Footer';
@@ -57,7 +58,6 @@ export default function ServiceProviderDashboardPage() {
         return;
       }
 
-      // UPDATED: Added profiles join with exact columns
       const { data, error } = await supabase
         .from("booking_info")
         .select(`
@@ -89,7 +89,6 @@ export default function ServiceProviderDashboardPage() {
     try {
       const targetBooking = bookings.find(b => b.id === id);
 
-      // Approved bookings are locked in: a provider can complete them but not cancel/reject them
       if (targetBooking?.booking_status === 'approved' && (newStatus === 'cancelled' || newStatus === 'rejected')) {
         alert('An approved booking can no longer be cancelled by the service provider.');
         return;
@@ -105,12 +104,11 @@ export default function ServiceProviderDashboardPage() {
         });
 
         if (error) {
-          // Supabase only says "non-2xx"; the function's real message is in the response body
           let detail = error.message;
           try {
             const body = await (error as any).context?.json?.();
             detail = body?.error || body?.message || JSON.stringify(body) || detail;
-          } catch { /* body was not JSON */ }
+          } catch { }
           console.error('process-refund failed:', detail);
           throw new Error(detail);
         }
@@ -370,14 +368,16 @@ export default function ServiceProviderDashboardPage() {
 
                   return (
                     <tr key={booking.id}>
+                      {/* UPDATED: Applied formatting to Booking Date */}
                       <td>
-                        <strong>{booking.booking_date}</strong>
+                        <strong>{formatDate(booking.booking_date)}</strong>
                         <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{booking.booking_timeslot}</div>
                       </td>
                       
+                      {/* UPDATED: Applied formatting to Refund Date */}
                       {activeTab === 'cancelled' && (
                         <td>
-                          <strong>{refundDateRaw ? new Date(refundDateRaw).toLocaleDateString() : 'N/A'}</strong>
+                          <strong>{refundDateRaw ? formatDate(refundDateRaw) : 'N/A'}</strong>
                         </td>
                       )}
                       

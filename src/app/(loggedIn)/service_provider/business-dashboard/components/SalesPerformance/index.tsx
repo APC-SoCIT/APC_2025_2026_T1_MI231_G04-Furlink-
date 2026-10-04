@@ -30,13 +30,28 @@ export default function SalesPerformance({
     
     const relevantServices = services.filter((s: any) => petIdSet.has(s.booking_pet_info_id));
 
-    // Group sales into 4 chunks (weeks or intervals) for the line charts
-    const labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-    const totalRevenueBuckets = [0, 0, 0, 0];
-    const potentialRevenueBuckets = [0, 0, 0, 0];
-    const actualRevenueBuckets = [0, 0, 0, 0];
-    const newCustomerBuckets = [0, 0, 0, 0];
-    const returningCustomerBuckets = [0, 0, 0, 0];
+    // 1. Dynamically set labels and bucket sizes based on timeFilter
+    let labels: string[] = [];
+    let bucketCount = 0;
+
+    if (timeFilter === 'yearly') {
+      labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      bucketCount = 12;
+    } else if (timeFilter === 'weekly') {
+      labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      bucketCount = 7;
+    } else {
+      // Default to Monthly/Custom week buckets
+      labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+      bucketCount = 5;
+    }
+
+    // Initialize data arrays filled with 0s dynamically based on bucketCount
+    const totalRevenueBuckets = new Array(bucketCount).fill(0);
+    const potentialRevenueBuckets = new Array(bucketCount).fill(0);
+    const actualRevenueBuckets = new Array(bucketCount).fill(0);
+    const newCustomerBuckets = new Array(bucketCount).fill(0);
+    const returningCustomerBuckets = new Array(bucketCount).fill(0);
 
     let overallTotalRevenue = 0;
     let overallTotalLoss = 0;
@@ -45,11 +60,17 @@ export default function SalesPerformance({
     const serviceMap: { [key: string]: { revenue: number; bookings: number } } = {};
 
     bookings.forEach((booking: any) => {
-      // Determine bucket index (divide booking index or spread across 4 buckets)
+      // 2. Determine exact bucket index based on the booking date and timeFilter
       const bDate = new Date(booking.booking_date || Date.now());
-      const dayOfMonth = bDate.getDate();
-      let bucketIdx = Math.min(Math.floor((dayOfMonth - 1) / 8), 3);
-      if (bucketIdx < 0) bucketIdx = 0;
+      let bucketIdx = 0;
+
+      if (timeFilter === 'yearly') {
+        bucketIdx = bDate.getMonth(); // 0-11
+      } else if (timeFilter === 'weekly') {
+        bucketIdx = (bDate.getDay() + 6) % 7; // 0-6 (Mon-Sun)
+      } else {
+        bucketIdx = Math.min(Math.floor((bDate.getDate() - 1) / 7), 4); // 0-4 (Week 1-5)
+      }
 
       // Find services for this booking
       const bPets = relevantPets.filter((p: any) => p.booking_info_id === booking.id);
@@ -112,7 +133,7 @@ export default function SalesPerformance({
       totalRevenue: overallTotalRevenue,
       totalLoss: overallTotalLoss,
     };
-  }, [bookings, pets, services]);
+  }, [bookings, pets, services, timeFilter]); // ADDED timeFilter to dependency array
 
   const dateRange = timeFilter === 'custom' ? 'Custom Range' : `Current ${timeFilter.charAt(0).toUpperCase() + timeFilter.slice(1)}`;
 

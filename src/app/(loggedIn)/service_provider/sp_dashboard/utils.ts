@@ -28,3 +28,32 @@ export const filterBookingsByStatus = (
   if (activeTab === 'all') return bookings;
   return bookings.filter((b) => b.booking_status === activeTab);
 };
+
+// NEW: Formats date to 'Dec 20, 2026'
+export const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+// NEW: Formats date and time to 'Dec 20, 2026, 10:00 AM'
+export const formatDateTime = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};

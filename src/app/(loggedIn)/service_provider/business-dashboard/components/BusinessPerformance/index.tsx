@@ -23,8 +23,9 @@ export default function BusinessPerformance({
   
   // Transform raw Supabase data into aggregated metrics for charts
   const analytics = useMemo(() => {
-    return processBusinessPerformanceData(bookings, pets, services);
-  }, [bookings, pets, services]);
+    // Pass timeFilter as the 4th argument so the top chart knows when to show 'Yearly' months
+    return processBusinessPerformanceData(bookings, pets, services, timeFilter);
+  }, [bookings, pets, services, timeFilter]);
 
   // Dynamically set the title for Average Bookings based on the selected filter
   const averageBookingsTitle = `Average Bookings (${timeFilter.charAt(0).toUpperCase() + timeFilter.slice(1)})`;

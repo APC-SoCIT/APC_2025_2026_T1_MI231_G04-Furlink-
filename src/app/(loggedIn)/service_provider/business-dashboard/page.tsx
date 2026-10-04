@@ -34,7 +34,6 @@ export default function BusinessDashboardPage() {
 
   const [spId, setSpId] = useState<string | null>(null);
   const [profileViewCount, setProfileViewCount] = useState<number>(0);
-  const [registrationApprovedAt, setRegistrationApprovedAt] = useState<string | null>(null); // Track approval date
   
   const [isClient, setIsClient] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false); 
@@ -43,7 +42,6 @@ export default function BusinessDashboardPage() {
     setIsClient(true);
   }, []);
 
-  // Resolve the logged-in user's sp_id, view count, and approval date on mount
   useEffect(() => {
     async function resolveProviderId() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -51,14 +49,13 @@ export default function BusinessDashboardPage() {
 
       const { data: providerData } = await supabase
         .from('sp_general_info')
-        .select('id, business_profile_view_count, registration_approved_at') // Fetch approval timestamp
+        .select('id, business_profile_view_count') 
         .eq('profiles_id', user.id)
         .maybeSingle();
 
       if (providerData?.id) {
         setSpId(providerData.id);
         setProfileViewCount(providerData.business_profile_view_count || 0);
-        setRegistrationApprovedAt(providerData.registration_approved_at); // Save to state
       }
     }
 
@@ -99,8 +96,39 @@ export default function BusinessDashboardPage() {
     });
   }, [bookings, timeFilter, customDateStart, customDateEnd]);
 
-  // 2. Pet Type Filter
-  const { filteredBookings, filteredPets, filteredServices } = useMemo(() => {
+  // 1b. Calculate Previous Period Bookings to Determine Dynamic Trends
+  const previousPeriodBookings = useMemo(() => {
+    if (!bookings || bookings.length === 0) return [];
+
+    const currentDate = new Date();
+    let currentStart = new Date();
+    let prevStart = new Date();
+    let prevEnd = new Date();
+
+    if (timeFilter === 'weekly') {
+      currentStart.setDate(currentDate.getDate() - 7);
+      prevEnd = new Date(currentStart);
+      prevStart.setDate(prevEnd.getDate() - 7);
+    } else if (timeFilter === 'monthly') {
+      currentStart.setMonth(currentDate.getMonth() - 1);
+      prevEnd = new Date(currentStart);
+      prevStart.setMonth(prevEnd.getMonth() - 1);
+    } else if (timeFilter === 'yearly') {
+      currentStart.setFullYear(currentDate.getFullYear() - 1);
+      prevEnd = new Date(currentStart);
+      prevStart.setFullYear(prevEnd.getFullYear() - 1);
+    } else {
+      return []; // No trend calculation for custom dates
+    }
+
+    return bookings.filter((b: any) => {
+      const bDate = new Date(b.booking_date);
+      return bDate >= prevStart && bDate < prevEnd;
+    });
+  }, [bookings, timeFilter]);
+
+  // 2. Pet Type & Test Data Exclusion Filter
+  const { filteredBookings, filteredPets, filteredServices, prevFilteredBookings } = useMemo(() => {
     let currentPets = pets || [];
     
     if (petTypeFilter !== 'all') {
@@ -108,20 +136,37 @@ export default function BusinessDashboardPage() {
     }
 
     const validPetIds = new Set(currentPets.map((p: any) => p.id));
-    const currentServices = (services || []).filter((s: any) => validPetIds.has(s.booking_pet_info_id));
+    
+    // Explicitly filter out any service name containing "test" to clean up charts and PDF reports
+    const currentServices = (services || []).filter((s: any) => {
+      if (!validPetIds.has(s.booking_pet_info_id)) return false;
+      const sName = s.booking_service_name?.toLowerCase() || '';
+      if (sName.includes('test')) return false;
+      return true;
+    });
 
     let currentBookings = baseFilteredBookings || [];
+    let prevBookings = previousPeriodBookings || [];
+    
     if (petTypeFilter !== 'all') {
       const validBookingIds = new Set(currentPets.map((p: any) => p.booking_info_id));
       currentBookings = currentBookings.filter((b: any) => validBookingIds.has(b.id));
+      prevBookings = prevBookings.filter((b: any) => validBookingIds.has(b.id));
     }
 
     return { 
       filteredBookings: currentBookings, 
       filteredPets: currentPets, 
-      filteredServices: currentServices 
+      filteredServices: currentServices,
+      prevFilteredBookings: prevBookings
     };
-  }, [baseFilteredBookings, pets, services, petTypeFilter]);
+  }, [baseFilteredBookings, previousPeriodBookings, pets, services, petTypeFilter]);
+
+  // Helper function to calculate percentage change
+  const calcTrend = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Number((((current - previous) / previous) * 100).toFixed(1));
+  };
 
   // Calculate Real KPI Metrics & Service Breakdown from fully filtered data
   const dynamicMetrics = useMemo(() => {
@@ -137,6 +182,16 @@ export default function BusinessDashboardPage() {
       b.booking_status?.toLowerCase() === 'cancelled'
     );
 
+    // Calculate previous period completed bookings for trend
+    const prevCompletedBookings = prevFilteredBookings.filter((b: any) => 
+      ['to_rate', 'rated'].includes(b.booking_status?.toLowerCase())
+    ).length;
+
+    // Calculate previous period cancelled bookings for trend
+    const prevCancelledBookings = prevFilteredBookings.filter((b: any) => 
+      b.booking_status?.toLowerCase() === 'cancelled'
+    ).length;
+
     const revenueBookingIds = new Set(revenueBookings.map((b: any) => b.id));
 
     const revenuePetIds = new Set(
@@ -145,9 +200,19 @@ export default function BusinessDashboardPage() {
         .map((p: any) => p.id)
     );
 
+    // Only count revenue from VALID services (test services already removed in filter above)
     const revenueGeneratingServices = filteredServices.filter((s: any) => revenuePetIds.has(s.booking_pet_info_id));
+    
+    // FIX: Calculate total revenue dynamically 
     const grossRevenue = revenueGeneratingServices.reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
     
+    // Calculate previous period revenue for trend (approximate via booking ratio if services aren't date-stamped)
+    const prevRevenueBookings = prevFilteredBookings.filter((b: any) => 
+      ['paid', 'to_rate', 'rated'].includes(b.booking_status?.toLowerCase())
+    ).length;
+    const avgBookingVal = revenueBookings.length > 0 ? grossRevenue / revenueBookings.length : 0;
+    const prevGrossRevenue = prevRevenueBookings * avgBookingVal;
+
     const serviceCounts: Record<string, number> = {};
     let totalValidServices = 0;
     
@@ -169,7 +234,6 @@ export default function BusinessDashboardPage() {
 
     const averageBookingValue = revenueBookings.length > 0 ? grossRevenue / revenueBookings.length : 0;
 
-    // Calculate peak time slot from filtered bookings using booking_timeslot
     const timeCounts: Record<string, number> = {};
     filteredBookings.forEach((b: any) => {
       const timeslot = b.booking_timeslot || '';
@@ -189,21 +253,21 @@ export default function BusinessDashboardPage() {
 
     return {
       totalRevenue: grossRevenue,
-      revenueTrend: 12.5, 
+      revenueTrend: calcTrend(grossRevenue, prevGrossRevenue), 
       totalBookings: completedBookings.length, 
-      bookingsTrend: 8.3,
+      bookingsTrend: calcTrend(completedBookings.length, prevCompletedBookings),
       averageBookingValue: averageBookingValue,
       avgTrend: 0,
       cancellationsCount: cancelledBookings.length,
-      cancelTrend: 0,
+      cancelTrend: calcTrend(cancelledBookings.length, prevCancelledBookings),
       listingViews: profileViewCount, 
-      viewsTrend: 0,
+      viewsTrend: 0, // Profile views don't have historical timestamps to calculate trend
       realServiceBreakdown,
       peakActivity: peakActivityTime 
     };
-  }, [filteredBookings, filteredPets, filteredServices, profileViewCount]);
+  }, [filteredBookings, prevFilteredBookings, filteredPets, filteredServices, profileViewCount]);
 
-  // Calculate dynamic date display for the header using the approval date as the floor limit
+  // Removed approval date clamp so Yearly filters show the true 365-day range in the header
   const currentDate = new Date();
   
   let endDate = currentDate;
@@ -222,17 +286,7 @@ export default function BusinessDashboardPage() {
     startDate = new Date(customDateStart);
   }
 
-  // Clamp start date to the exact registration approval date
-  if (registrationApprovedAt) {
-    const approvedDate = new Date(registrationApprovedAt);
-    if (startDate < approvedDate) {
-      startDate = approvedDate;
-    }
-  }
-
   const formatOpts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-  
-  // Conditionally format the date string depending on if the start and end dates are identical
   const formattedStartDate = startDate.toLocaleDateString('en-US', formatOpts);
   const formattedEndDate = endDate.toLocaleDateString('en-US', formatOpts);
   
@@ -366,17 +420,6 @@ export default function BusinessDashboardPage() {
                     <span>{renderTrendIcon(dynamicMetrics.bookingsTrend)}</span>
                     <span className={getTrendClass(dynamicMetrics.bookingsTrend)}>
                       {formatTrend(dynamicMetrics.bookingsTrend)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={styles.metricCard}>
-                  <div className={styles.metricLabel}>Listing Visitors</div>
-                  <div className={styles.metricValue}>{formatLargeNumber(dynamicMetrics.listingViews)}</div>
-                  <div className={styles.metricTrend}>
-                    <span>{renderTrendIcon(dynamicMetrics.viewsTrend)}</span>
-                    <span className={getTrendClass(dynamicMetrics.viewsTrend)}>
-                      {formatTrend(dynamicMetrics.viewsTrend)}
                     </span>
                   </div>
                 </div>

@@ -34,7 +34,8 @@ export default function CustomerInsights({ timeFilter, petTypeFilter, bookings, 
     let dogCount = 0;
     let catCount = 0;
     validPets.forEach(p => {
-      const type = String(p.pet_type || p.species || '').toLowerCase();
+      // FIX: Use booking_pet_type to match the schema
+      const type = String(p.booking_pet_type || p.pet_type || p.species || '').toLowerCase();
       if (type.includes('cat')) catCount++;
       else dogCount++;
     });
@@ -67,7 +68,8 @@ export default function CustomerInsights({ timeFilter, petTypeFilter, bookings, 
     // 4. Breeds Aggregation (Accurately detecting cats via type or breed name)
     const breedMap: { [key: string]: { count: number; isCat: boolean } } = {};
     validPets.forEach(p => {
-      const type = String(p.pet_type || p.species || '').toLowerCase();
+      // FIX: Use booking_pet_type to match the schema
+      const type = String(p.booking_pet_type || p.pet_type || p.species || '').toLowerCase();
       const breed = String(p.booking_breed || p.pet_breed || p.breed || 'Unknown Breed').trim();
       
       // Explicitly catch known cat breeds or type fields
