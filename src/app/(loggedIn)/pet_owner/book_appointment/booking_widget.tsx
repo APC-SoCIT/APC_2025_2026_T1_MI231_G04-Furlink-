@@ -32,6 +32,7 @@ type BookingWidgetProps = {
   operatingHours?: OperatingHour[];
   existingBookings?: ExistingBooking[];
   currentUserId: string;
+  waiverUrl?: string | null;
 };
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -48,9 +49,16 @@ export default function BookingWidget({
   spId, 
   operatingHours = [], 
   existingBookings = [],
-  currentUserId 
+  currentUserId,
+  waiverUrl
 }: BookingWidgetProps) {
   const router = useRouter();
+
+  const isDefaultWaiver =
+    !waiverUrl ||
+    waiverUrl === 'PLATFORM_DEFAULT_WAIVER' ||
+    waiverUrl.includes('furlink-standard-waiver.pdf');
+  const resolvedWaiverHref = (isDefaultWaiver ? null : waiverUrl) ?? '/service_provider/waiver';
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [nowTime, setNowTime] = useState<number>(0);
@@ -410,7 +418,16 @@ export default function BookingWidget({
           >
             <strong>Terms and Conditions</strong>
           </Link>{' '}
-          including policies on down payments, cancellations, and pet safety.
+          and the{' '}
+          <a
+            href={resolvedWaiverHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
+          >
+            <strong>Service Waiver</strong>
+          </a>
+          , including policies on down payments, cancellations, and pet safety.
         </label>
       </div>
 
