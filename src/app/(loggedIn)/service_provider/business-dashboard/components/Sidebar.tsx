@@ -18,6 +18,7 @@ interface SidebarProps {
   customDateEnd: string;
   setCustomDateEnd: (val: string) => void;
   bookedServices: { name: string; bookings: number; percentage: number }[];
+  bookings: any[]; // ADDED: Pass down raw bookings data for the reviews widget
 }
 
 export default function Sidebar({
@@ -31,7 +32,8 @@ export default function Sidebar({
   setCustomDateStart,
   customDateEnd,
   setCustomDateEnd,
-  bookedServices
+  bookedServices,
+  bookings // ADDED: Destructure the bookings prop
 }: SidebarProps) {
   
   const today = new Date().toISOString().split('T')[0];
@@ -136,7 +138,7 @@ export default function Sidebar({
 
       {/* Customer Reviews Widget - Conditionally rendered only on Customer Insights */}
       {activeTab === 'customer_insights' && (
-        <ReviewsSidebarWidget />
+        <ReviewsSidebarWidget bookings={bookings} /> // UPDATED: Pass live bookings data down
       )}
       
     </aside>
