@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -15,7 +15,7 @@ import "@/app/(public)/auth/auth.css";
 
 const OTP_VALIDITY_SECONDS = 120; // 2 minutes validity per code
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const searchParams = useSearchParams();
   const prefilledIdentifier = searchParams.get("identifier") || "";
 
@@ -447,5 +447,13 @@ export default function ForgotPasswordPage() {
         </form>
       )}
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: "40px", textAlign: "center" }}>Loading...</div>}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }
