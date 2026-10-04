@@ -27,6 +27,7 @@ type ServiceItem = {
 
 type ServiceProvider = {
   id: string;
+  profiles_id: string;
   business_name: string;
   business_city: string;
   sp_img_facilities?: FacilityImage[];
@@ -84,6 +85,7 @@ export default function PetOwnerPage() {
         .from("sp_general_info")
         .select(`
           id,
+          profiles_id,
           business_name,
           business_city,
           sp_img_facilities (
@@ -103,19 +105,30 @@ export default function PetOwnerPage() {
 
       if (error) {
         console.error("Error fetching service providers:", error);
-      } else {
-        setServiceProviders(providers || []);
       }
 
-      const { data: cityData } = await supabase
-        .from("sp_general_info")
-        .select("business_city")
-        .eq("registration_status", "approved");
+      // Hide service providers whose account is currently suspended.
+      // First lift any suspension that has already run out, then look up who is still suspended.
+      await supabase.rpc("lift_expired_suspensions");
 
-      if (cityData) {
-        const uniqueCities = Array.from(new Set(cityData.map((item) => item.business_city)));
-        setAvailableCities(uniqueCities);
+      const allProviders = (providers || []) as unknown as ServiceProvider[];
+      const profileIds = allProviders.map((p) => p.profiles_id).filter(Boolean);
+
+      let suspendedIds = new Set<string>();
+      if (profileIds.length > 0) {
+        const { data: suspendedProfiles } = await supabase
+          .from("profiles")
+          .select("id")
+          .in("id", profileIds)
+          .eq("status", "suspended");
+        suspendedIds = new Set((suspendedProfiles || []).map((p: { id: string }) => p.id));
       }
+
+      const visibleProviders = allProviders.filter((p) => !suspendedIds.has(p.profiles_id));
+      setServiceProviders(visibleProviders);
+
+      // City filter only offers cities that still have a visible shop
+      setAvailableCities(Array.from(new Set(visibleProviders.map((p) => p.business_city))));
 
       setLoading(false);
     }

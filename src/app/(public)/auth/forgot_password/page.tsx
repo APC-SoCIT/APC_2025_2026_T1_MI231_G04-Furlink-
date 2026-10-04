@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -15,7 +15,7 @@ import "@/app/(public)/auth/auth.css";
 
 const OTP_VALIDITY_SECONDS = 120; // 2 minutes validity per code
 
-function ForgotPasswordContent() {
+export default function ForgotPasswordPage() {
   const searchParams = useSearchParams();
   const prefilledIdentifier = searchParams.get("identifier") || "";
 
@@ -144,11 +144,6 @@ function ForgotPasswordContent() {
         .eq("email", currentEmail)
         .maybeSingle();
 
-      if (userProfile?.status === "suspended") {
-        setError("Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details.");
-        setLoading(false);
-        return;
-      }
 
       if (userProfile?.status === "deactivated") {
         setError("Your account is currently deactivated. Please log in directly to reactivate your account.");
@@ -279,12 +274,6 @@ function ForgotPasswordContent() {
         .eq("id", user.id)
         .maybeSingle();
 
-      if (userProfile?.status === "suspended") {
-        await supabase.auth.signOut();
-        setError("Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details.");
-        setLoading(false);
-        return;
-      }
 
       const role = userProfile?.role || user.user_metadata?.role || 'pet_owner';
       const mustChangePassword = user.user_metadata?.must_change_password;
@@ -458,13 +447,5 @@ function ForgotPasswordContent() {
         </form>
       )}
     </div>
-  );
-}
-
-export default function ForgotPasswordPage() {
-  return (
-    <Suspense fallback={null}>
-      <ForgotPasswordContent />
-    </Suspense>
   );
 }

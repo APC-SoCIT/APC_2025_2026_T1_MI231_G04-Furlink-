@@ -473,6 +473,14 @@ export default function ManageBookingsPage() {
   // Updated: Routes paid cancellations to Edge Function, handles unpaid directly
   const confirmCancelBooking = async () => {
     if (!selectedBooking) return;
+
+    // Pet owners can only cancel unpaid ('to pay') bookings; awaiting approval / approved are locked
+    if (selectedBooking.booking_status !== 'to pay') {
+      alert('Bookings that are awaiting approval or approved can no longer be cancelled.');
+      setShowCancelModal(false);
+      return;
+    }
+
     setIsCancelling(true);
 
     try {

@@ -12,8 +12,9 @@ import {
 import { BookingRecord, BookingTab } from '../types/booking';
 import { formatDateDisplay, formatTimeDisplay, formatStatusLabel } from '../utils/bookingFormatters';
 
-// Tabs from which the pet owner is still allowed to cancel the booking
-const CANCELLABLE_TABS: BookingTab[] = ['awaiting_approval', 'to_pay', 'upcoming'];
+// Tabs from which the pet owner is still allowed to cancel the booking.
+// Once a booking is awaiting approval or approved, only the service provider side can change it.
+const CANCELLABLE_TABS: BookingTab[] = ['to_pay'];
 
 interface BookingDetailsModalProps {
   selectedBooking: BookingRecord;
@@ -268,21 +269,20 @@ export default function BookingDetailsModal({
             </button>
           )}
 
-          {/* Only available for 'awaiting_approval' */}
-          {activeTab === 'awaiting_approval' && (
-            <button
-              className="btn-reschedule-booking"
-              onClick={onReschedule}
-            >
-              Reschedule
-            </button>
-          )}
+          {/* Rescheduling is not available to pet owners: awaiting-approval bookings are locked */}
 
-          {/* Pet owner can self-cancel while awaiting approval, unpaid, or already approved */}
+          {/* Pet owner can only self-cancel while the booking is still unpaid (To Pay) */}
           {CANCELLABLE_TABS.includes(activeTab) && (
             <button className="btn-cancel-booking" onClick={onCancelBooking}>
               Cancel Booking
             </button>
+          )}
+          {(activeTab === 'awaiting_approval' || activeTab === 'upcoming') && (
+            <p style={{ width: '100%', margin: 0, fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+              {activeTab === 'awaiting_approval'
+                ? 'Bookings that are awaiting approval can no longer be cancelled or rescheduled.'
+                : 'Approved bookings can no longer be cancelled.'}
+            </p>
           )}
 
           <button className="btn-close-modal" onClick={onClose}>

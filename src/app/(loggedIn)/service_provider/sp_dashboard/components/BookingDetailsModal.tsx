@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Booking, BookingStatus } from '../type';
 import { formatCurrency, formatStatus } from '../utils';
+import { useAccountStatus } from '@/context/AccountStatusContext';
 
 interface BookingDetailsModalProps {
   selectedBooking: Booking;
@@ -14,6 +15,7 @@ export default function BookingDetailsModal({
   setSelectedBooking, 
   handleUpdateStatus 
 }: BookingDetailsModalProps) {
+  const { isSuspended } = useAccountStatus();
   const supabase = createClientComponentClient();
 
   const [isUpdating, setIsUpdating] = useState(false);
@@ -331,10 +333,15 @@ export default function BookingDetailsModal({
 
               {!showRejectInput && !showApproveInput && (
                 <>
-                  <button onClick={() => setShowRejectInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                  {isSuspended && (
+                    <p style={{ color: '#b45309', fontSize: '0.8rem', fontWeight: 600, margin: 0 }}>
+                      Your account is suspended, so you can&apos;t accept or reject booking requests until the suspension ends.
+                    </p>
+                  )}
+                  <button disabled={isSuspended} onClick={() => setShowRejectInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: isSuspended ? 'not-allowed' : 'pointer', opacity: isSuspended ? 0.5 : 1, fontSize: '0.875rem', transition: 'background 0.2s' }}>
                     Reject Booking
                   </button>
-                  <button onClick={() => setShowApproveInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', transition: 'background 0.2s' }}>
+                  <button disabled={isSuspended} onClick={() => setShowApproveInput(true)} style={{ padding: '0.75rem 1.5rem', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: isSuspended ? 'not-allowed' : 'pointer', opacity: isSuspended ? 0.5 : 1, fontSize: '0.875rem', transition: 'background 0.2s' }}>
                     Approve Booking
                   </button>
                 </>
@@ -421,6 +428,7 @@ export default function BookingDetailsModal({
                   </div>
                 </div>
               ) : (
+                <>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button 
                     onClick={() => setShowCompleteInput(true)} 
@@ -428,14 +436,23 @@ export default function BookingDetailsModal({
                   >
                     Mark as Completed
                   </button>
-                  <button 
-                    onClick={selectedBooking.booking_status === 'paid' ? handleCancelAndRefund : () => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
-                    disabled={isRefunding}
-                    style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isRefunding ? 0.7 : 1 }}
-                  >
-                    {isRefunding ? 'Processing...' : (selectedBooking.booking_status === 'paid' ? 'Cancel & Refund' : 'Cancel Booking')}
-                  </button>
+                  {/* Approved bookings are locked in: the provider can complete them but not cancel them */}
+                  {selectedBooking.booking_status === 'paid' && (
+                    <button 
+                      onClick={handleCancelAndRefund} 
+                      disabled={isRefunding}
+                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isRefunding ? 0.7 : 1 }}
+                    >
+                      {isRefunding ? 'Processing...' : 'Cancel & Refund'}
+                    </button>
+                  )}
                 </div>
+                {selectedBooking.booking_status === 'approved' && (
+                  <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0.5rem 0 0', textAlign: 'center' }}>
+                    This booking is approved and can no longer be cancelled.
+                  </p>
+                )}
+                </>
               )}
             </>
           )}

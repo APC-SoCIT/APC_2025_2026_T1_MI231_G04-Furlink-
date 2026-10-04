@@ -270,14 +270,7 @@ export default function LoginPage() {
         .eq("id", user.id)
         .maybeSingle();
 
-      if (userProfile?.status === "suspended") {
-        await supabase.auth.signOut();
-        setErrors({ 
-          form: "Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details." 
-        });
-        setLoading(false);
-        return;
-      }
+      // Suspended accounts may log in (read-only); restrictions are enforced in the app and database.
 
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(user.id);
@@ -355,15 +348,7 @@ export default function LoginPage() {
         .eq("id", data.user.id)
         .maybeSingle();
         
-      if (userProfile?.status === "suspended") {
-        await supabase.auth.signOut();
-        setErrors({ 
-          form: "Your account is currently suspended. Please log in once your suspension period is done. Please check your email to know about your suspension details." 
-        });
-        setVerificationLoading(false);
-        setPendingVerification(false);
-        return;
-      }
+      // Suspended accounts may log in (read-only); restrictions are enforced in the app and database.
 
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(data.user.id);
