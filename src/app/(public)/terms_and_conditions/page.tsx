@@ -117,14 +117,10 @@ export default function TermsAndConditionsPage() {
           </p>
           <ul>
             <li>
-              <strong>Pet Owner Infractions:</strong> Minor infractions include excessive cancellations, inaccurate pet info, or profanity in feedback (3 minor warnings result in a 3-day suspension). 
-              Normal infractions include no-shows or repeated minor infractions. Severe infractions cover schedule 
-              siphoning or severe review abuse. Critical infractions involve direct fraud or threats.
+              <strong>Pet Owner Infractions:</strong> Minor infractions include excessive cancellations, inaccurate pet info, or profanity in feedback. Normal infractions include no-shows or repeated minor infractions. Severe infractions cover schedule siphoning or severe review abuse. Critical infractions involve direct fraud or threats. Regardless of severity, every 3 accumulated warnings will result in a 7-day suspension, which can still be lifted by the admin after further investigation. During suspension, pet owners may still manage pets, view booking history, and manage their account.
             </li>
             <li>
-              <strong>Service Provider Infractions:</strong> Minor infractions cover response delays or minor service complaints. Normal infractions include high cancellation rates or low ratings (7-day suspension). 
-              Severe infractions cover mass refunds or severe operational complaints. Critical infractions involve 
-              accumulated suspensions or fraud.
+              <strong>Service Provider Infractions:</strong> Minor infractions cover response delays or minor service complaints. Normal infractions include high cancellation rates or low ratings. Severe infractions cover mass refunds or severe operational complaints. Critical infractions involve accumulated suspensions or fraud. Regardless of severity, every 3 accumulated warnings will result in a 7-day suspension, which can still be lifted by the admin after further investigation. During suspension, service providers may still complete active bookings and manage their account and listing.
             </li>
           </ul>
         </section>
