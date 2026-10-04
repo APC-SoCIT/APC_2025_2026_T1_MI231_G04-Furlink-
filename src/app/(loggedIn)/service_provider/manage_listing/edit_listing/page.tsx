@@ -50,27 +50,33 @@ export default function EditListingPage() {
         const { data: srvData, error } = await supabase
           .from('sp_services')
           .select(`*, sp_service_options(*)`)
-          .eq('sp_id', generalData.id);
+          .eq('sp_id', generalData.id)
+          .eq('is_archived', false); 
 
         if (error) throw new Error("Failed to load services data.");
 
         if (srvData && srvData.length > 0) {
-          const loadedServices = srvData.map((s: any) => ({
-            id: s.id,
-            type: s.service_type,
-            name: s.service_name,
-            description: s.service_description,
-            notes: s.service_notes || "",
-            haircutIncluded: s.service_haircut_included,
-            pricing: (s.sp_service_options || []).map((p: any) => ({
-              id: p.id,
-              petType: p.pet_type,
-              size: p.pet_size,
-              minWeight: p.pet_min_weight_range === 0 ? "" : p.pet_min_weight_range.toString(),
-              maxWeight: p.pet_max_weight_range === 999 ? "" : p.pet_max_weight_range.toString(),
-              price: p.service_price.toString()
-            }))
-          }));
+          const loadedServices = srvData.map((s: any) => {
+            const activeOptions = (s.sp_service_options || []).filter((p: any) => p.is_archived !== true);
+            
+            return {
+              id: s.id,
+              type: s.service_type,
+              name: s.service_name,
+              description: s.service_description,
+              notes: s.service_notes || "",
+              haircutIncluded: s.service_haircut_included,
+              pricing: activeOptions.map((p: any) => ({
+                id: p.id,
+                petType: p.pet_type,
+                size: p.pet_size,
+                // FIX: Allow 0 to be rendered as a string instead of converting to blank
+                minWeight: p.pet_min_weight_range != null ? p.pet_min_weight_range.toString() : "",
+                maxWeight: p.pet_max_weight_range === 999 ? "" : (p.pet_max_weight_range != null ? p.pet_max_weight_range.toString() : ""),
+                price: p.service_price.toString()
+              }))
+            };
+          });
           setServices(loadedServices);
         }
       } catch (err: any) {
@@ -126,12 +132,22 @@ export default function EditListingPage() {
       const currentServiceIds = services.map((s: any) => s.id).filter(Boolean);
       const currentOptionIds = services.flatMap((s: any) => s.pricing.map((p: any) => p.id)).filter(Boolean);
 
-      const { data: dbServices } = await supabase.from('sp_services').select('id').eq('sp_id', spId);
+      const { data: dbServices } = await supabase
+        .from('sp_services')
+        .select('id')
+        .eq('sp_id', spId)
+        .eq('is_archived', false);
+        
       const dbServiceIds = dbServices?.map(s => s.id) || [];
       
       let dbOptions: any[] = [];
       if (dbServiceIds.length > 0) {
-        const { data: optData } = await supabase.from('sp_service_options').select('id').in('sp_services_id', dbServiceIds);
+        const { data: optData } = await supabase
+          .from('sp_service_options')
+          .select('id')
+          .in('sp_services_id', dbServiceIds)
+          .eq('is_archived', false);
+          
         dbOptions = optData || [];
       }
 
@@ -139,18 +155,24 @@ export default function EditListingPage() {
       const optionsToDelete = dbOptions.map(o => o.id).filter(id => !currentOptionIds.includes(id));
 
       if (optionsToDelete.length > 0) {
-        const { error: optDelErr } = await supabase.from('sp_service_options').delete().in('id', optionsToDelete);
+        const { error: optDelErr } = await supabase
+          .from('sp_service_options')
+          .update({ is_archived: true })
+          .in('id', optionsToDelete);
+          
         if (optDelErr) {
-          if (optDelErr.code === '23503') throw new Error("Cannot remove pricing options that have been booked by pet owners. Please keep them listed.");
-          throw new Error("Failed to delete removed pricing options.");
+          throw new Error("Failed to archive removed pricing options.");
         }
       }
 
       if (servicesToDelete.length > 0) {
-        const { error: srvDelErr } = await supabase.from('sp_services').delete().in('id', servicesToDelete);
+        const { error: srvDelErr } = await supabase
+          .from('sp_services')
+          .update({ is_archived: true })
+          .in('id', servicesToDelete);
+          
         if (srvDelErr) {
-          if (srvDelErr.code === '23503') throw new Error("Cannot remove services that have active or historical bookings. Please keep them listed.");
-          throw new Error("Failed to delete removed services.");
+          throw new Error("Failed to archive removed services.");
         }
       }
 
@@ -210,7 +232,6 @@ export default function EditListingPage() {
   return (
     <div className="manage-listing-page-layout">
       <div className="manage-listing-container">
-        {/* STRUCTURAL FIX: Increased maxWidth from 800px to 1100px so the two-column grid has enough room on desktop view */}
         <div style={{ maxWidth: '1100px', margin: '0 auto', background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
@@ -239,7 +260,6 @@ export default function EditListingPage() {
                   removeService={removeService}
                   validationErrors={validationErrors}
                 >
-                  {/* MOBILE & SPACING FIX: minWidth bumped to 650px. Forces scrollbar on small screens instead of collapsing inputs */}
                   <div style={{ flex: 1, minWidth: 0, width: '100%', overflowX: 'auto', paddingBottom: '10px' }}>
                     <div style={{ minWidth: '650px', paddingRight: '10px' }}>
                       <PricingTable

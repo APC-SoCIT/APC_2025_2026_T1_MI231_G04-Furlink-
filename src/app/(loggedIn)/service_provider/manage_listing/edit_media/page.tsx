@@ -1,11 +1,15 @@
 /* src/app/(loggedIn)/service_provider/manage_listing/edit_media/page.tsx */
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Footer from "@/components/Footer";
 import "../manage_listing.css";
+
+// Match Onboarding Validation Constants
+const DOC_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+const IMG_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
 export default function EditMediaPage() {
   const router = useRouter();
@@ -28,10 +32,15 @@ export default function EditMediaPage() {
   const [newPaymentQr, setNewPaymentQr] = useState<File | null>(null);
   const [newFacilities, setNewFacilities] = useState<File[]>([]);
 
-  // Image Modal State (for viewing facility images in a larger view)
+  // Input Refs for clearing values when the user clicks "Remove" (TS Fix: Added | null)
+  const waiverRef = useRef<HTMLInputElement | null>(null);
+  const permitRef = useRef<HTMLInputElement | null>(null);
+  const qrRef = useRef<HTMLInputElement | null>(null);
+  const facilitiesRef = useRef<HTMLInputElement | null>(null);
+
+  // Image Modal State
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // 1. Fetch current media and document URLs on load
   useEffect(() => {
     const fetchMedia = async () => {
       try {
@@ -67,28 +76,85 @@ export default function EditMediaPage() {
     fetchMedia();
   }, [supabase]);
 
-  // 2. Dynamic Helper to upload a file to a SPECIFIC Supabase Storage bucket
+  // Reusable File Validation Helper (Matches Onboarding)
+  const validateFile = (file: File, type: 'doc' | 'img', maxMb: number): string | null => {
+    const maxSize = maxMb * 1024 * 1024;
+    if (type === 'doc' && !DOC_TYPES.includes(file.type)) return "Invalid document type. Please upload a PDF or Word document.";
+    if (type === 'img' && !IMG_TYPES.includes(file.type)) return "Invalid image type. Please upload a JPG or PNG.";
+    if (file.size > maxSize) return `File is too large. Maximum size is ${maxMb}MB.`;
+    return null;
+  };
+
+  // Handler for Single File Uploads (Waiver, Permit, QR)
+  const handleSingleFileSelect = (
+    e: React.ChangeEvent<HTMLInputElement>, 
+    setFileState: React.Dispatch<React.SetStateAction<File | null>>, 
+    type: 'doc' | 'img', 
+    maxMb: number
+  ) => {
+    setErrorMessage(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const error = validateFile(file, type, maxMb);
+    if (error) {
+      setErrorMessage(error);
+      e.target.value = ""; // Clear invalid file from input
+      setFileState(null);
+      return;
+    }
+    
+    setFileState(file);
+  };
+
+  // Handler for Multiple Facility Images with strict Max 3 Limit Check
+  const handleFacilitySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setErrorMessage(null);
+    const files = Array.from(e.target.files || []);
+    
+    // Calculate total images: Existing - Scheduled for Deletion + Already Staged + Newly Selected
+    const currentCount = existingFacilities.length - facilitiesToDelete.length;
+    
+    if (currentCount + newFacilities.length + files.length > 3) {
+      setErrorMessage("You can only have a maximum of 3 facility images in total.");
+      if (facilitiesRef.current) facilitiesRef.current.value = "";
+      return;
+    }
+
+    const validFiles: File[] = [];
+    for (const file of files) {
+      const error = validateFile(file, 'img', 1); // 1MB Max for facilities
+      if (error) {
+        setErrorMessage(error);
+        if (facilitiesRef.current) facilitiesRef.current.value = "";
+        return;
+      }
+      validFiles.push(file);
+    }
+
+    setNewFacilities(prev => [...prev, ...validFiles]);
+    if (facilitiesRef.current) facilitiesRef.current.value = ""; // Clear input to allow accumulating more clicks
+  };
+
+  // Helper to remove a single file from state and reset its corresponding input (TS Fix: Added | null)
+  const clearSingleFile = (setFileState: React.Dispatch<React.SetStateAction<File | null>>, ref: React.MutableRefObject<HTMLInputElement | null> | React.RefObject<HTMLInputElement | null>) => {
+    setFileState(null);
+    if (ref.current) ref.current.value = "";
+  };
+
+  // Dynamic Helper to upload a file to a SPECIFIC Supabase Storage bucket
   const uploadFile = async (userId: string, bucketName: string, file: File) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
-    
-    // Use the userId as a sub-folder to keep things organized per user
     const filePath = `${userId}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(filePath, file);
-
+    const { error: uploadError } = await supabase.storage.from(bucketName).upload(filePath, file);
     if (uploadError) throw new Error(`Failed to upload file to ${bucketName}.`);
 
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(filePath);
-
+    const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(filePath);
     return publicUrl;
   };
 
-  // 3. Process all uploads and database updates
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -98,12 +164,10 @@ export default function EditMediaPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !spId) throw new Error("Authentication error. Please log in again.");
 
-      // Upload new single documents if provided, targeting their specific buckets
       const waiverUrl = newWaiver ? await uploadFile(user.id, "sp-waiver", newWaiver) : generalData.business_waiver_url;
       const permitUrl = newPermit ? await uploadFile(user.id, "sp-permit", newPermit) : generalData.business_permit_url;
       const paymentUrl = newPaymentQr ? await uploadFile(user.id, "sp-payment-qr", newPaymentQr) : generalData.business_payment_qr_url;
 
-      // Update sp_general_info with the final URLs
       const { error: genUpdateError } = await supabase
         .from('sp_general_info')
         .update({
@@ -115,7 +179,6 @@ export default function EditMediaPage() {
 
       if (genUpdateError) throw new Error("Failed to update general business documents.");
 
-      // Clean up removed facility images from the database
       if (facilitiesToDelete.length > 0) {
         const { error: deleteError } = await supabase
           .from('sp_img_facilities')
@@ -125,7 +188,6 @@ export default function EditMediaPage() {
         if (deleteError) throw new Error("Failed to remove selected facility images.");
       }
 
-      // Upload new facility images targeting the sp-facility-images bucket
       if (newFacilities.length > 0) {
         const newFacilityUrls: string[] = [];
         for (const file of newFacilities) {
@@ -161,31 +223,12 @@ export default function EditMediaPage() {
       {/* Lightbox / Modal for enlarged image view */}
       {selectedImage && (
         <div 
-          style={{ 
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', 
-            backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', 
-            zIndex: 9999, padding: '20px' 
-          }}
+          style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '20px' }}
           onClick={() => setSelectedImage(null)}
         >
           <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
-            <img 
-              src={selectedImage} 
-              alt="Enlarged Facility" 
-              style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: '8px', objectFit: 'contain' }} 
-            />
-            <button 
-              type="button"
-              onClick={() => setSelectedImage(null)}
-              style={{ 
-                position: 'absolute', top: '-15px', right: '-15px', background: '#fff', color: '#333', 
-                border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', 
-                fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                display: 'flex', justifyContent: 'center', alignItems: 'center'
-              }}
-            >
-              &times;
-            </button>
+            <img src={selectedImage} alt="Enlarged Facility" style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: '8px', objectFit: 'contain' }} />
+            <button type="button" onClick={() => setSelectedImage(null)} style={{ position: 'absolute', top: '-15px', right: '-15px', background: '#fff', color: '#333', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>&times;</button>
           </div>
         </div>
       )}
@@ -207,19 +250,20 @@ export default function EditMediaPage() {
                 <label>Waiver Document</label>
                 <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
                   Current: {' '}
-                  {/* Updated condition to handle both the placeholder text and the actual PDF url being saved in the DB */}
                   {generalData.business_waiver_url === "PLATFORM_DEFAULT_WAIVER" || generalData.business_waiver_url?.includes('furlink-standard-waiver.pdf') ? (
-                    <a href="/service_provider/waiver" target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>
-                      Platform Default
-                    </a>
+                    <a href="/service_provider/waiver" target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>Platform Default</a>
                   ) : (
-                    <a href={generalData.business_waiver_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>
-                      View Document
-                    </a>
+                    <a href={generalData.business_waiver_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View Document</a>
                   )}
                 </div>
-                <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setNewWaiver(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
-                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current waiver.</span>
+                <input type="file" ref={waiverRef} accept=".pdf,.doc,.docx" onChange={(e) => handleSingleFileSelect(e, setNewWaiver, 'doc', 1)} style={{ fontSize: '13px', width: '100%' }} />
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current waiver (.pdf, .doc, .docx | Max 1MB).</span>
+                {newWaiver && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#0E2679', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    📄 {newWaiver.name}
+                    <button type="button" onClick={() => clearSingleFile(setNewWaiver, waiverRef)} style={{ background: 'none', border: 'none', color: '#d9534f', cursor: 'pointer', fontWeight: 'bold' }}>✕ Remove</button>
+                  </div>
+                )}
               </div>
 
               <div className="listing-field-group" style={{ marginBottom: '15px' }}>
@@ -227,7 +271,14 @@ export default function EditMediaPage() {
                 <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
                   Current: {generalData.business_permit_url ? <a href={generalData.business_permit_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View Document</a> : "None"}
                 </div>
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setNewPermit(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
+                <input type="file" ref={permitRef} accept=".pdf,.doc,.docx" onChange={(e) => handleSingleFileSelect(e, setNewPermit, 'doc', 2)} style={{ fontSize: '13px', width: '100%' }} />
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current business permit (.pdf, .doc, .docx | Max 2MB).</span>
+                {newPermit && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#0E2679', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    📄 {newPermit.name}
+                    <button type="button" onClick={() => clearSingleFile(setNewPermit, permitRef)} style={{ background: 'none', border: 'none', color: '#d9534f', cursor: 'pointer', fontWeight: 'bold' }}>✕ Remove</button>
+                  </div>
+                )}
               </div>
 
               <div className="listing-field-group">
@@ -235,13 +286,20 @@ export default function EditMediaPage() {
                 <div style={{ fontSize: '13px', marginBottom: '10px', wordBreak: 'break-all' }}>
                   Current: {generalData.business_payment_qr_url ? <a href={generalData.business_payment_qr_url} target="_blank" rel="noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View QR</a> : "None"}
                 </div>
-                <input type="file" accept=".png,.jpg,.jpeg" onChange={(e) => setNewPaymentQr(e.target.files?.[0] || null)} style={{ fontSize: '13px', width: '100%' }} />
+                <input type="file" ref={qrRef} accept=".png,.jpg,.jpeg" onChange={(e) => handleSingleFileSelect(e, setNewPaymentQr, 'img', 1)} style={{ fontSize: '13px', width: '100%' }} />
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current payment QR code (.jpg, .png | Max 1MB).</span>
+                {newPaymentQr && (
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#0E2679', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    🖼️ {newPaymentQr.name}
+                    <button type="button" onClick={() => clearSingleFile(setNewPaymentQr, qrRef)} style={{ background: 'none', border: 'none', color: '#d9534f', cursor: 'pointer', fontWeight: 'bold' }}>✕ Remove</button>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Facility Images Section */}
             <div>
-              <h3 style={{ color: '#0a217a', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Facility Images</h3>
+              <h3 style={{ color: '#0a217a', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Facility Images (Max 3)</h3>
               
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
                 {existingFacilities.filter(f => !facilitiesToDelete.includes(f.id)).map(f => (
@@ -249,7 +307,7 @@ export default function EditMediaPage() {
                     <img 
                       src={f.business_facility_images} 
                       alt="Facility" 
-                      onClick={() => setSelectedImage(f.business_facility_images)} // Trigger Modal
+                      onClick={() => setSelectedImage(f.business_facility_images)}
                       style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd', cursor: 'pointer' }} 
                       title="Click to view larger"
                     />
@@ -269,16 +327,32 @@ export default function EditMediaPage() {
                 <label>Add New Images</label>
                 <input 
                   type="file" 
+                  ref={facilitiesRef}
                   multiple 
                   accept=".png,.jpg,.jpeg" 
-                  onChange={(e) => {
-                    if (e.target.files) {
-                      setNewFacilities(Array.from(e.target.files));
-                    }
-                  }} 
+                  onChange={handleFacilitySelect} 
                   style={{ fontSize: '13px', width: '100%' }} 
                 />
-                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Select multiple files to upload new facility images.</span>
+                <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Select multiple files to upload new facility images (.jpg, .png | Max 1MB each).</span>
+                
+                {/* List of newly staged facility images */}
+                {newFacilities.length > 0 && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <strong style={{ fontSize: '12px', color: '#333' }}>Staged for Upload:</strong>
+                    {newFacilities.map((f, i) => (
+                      <div key={i} style={{ fontSize: '13px', color: '#0E2679', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        🖼️ {f.name}
+                        <button 
+                          type="button" 
+                          onClick={() => setNewFacilities(prev => prev.filter((_, index) => index !== i))} 
+                          style={{ background: 'none', border: 'none', color: '#d9534f', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
