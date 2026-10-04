@@ -478,9 +478,10 @@ export default function ManageBookingsPage() {
   const confirmCancelBooking = async () => {
     if (!selectedBooking) return;
 
-    // Pet owners can only cancel unpaid ('to pay') bookings; awaiting approval / approved are locked
-    if (selectedBooking.booking_status !== 'to pay') {
-      alert('Bookings that are awaiting approval or approved can no longer be cancelled.');
+    // Pet owners can cancel unpaid ('to pay'), awaiting approval, or approved bookings
+    const cancellableStatuses = ['to pay', 'pending_sp_response', 'approved'];
+    if (!cancellableStatuses.includes(selectedBooking.booking_status)) {
+      alert('This booking can no longer be cancelled.');
       setShowCancelModal(false);
       return;
     }
@@ -502,13 +503,34 @@ export default function ManageBookingsPage() {
         if (error) throw new Error(error.message);
         
         setActiveTab('cancelled');
-      } else {
-        // Payment was made. Invoke the Edge Function to handle the 70% refund API split.
+      } else if (selectedBooking.booking_status === 'pending_sp_response' || selectedBooking.booking_status === 'approved') {
+        // Payment was made. Calculate 25% refund to PO (75% to SP), then invoke Edge Function
+        const totalAmount = Number(selectedBooking.booking_total_amount || 0);
+        const refundAmount = totalAmount * 0.25; // PO gets 25%
+        
         const { error } = await supabase.functions.invoke('process-refund', {
           body: {
             booking_id: selectedBooking.id,
             cancelled_by: 'pet_owner',
             refund_reason: 'po_cancellation',
+            refund_amount: refundAmount, // 25% to PO
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        setActiveTab('refund');
+      } else {
+        // Payment was made (fallback for any other paid status). Invoke the Edge Function.
+        const totalAmount = Number(selectedBooking.booking_total_amount || 0);
+        const refundAmount = totalAmount * 0.25; // PO gets 25%
+        
+        const { error } = await supabase.functions.invoke('process-refund', {
+          body: {
+            booking_id: selectedBooking.id,
+            cancelled_by: 'pet_owner',
+            refund_reason: 'po_cancellation',
+            refund_amount: refundAmount, // 25% to PO
           },
         });
 
@@ -527,7 +549,6 @@ export default function ManageBookingsPage() {
       setIsCancelling(false);
     }
   };
-
   return (
     <div className="manage-bookings-container">
       <main className="manage-bookings-main">
