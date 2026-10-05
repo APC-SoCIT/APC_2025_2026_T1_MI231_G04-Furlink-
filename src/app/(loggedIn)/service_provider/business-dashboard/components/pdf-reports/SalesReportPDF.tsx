@@ -10,10 +10,9 @@ const styles = StyleSheet.create({
   metaValue: { width: '65%', color: '#334155' },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', marginTop: 12, marginBottom: 8, color: '#1e3a8a', borderBottomWidth: 1, borderBottomColor: '#cbd5e1', paddingBottom: 4 },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-  card: { width: '31%', backgroundColor: '#f8fafc', padding: 8, borderRadius: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8 },
+  card: { width: '48%', backgroundColor: '#f8fafc', padding: 8, borderRadius: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8 },
   cardLabel: { fontSize: 7, color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
   cardValue: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
-  trendText: { fontSize: 6, color: '#64748b', marginTop: 2 },
   analysisBox: { backgroundColor: '#f8fafc', padding: 10, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#facc15' },
   analysisHeading: { fontWeight: 'bold', color: '#1e3a8a', marginBottom: 2, fontSize: 9 },
   analysisText: { color: '#475569', fontSize: 9 },
@@ -28,6 +27,10 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
   const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const totalBookings = bookings.filter((b: any) => ['to_rate', 'rated', 'paid'].includes(b.booking_status?.toLowerCase())).length;
 
+  // Calculate Average Customer Value
+  const validRevenueBookings = bookings.filter((b: any) => ['paid', 'to_rate', 'rated'].includes(b.booking_status?.toLowerCase()));
+  const avgCustomer = validRevenueBookings.length > 0 ? (totalRevenue / validRevenueBookings.length) : 0;
+
   // 1. Calculate Cancellation Loss
   const cancelledBookings = bookings.filter((b: any) => b.booking_status?.toLowerCase() === 'cancelled');
   const cancelledBookingIds = new Set(cancelledBookings.map((b: any) => b.id));
@@ -37,7 +40,6 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
     .reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
 
   // 2. Calculate Top Performing Pet Type by Revenue
-  const validRevenueBookings = bookings.filter((b: any) => ['paid', 'to_rate', 'rated'].includes(b.booking_status?.toLowerCase()));
   const revBookingIds = new Set(validRevenueBookings.map((b: any) => b.id));
   
   let dogRevenue = 0;
@@ -63,7 +65,6 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
     : `Dog services generated ${dogRevPer}% of total revenue`;
 
   // 3. Customer Segmentation (New vs Returning Revenue)
-  // Track customer booking history based on client/profile identifiers in bookings
   const customerBookingCounts: Record<string, number> = {};
   bookings.forEach((b: any) => {
     const customerKey = b.profiles_id || b.customer_id || b.client_id || 'guest';
@@ -80,7 +81,6 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
       .filter((s: any) => bPetIds.has(s.booking_pet_info_id))
       .reduce((sum: number, s: any) => sum + Number(s.booking_price || 0), 0);
 
-    // If this customer has more than 1 booking total, count as returning
     if ((customerBookingCounts[customerKey] || 1) > 1) {
       retCustRevenue += bRev;
     } else {
@@ -101,11 +101,22 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
 
         <Text style={styles.sectionTitle}>Executive Summary</Text>
         <View style={styles.gridContainer}>
-          <View style={styles.card}><Text style={styles.cardLabel}>GROSS REVENUE</Text><Text style={styles.cardValue}>PHP {totalRevenue || 0}</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>TOTAL BOOKINGS</Text><Text style={styles.cardValue}>{totalBookings}</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>LISTING VISITORS</Text><Text style={styles.cardValue}>0</Text><Text style={styles.trendText}>0% vs previous period</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>AVG BOOKINGS/CUSTOMER</Text><Text style={styles.cardValue}>0</Text><Text style={styles.trendText}>0% vs previous period</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>CANCELLATIONS</Text><Text style={styles.cardValue}>{cancelledBookings.length}</Text></View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>GROSS REVENUE</Text>
+            <Text style={styles.cardValue}>PHP {Number(totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>TOTAL BOOKINGS</Text>
+            <Text style={styles.cardValue}>{totalBookings}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>AVG BOOKINGS/CUSTOMER</Text>
+            <Text style={styles.cardValue}>PHP {Number(avgCustomer).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>CANCELLATIONS</Text>
+            <Text style={styles.cardValue}>{cancelledBookings.length}</Text>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Sales Analysis</Text>
@@ -121,7 +132,7 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
           <Text style={styles.analysisHeading}>Cancellation Impact:</Text>
           <Text style={styles.analysisText}>
             {cancellationLoss > 0 
-              ? `Cancellations resulted in a revenue loss of PHP ${cancellationLoss.toLocaleString()} during this period. Consider implementing cancellation policies or improving customer communication.`
+              ? `Cancellations resulted in a revenue loss of PHP ${cancellationLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} during this period. Consider implementing cancellation policies or improving customer communication.`
               : `Excellent! No revenue was lost to cancellations during this period.`}
           </Text>
         </View>
@@ -134,11 +145,11 @@ export const SalesReportPDF = ({ bookings = [], pets = [], services = [], month,
         <View style={styles.segmentContainer}>
           <View style={styles.segmentCard}>
             <Text style={styles.segmentTitle}>New Customers</Text>
-            <Text style={styles.segmentValue}>PHP {newCustRevenue.toLocaleString()}</Text>
+            <Text style={styles.segmentValue}>PHP {newCustRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
           </View>
           <View style={styles.segmentCard}>
             <Text style={styles.segmentTitle}>Returning Customers</Text>
-            <Text style={styles.segmentValue}>PHP {retCustRevenue.toLocaleString()}</Text>
+            <Text style={styles.segmentValue}>PHP {retCustRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
           </View>
         </View>
       </Page>

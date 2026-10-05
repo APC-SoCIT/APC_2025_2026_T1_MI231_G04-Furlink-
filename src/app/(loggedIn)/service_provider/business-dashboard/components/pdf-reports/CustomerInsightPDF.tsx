@@ -10,10 +10,9 @@ const styles = StyleSheet.create({
   metaValue: { width: '65%', color: '#334155' },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', marginTop: 12, marginBottom: 8, color: '#1e3a8a', borderBottomWidth: 1, borderBottomColor: '#cbd5e1', paddingBottom: 4 },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-  card: { width: '31%', backgroundColor: '#f8fafc', padding: 8, borderRadius: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8 },
+  card: { width: '48%', backgroundColor: '#f8fafc', padding: 8, borderRadius: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8 },
   cardLabel: { fontSize: 7, color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
   cardValue: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
-  trendText: { fontSize: 6, color: '#64748b', marginTop: 2 },
   
   analysisBox: { backgroundColor: '#f8fafc', padding: 10, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#facc15' },
   analysisHeading: { fontWeight: 'bold', color: '#1e3a8a', marginBottom: 2, fontSize: 9 },
@@ -37,6 +36,10 @@ export const CustomerInsightPDF = ({ bookings = [], pets = [], month, petTypeFil
   const totalBookings = bookings.filter((b: any) => ['to_rate', 'rated', 'paid'].includes(b.booking_status?.toLowerCase())).length;
   const cancelledBookings = bookings.filter((b: any) => b.booking_status?.toLowerCase() === 'cancelled');
 
+  // Calculate Average Customer Value
+  const revBookings = bookings.filter((b: any) => ['paid', 'to_rate', 'rated'].includes(b.booking_status?.toLowerCase()));
+  const avgCustomer = revBookings.length > 0 ? (totalRevenue / revBookings.length) : 0;
+
   const validBookingIds = new Set(bookings.map((b: any) => b.id));
   const validPets = pets.filter((p: any) => validBookingIds.has(p.booking_info_id));
   let dogCount = 0; let catCount = 0;
@@ -52,7 +55,6 @@ export const CustomerInsightPDF = ({ bookings = [], pets = [], month, petTypeFil
     ? `Cats account for ${catPer}% of bookings, indicating a strong preference for cat services.` 
     : `Dogs account for ${dogPer}% of bookings, indicating a strong preference for dog services.`;
 
-  // Grab the exact username / identifier used by the Top Rebooked Customers graph
   const customerCounts: Record<string, number> = {};
   const customerNames: Record<string, string> = {};
   
@@ -65,7 +67,7 @@ export const CustomerInsightPDF = ({ bookings = [], pets = [], month, petTypeFil
       b.client_name || 
       'Valued Customer';
 
-    const k = name; // Group by the display name directly just like the chart axis
+    const k = name; 
     customerCounts[k] = (customerCounts[k] || 0) + 1;
     customerNames[k] = name;
   });
@@ -95,11 +97,22 @@ export const CustomerInsightPDF = ({ bookings = [], pets = [], month, petTypeFil
 
         <Text style={styles.sectionTitle}>Executive Summary</Text>
         <View style={styles.gridContainer}>
-          <View style={styles.card}><Text style={styles.cardLabel}>GROSS REVENUE</Text><Text style={styles.cardValue}>PHP {totalRevenue || 0}</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>TOTAL BOOKINGS</Text><Text style={styles.cardValue}>{totalBookings}</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>LISTING VISITORS</Text><Text style={styles.cardValue}>0</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>AVG BOOKINGS/CUSTOMER</Text><Text style={styles.cardValue}>0</Text></View>
-          <View style={styles.card}><Text style={styles.cardLabel}>CANCELLATIONS</Text><Text style={styles.cardValue}>{cancelledBookings.length}</Text></View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>GROSS REVENUE</Text>
+            <Text style={styles.cardValue}>PHP {Number(totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>TOTAL BOOKINGS</Text>
+            <Text style={styles.cardValue}>{totalBookings}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>AVG BOOKINGS/CUSTOMER</Text>
+            <Text style={styles.cardValue}>PHP {Number(avgCustomer).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>CANCELLATIONS</Text>
+            <Text style={styles.cardValue}>{cancelledBookings.length}</Text>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Customer Demographics</Text>
