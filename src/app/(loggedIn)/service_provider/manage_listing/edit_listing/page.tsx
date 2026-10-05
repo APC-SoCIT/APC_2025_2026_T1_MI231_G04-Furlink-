@@ -70,7 +70,6 @@ export default function EditListingPage() {
                 id: p.id,
                 petType: p.pet_type,
                 size: p.pet_size,
-                // FIX: Allow 0 to be rendered as a string instead of converting to blank
                 minWeight: p.pet_min_weight_range != null ? p.pet_min_weight_range.toString() : "",
                 maxWeight: p.pet_max_weight_range === 999 ? "" : (p.pet_max_weight_range != null ? p.pet_max_weight_range.toString() : ""),
                 price: p.service_price.toString()
@@ -112,6 +111,8 @@ export default function EditListingPage() {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Required"; isValid = false;
           } else if (parseFloat(p.minWeight) >= parseFloat(p.maxWeight)) {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Min < Max"; isValid = false;
+          } else if (parseFloat(p.minWeight) < 0 || parseFloat(p.maxWeight) < 0) { // Fix: Blocks negative weights server-side
+            newErrors[`service_${si}_pricing_${pi}_weight`] = "Cannot be negative"; isValid = false;
           }
         }
       });

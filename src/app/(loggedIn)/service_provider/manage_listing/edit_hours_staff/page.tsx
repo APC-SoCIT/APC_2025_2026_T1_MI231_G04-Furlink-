@@ -63,7 +63,6 @@ export default function EditHoursStaffPage() {
     setHours(updated);
   };
 
-  // 1. Add new operating hour row function
   const addHourRow = () => {
     setHours([...hours, { 
       day_of_week: "Monday", 
@@ -74,7 +73,6 @@ export default function EditHoursStaffPage() {
     }]);
   };
 
-  // 2. Remove operating hour row function
   const removeHourRow = (index: number) => {
     setHours(hours.filter((_, i) => i !== index));
   };
@@ -100,6 +98,12 @@ export default function EditHoursStaffPage() {
 
     try {
       if (!spId) throw new Error("Provider profile ID is missing. Cannot save changes.");
+
+      // Fix: Validate against negative numbers or zero before processing the payload
+      for (const h of hours) {
+        if (parseInt(h.slot_interval) < 1) throw new Error("Duration must be at least 1 minute.");
+        if (parseInt(h.slot_capacity) < 1) throw new Error("Capacity must be at least 1 pet.");
+      }
 
       const hoursPayload = hours.map(h => ({
         sp_id: spId,
@@ -157,7 +161,6 @@ export default function EditHoursStaffPage() {
             
             {/* Hours Section */}
             <div>
-              {/* 3. Updated Header with Add Button */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>
                 <h3 style={{ color: '#0a217a', margin: 0 }}>Operating Hours</h3>
                 <button type="button" onClick={addHourRow} style={{ background: '#0a217a', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>+ Add Schedule</button>
@@ -165,10 +168,8 @@ export default function EditHoursStaffPage() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {hours.map((h, index) => (
-                  // 4. Added relative positioning and adjusted padding for the close button
                   <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '15px', background: '#fdfdfd', padding: '25px 15px 15px 15px', borderRadius: '8px', border: '1px solid #e0e0e0', position: 'relative', flexWrap: 'wrap' }}>
                     
-                    {/* 5. Converted Day text into a Select Dropdown */}
                     <div style={{ flex: '1 1 120px', minWidth: '120px' }}>
                       <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600, display: 'block' }}>Day</label>
                       <select 
@@ -202,15 +203,16 @@ export default function EditHoursStaffPage() {
                     <div style={{ display: 'flex', gap: '15px', flex: '1 1 200px', minWidth: '200px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                         <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Duration (Mins)</label>
-                        <input type="number" placeholder="60" value={h.slot_interval} onChange={(e) => handleHourChange(index, 'slot_interval', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                        {/* Fix: Added min="1" attribute */}
+                        <input type="number" min="1" placeholder="60" value={h.slot_interval} onChange={(e) => handleHourChange(index, 'slot_interval', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                         <label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>Capacity (Pets/Slot)</label>
-                        <input type="number" placeholder="1" value={h.slot_capacity} onChange={(e) => handleHourChange(index, 'slot_capacity', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
+                        {/* Fix: Added min="1" attribute */}
+                        <input type="number" min="1" placeholder="1" value={h.slot_capacity} onChange={(e) => handleHourChange(index, 'slot_capacity', e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }} required />
                       </div>
                     </div>
 
-                    {/* 6. Added Removal Button */}
                     <button type="button" onClick={() => removeHourRow(index)} style={{ position: 'absolute', top: '5px', right: '10px', background: 'transparent', border: 'none', color: '#d9534f', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }} title="Remove Schedule">&times;</button>
                   </div>
                 ))}
