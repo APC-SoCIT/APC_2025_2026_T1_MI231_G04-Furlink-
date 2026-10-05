@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Booking, BookingStatus } from '../type';
-// UPDATED: Imported formatDate and formatDateTime
 import { formatCurrency, formatStatus, formatDate, formatDateTime } from '../utils';
 import { useAccountStatus } from '@/context/AccountStatusContext';
 
@@ -209,7 +208,6 @@ export default function BookingDetailsModal({
         </h3>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
-          {/* UPDATED: Applied formatting to Booking Date and Created At */}
           <div><span style={{ color: '#64748b', display: 'block' }}>Date & Time</span><strong>{formatDate(selectedBooking.booking_date)} ({selectedBooking.booking_timeslot})</strong></div>
           <div><span style={{ color: '#64748b', display: 'block' }}>Total Amount</span><strong>{formatCurrency(selectedBooking.booking_total_amount)}</strong></div>
           <div><span style={{ color: '#64748b', display: 'block' }}>Status</span><strong style={{ textTransform: 'capitalize' }}>{formatStatus(selectedBooking.booking_status)}</strong></div>
@@ -497,7 +495,6 @@ export default function BookingDetailsModal({
                   </div>
                 </div>
               ) : (
-                <>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button 
                     onClick={() => setShowCompleteInput(true)} 
@@ -505,22 +502,15 @@ export default function BookingDetailsModal({
                   >
                     Mark as Completed
                   </button>
-                  {selectedBooking.booking_status === 'paid' && (
-                    <button 
-                      onClick={handleCancelAndRefund} 
-                      disabled={isRefunding}
-                      style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isRefunding ? 0.7 : 1 }}
-                    >
-                      {isRefunding ? 'Processing...' : 'Cancel & Refund'}
-                    </button>
-                  )}
+                  {/* UPDATED: Restored the cancel button for approved bookings, routing directly to status update since refunds aren't needed yet */}
+                  <button 
+                    onClick={selectedBooking.booking_status === 'paid' ? handleCancelAndRefund : () => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
+                    disabled={isRefunding}
+                    style={{ flex: 1, padding: '0.75rem 1.5rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.875rem', opacity: isRefunding ? 0.7 : 1 }}
+                  >
+                    {isRefunding ? 'Processing...' : (selectedBooking.booking_status === 'paid' ? 'Cancel & Refund' : 'Cancel Booking')}
+                  </button>
                 </div>
-                {selectedBooking.booking_status === 'approved' && (
-                  <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0.5rem 0 0', textAlign: 'center' }}>
-                    This booking is approved and can no longer be cancelled.
-                  </p>
-                )}
-                </>
               )}
             </>
           )}

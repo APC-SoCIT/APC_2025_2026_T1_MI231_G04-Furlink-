@@ -5,7 +5,6 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 import { FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { Booking, BookingStatus } from "./type";
-// UPDATED: Imported formatDate
 import { filterBookingsByStatus, formatCurrency, formatStatus, formatDate } from "./utils";
 import BookingDetailsModal from './components/BookingDetailsModal';
 import CalendarModal from './components/CalendarModal';
@@ -89,10 +88,7 @@ export default function ServiceProviderDashboardPage() {
     try {
       const targetBooking = bookings.find(b => b.id === id);
 
-      if (targetBooking?.booking_status === 'approved' && (newStatus === 'cancelled' || newStatus === 'rejected')) {
-        alert('An approved booking can no longer be cancelled by the service provider.');
-        return;
-      }
+      // UPDATED: Removed the strict check that prevented "approved" bookings from being cancelled.
       
       if ((newStatus === 'rejected' || newStatus === 'cancelled') && (targetBooking?.booking_status === 'paid' || targetBooking?.booking_status === 'approved' || targetBooking?.booking_status === 'pending_sp_response')) {
         const { error } = await supabase.functions.invoke('process-refund', {
@@ -368,13 +364,11 @@ export default function ServiceProviderDashboardPage() {
 
                   return (
                     <tr key={booking.id}>
-                      {/* UPDATED: Applied formatting to Booking Date */}
                       <td>
                         <strong>{formatDate(booking.booking_date)}</strong>
                         <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{booking.booking_timeslot}</div>
                       </td>
                       
-                      {/* UPDATED: Applied formatting to Refund Date */}
                       {activeTab === 'cancelled' && (
                         <td>
                           <strong>{refundDateRaw ? formatDate(refundDateRaw) : 'N/A'}</strong>
