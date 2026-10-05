@@ -14,6 +14,9 @@ import ServiceCard from "../onboarding/components/ServiceCard";
 import PricingTable from "../onboarding/components/PricingTable";
 import { useServiceManager } from "../onboarding/hooks/useServiceManager";
 
+// Helper to prevent passing frontend-generated temp IDs to Supabase which causes uuid-syntax crashes
+const isUUID = (id: any) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 export default function EditListingPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -111,7 +114,7 @@ export default function EditListingPage() {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Required"; isValid = false;
           } else if (parseFloat(p.minWeight) >= parseFloat(p.maxWeight)) {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Min < Max"; isValid = false;
-          } else if (parseFloat(p.minWeight) < 0 || parseFloat(p.maxWeight) < 0) { // Fix: Blocks negative weights server-side
+          } else if (parseFloat(p.minWeight) < 0 || parseFloat(p.maxWeight) < 0) {
             newErrors[`service_${si}_pricing_${pi}_weight`] = "Cannot be negative"; isValid = false;
           }
         }
@@ -130,8 +133,8 @@ export default function EditListingPage() {
     try {
       if (!spId) throw new Error("Provider profile ID is missing. Cannot save changes.");
 
-      const currentServiceIds = services.map((s: any) => s.id).filter(Boolean);
-      const currentOptionIds = services.flatMap((s: any) => s.pricing.map((p: any) => p.id)).filter(Boolean);
+      const currentServiceIds = services.map((s: any) => s.id).filter(isUUID);
+      const currentOptionIds = services.flatMap((s: any) => s.pricing.map((p: any) => p.id)).filter(isUUID);
 
       const { data: dbServices } = await supabase
         .from('sp_services')
@@ -161,9 +164,7 @@ export default function EditListingPage() {
           .update({ is_archived: true })
           .in('id', optionsToDelete);
           
-        if (optDelErr) {
-          throw new Error("Failed to archive removed pricing options.");
-        }
+        if (optDelErr) throw new Error(`Failed to archive removed pricing options: ${optDelErr.message}`);
       }
 
       if (servicesToDelete.length > 0) {
@@ -172,21 +173,23 @@ export default function EditListingPage() {
           .update({ is_archived: true })
           .in('id', servicesToDelete);
           
-        if (srvDelErr) {
-          throw new Error("Failed to archive removed services.");
-        }
+        if (srvDelErr) throw new Error(`Failed to archive removed services: ${srvDelErr.message}`);
       }
 
       for (const service of services) {
         const srvId = (service as any).id;
+        
+        // FIX: Ensure only valid UUIDs are passed, otherwise Supabase treats it as a brand new insert
         const srvPayload = {
-          ...(srvId ? { id: srvId } : {}), 
+          ...(isUUID(srvId) ? { id: srvId } : {}), 
           sp_id: spId,
           service_type: service.type,
           service_name: service.name,
           service_description: service.description,
           service_notes: service.notes,
           service_haircut_included: service.haircutIncluded,
+          service_status: 'active', // Explicitly provide status in case of new inserts
+          is_archived: false
         };
 
         const { data: savedSrv, error: srvErr } = await supabase
@@ -195,28 +198,34 @@ export default function EditListingPage() {
           .select()
           .single();
 
-        if (srvErr) throw new Error(`Failed to save service: ${service.name}`);
+        if (srvErr) throw new Error(`Failed to save service "${service.name}": ${srvErr.message}`);
 
         for (const opt of (service as any).pricing) {
           const optId = (opt as any).id;
+          
+          // FIX: Ensure only valid UUIDs are passed for pricing options
           const optPayload = {
-            ...(optId ? { id: optId } : {}),
+            ...(isUUID(optId) ? { id: optId } : {}),
             sp_services_id: savedSrv.id,
             pet_type: opt.petType,
             pet_size: opt.size,
             pet_min_weight_range: parseFloat(opt.minWeight) || 0,
             pet_max_weight_range: parseFloat(opt.maxWeight) || 999,
             service_price: parseFloat(opt.price),
+            option_status: 'active', // Explicitly provide status
+            is_archived: false
           };
 
           const { error: optErr } = await supabase
             .from('sp_service_options')
             .upsert(optPayload, { onConflict: 'id' });
 
-          if (optErr) throw new Error("Failed to save pricing options.");
+          // FIX: Surface the actual DB error message so we aren't guessing
+          if (optErr) throw new Error(`Failed to save pricing variant for "${service.name}": ${optErr.message}`);
         }
       }
 
+      router.refresh(); 
       router.push("/service_provider/manage_listing");
     } catch (err: any) {
       setErrorMessage(err?.message || "An unexpected error occurred during save.");
