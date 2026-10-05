@@ -89,7 +89,6 @@ export default function ReportPreviewModal({
     const custNames: Record<string, string> = {};
     
     bookingsData.forEach((b: any) => {
-      // Prioritize username properties to match the dashboard's top rebooked customers graph
       const name = 
         b.username || 
         b.customer_username || 
@@ -98,7 +97,6 @@ export default function ReportPreviewModal({
         b.client_name || 
         'Valued Customer';
 
-      // Group directly by the display name used on the chart
       const k = name;
       custCounts[k] = (custCounts[k] || 0) + 1;
       custNames[k] = name;
@@ -134,7 +132,6 @@ export default function ReportPreviewModal({
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
-        {/* Modal Header */}
         <div className={styles.modalHeader}>
           <h2>{title}</h2>
           <button className={styles.closeBtn} onClick={onClose}>
@@ -142,7 +139,6 @@ export default function ReportPreviewModal({
           </button>
         </div>
 
-        {/* Modal Body / Preview Area */}
         <div className={styles.modalBody}>
           <div className={styles.previewMetaBox}>
             <div className={styles.metaRow}>
@@ -170,19 +166,20 @@ export default function ReportPreviewModal({
           <div className={styles.previewGrid}>
             <div className={styles.previewCard}>
               <span className={styles.cardHeaderTitle}>GROSS REVENUE</span>
-              <span className={styles.cardValue}>PHP {metrics.revenue.toLocaleString()}</span>
+              <span className={styles.cardValue}>
+                PHP {Number(metrics.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
             <div className={styles.previewCard}>
               <span className={styles.cardHeaderTitle}>TOTAL BOOKINGS</span>
               <span className={styles.cardValue}>{metrics.bookings}</span>
             </div>
-            <div className={styles.previewCard}>
-              <span className={styles.cardHeaderTitle}>LISTING VISITORS</span>
-              <span className={styles.cardValue}>{metrics.visitors}</span>
-            </div>
+            {/* Listing Visitors safely removed from preview grid */}
             <div className={styles.previewCard}>
               <span className={styles.cardHeaderTitle}>AVG BOOKINGS/CUSTOMER</span>
-              <span className={styles.cardValue}>{metrics.avgCustomer}</span>
+              <span className={styles.cardValue}>
+                PHP {Number(metrics.avgCustomer || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
             <div className={styles.previewCard}>
               <span className={styles.cardHeaderTitle}>CANCELLATIONS</span>
@@ -284,7 +281,6 @@ export default function ReportPreviewModal({
                       <span style={{ background: '#1e3a8a', color: '#ffffff', fontSize: '0.75rem', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px' }}>#{idx + 1}</span>
                       <span style={{ fontWeight: 'bold', color: '#1e3a8a', fontSize: '0.9rem' }}>{cust.name}</span>
                     </div>
-                    {/* Handles singular vs plural dynamically based on customer booking count */}
                     <span style={{ color: '#64748b', fontSize: '0.85rem' }}>
                       {cust.count} {cust.count === 1 ? 'booking' : 'bookings'}
                     </span>
@@ -391,11 +387,11 @@ export default function ReportPreviewModal({
                     <>
                       <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
                         <span style={{ fontWeight: 'bold', color: '#1e3a8a', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>New Customers</span>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#0f172a' }}>PHP {nRev.toLocaleString()}</span>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#0f172a' }}>PHP {nRev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
                         <span style={{ fontWeight: 'bold', color: '#1e3a8a', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Returning Customers</span>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#0f172a' }}>PHP {rRev.toLocaleString()}</span>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#0f172a' }}>PHP {rRev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </>
                   );
@@ -405,7 +401,6 @@ export default function ReportPreviewModal({
           )}
         </div>
 
-        {/* Modal Footer with Download Button */}
         <div className={styles.modalFooter}>
           <PDFDownloadLink document={pdfDocument} fileName={fileName}>
             {({ loading }) => (
