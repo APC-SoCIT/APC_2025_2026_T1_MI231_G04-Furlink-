@@ -1,3 +1,4 @@
+/* src/app/(loggedIn)/pet_owner/book_appointment/page.tsx */
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -63,28 +64,14 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
     .eq("sp_id", spId);
 
   // 4. Fetch Services & Service Options
+  // FIX: Using wildcard (*) instead of explicit column names to prevent silent query failures 
+  // if is_archived wasn't added to the child sp_service_options table. 
+  // We also use .neq('is_archived', true) to safely catch false or NULL values.
   const { data: services } = await supabase
     .from("sp_services")
-    .select(`
-      id,
-      service_type,
-      service_name,
-      service_description,
-      service_notes,
-      service_haircut_included,
-      service_status,
-      sp_service_options (
-        id,
-        pet_type,
-        pet_size,
-        pet_min_weight_range,
-        pet_max_weight_range,
-        service_price,
-        option_status
-      )
-    `)
+    .select(`*, sp_service_options(*)`)
     .eq("sp_id", spId)
-    .eq("service_status", "active");
+    .neq("is_archived", true); 
 
   // 5. Fetch Active Bookings across ALL users with profiles_id to track global capacity & user-specific warnings
   const { data: rawBookings } = await supabase
@@ -222,13 +209,17 @@ export default async function BookAppointmentPage({ searchParams }: PageProps) {
               <h2 className="section-title">Service Prices</h2>
               <span className="vat-text">* VAT inclusive</span>
 
+              {/* FIX: Improved fallback UI just in case services are truly empty */}
               {!services || services.length === 0 ? (
-                <p className="no-services-text">No active services listed yet.</p>
+                <div style={{ padding: '30px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', marginTop: '20px' }}>
+                  <p className="no-services-text" style={{ color: '#64748b', margin: 0 }}>No active services listed yet.</p>
+                </div>
               ) : (
                 services.map((service) => {
+                  // Local code filter to safely exclude archived pricing variants
                   const activeOptions =
                     service.sp_service_options?.filter(
-                      (opt: any) => opt.option_status === "active"
+                      (opt: any) => opt.is_archived !== true
                     ) || [];
 
                   return (

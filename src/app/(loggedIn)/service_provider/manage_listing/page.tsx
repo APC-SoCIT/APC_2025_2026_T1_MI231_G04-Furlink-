@@ -43,10 +43,11 @@ export default function ManageListingPage() {
         }
 
         // 2. Fetch Related Tables
+        // FIX: Added .eq('is_archived', false) to the services query to hide soft-deleted items
         const [empRes, hoursRes, srvRes, imgRes] = await Promise.all([
           supabase.from('sp_employees_info').select('*').eq('sp_id', generalData.id),
           supabase.from('sp_operating_hours').select('*').eq('sp_id', generalData.id),
-          supabase.from('sp_services').select('*, sp_service_options(*)').eq('sp_id', generalData.id),
+          supabase.from('sp_services').select('*, sp_service_options(*)').eq('sp_id', generalData.id).eq('is_archived', false),
           supabase.from('sp_img_facilities').select('*').eq('sp_id', generalData.id)
         ]);
 
@@ -216,37 +217,46 @@ export default function ManageListingPage() {
                 </div>
 
                 <div className="straight-layout-container">
-                  {services.map((srv: any) => (
-                    <div key={srv.id} className="listing-field-group">
-                      <h4 style={{ margin: '0 0 10px 0', color: '#0a217a', fontSize: '18px' }}>
-                        {srv.service_name} <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#666' }}>({srv.service_type})</span>
-                      </h4>
-                      <p className="listing-field-value" style={{ marginBottom: '10px' }}>{srv.service_description}</p>
-                      
-                      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', marginTop: '10px' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid #ddd', fontSize: '13px', color: '#0a217a' }}>
-                            <th style={{ padding: '8px 4px' }}>Pet Type</th>
-                            <th style={{ padding: '8px 4px' }}>Size / Weight</th>
-                            <th style={{ padding: '8px 4px' }}>Price</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {srv.sp_service_options?.map((opt: any) => (
-                            <tr key={opt.id} style={{ borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                              <td style={{ padding: '8px 4px', textTransform: 'capitalize' }}>{opt.pet_type}</td>
-                              <td style={{ padding: '8px 4px', textTransform: 'capitalize' }}>
-                                {opt.pet_size === 'all' 
-                                  ? 'All Sizes' 
-                                  : `${opt.pet_size} (${opt.pet_min_weight_range} - ${opt.pet_max_weight_range} kg)`}
-                              </td>
-                              <td style={{ padding: '8px 4px', fontWeight: 'bold' }}>₱{opt.service_price}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))}
+                  {services.map((srv: any) => {
+                    // FIX: Filter out archived service pricing options so they don't appear in the table
+                    const activeOptions = (srv.sp_service_options || []).filter((opt: any) => opt.is_archived !== true);
+                    
+                    return (
+                      <div key={srv.id} className="listing-field-group">
+                        <h4 style={{ margin: '0 0 10px 0', color: '#0a217a', fontSize: '18px' }}>
+                          {srv.service_name} <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#666' }}>({srv.service_type})</span>
+                        </h4>
+                        <p className="listing-field-value" style={{ marginBottom: '10px' }}>{srv.service_description}</p>
+                        
+                        {activeOptions.length > 0 ? (
+                          <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', marginTop: '10px' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid #ddd', fontSize: '13px', color: '#0a217a' }}>
+                                <th style={{ padding: '8px 4px' }}>Pet Type</th>
+                                <th style={{ padding: '8px 4px' }}>Size / Weight</th>
+                                <th style={{ padding: '8px 4px' }}>Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activeOptions.map((opt: any) => (
+                                <tr key={opt.id} style={{ borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                                  <td style={{ padding: '8px 4px', textTransform: 'capitalize' }}>{opt.pet_type}</td>
+                                  <td style={{ padding: '8px 4px', textTransform: 'capitalize' }}>
+                                    {opt.pet_size === 'all' 
+                                      ? 'All Sizes' 
+                                      : `${opt.pet_size} (${opt.pet_min_weight_range} - ${opt.pet_max_weight_range} kg)`}
+                                  </td>
+                                  <td style={{ padding: '8px 4px', fontWeight: 'bold' }}>₱{opt.service_price}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p style={{ fontSize: '13px', color: '#666', fontStyle: 'italic' }}>No active pricing variants listed.</p>
+                        )}
+                      </div>
+                    );
+                  })}
                   {services.length === 0 && <p>No services recorded.</p>}
                 </div>
               </div>
