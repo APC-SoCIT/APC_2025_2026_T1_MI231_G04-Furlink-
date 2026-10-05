@@ -1,6 +1,6 @@
 import React from 'react';
 
-const REFUND_PERCENT = 25;
+const REFUND_PERCENT = 75;
 const FORFEIT_PERCENT = 100 - REFUND_PERCENT;
 
 const formatPeso = (amount: number) =>

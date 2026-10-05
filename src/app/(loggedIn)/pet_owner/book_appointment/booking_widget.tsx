@@ -420,7 +420,7 @@ export default function BookingWidget({
           </Link>{' '}
           and the{' '}
           <a
-            href={resolvedWaiverHref}
+            href={resolvedWaiverHref} //adding waiver page
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: 'var(--btn-dark-blue)', textDecoration: 'underline' }}
