@@ -250,17 +250,66 @@ export default function BookingDetailsModal({
               return (
                 <div key={pet.id} style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}>
                   <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{pet.booking_pet_name} <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '0.85rem' }}>({pet.booking_pet_type})</span></p>
+                  
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
                     <p><strong>Breed:</strong> {pet.booking_breed}</p>
-                    <p><strong>Gender:</strong> {pet.booking_gender}</p>
+                    <p><strong>Gender:</strong> <span style={{ textTransform: 'capitalize' }}>{pet.booking_gender}</span></p>
                     <p><strong>Weight:</strong> {pet.booking_weight} kg ({pet.booking_calculated_size})</p>
-                    <p><strong>Behavior:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
+                    <p><strong>Date of Birth:</strong> {formatDate(pet.booking_date_of_birth)}</p>
+                    
+                    <p style={{ gridColumn: '1 / -1' }}><strong>Behaviors:</strong> {pet.booking_behavior?.join(', ') || 'N/A'}</p>
+                    
+                    {/* NEW: Displays Emergency Vet Consent */}
+                    <p style={{ gridColumn: '1 / -1' }}>
+                      <strong>Emergency Vet Consent:</strong> {pet.booking_emergency_consent ? 'Granted' : 'Not Granted'}
+                    </p>
                     
                     {pet.assigned_employee_id && (
                       <p style={{ gridColumn: '1 / -1', marginTop: '0.25rem', color: '#1e3a8a', background: '#eff6ff', padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #bfdbfe' }}>
                         <strong>Assigned Staff:</strong> {assignedEmp ? `${assignedEmp.employee_first_name} ${assignedEmp.employee_last_name}` : 'Unknown'}
                       </p>
                     )}
+
+                    {pet.booking_grooming_notes && (
+                      <div style={{ gridColumn: '1 / -1', marginTop: '0.25rem', background: '#f1f5f9', padding: '0.5rem', borderRadius: '0.5rem' }}>
+                        <strong style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase' }}>Grooming Notes:</strong>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#334155' }}>{pet.booking_grooming_notes}</p>
+                      </div>
+                    )}
+
+                    {/* UPDATED: Document / Image Attachments Links including AI Haircut */}
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      {pet.booking_vaccine_url && (
+                        <a 
+                          href={pet.booking_vaccine_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#1e3a8a', textDecoration: 'underline' }}
+                        >
+                          📄 View Vaccine Record
+                        </a>
+                      )}
+                      {pet.booking_illness_proof_url && (
+                        <a 
+                          href={pet.booking_illness_proof_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#dc2626', textDecoration: 'underline' }}
+                        >
+                          🖼️ View Illness Proof Image
+                        </a>
+                      )}
+                      {pet.booking_ai_haircut_url && (
+                        <a 
+                          href={pet.booking_ai_haircut_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#9333ea', textDecoration: 'underline' }}
+                        >
+                          ✂️ View AI Haircut Reference
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   {pet.booking_service_info && pet.booking_service_info.length > 0 && (
@@ -502,7 +551,6 @@ export default function BookingDetailsModal({
                   >
                     Mark as Completed
                   </button>
-                  {/* UPDATED: Restored the cancel button for approved bookings, routing directly to status update since refunds aren't needed yet */}
                   <button 
                     onClick={selectedBooking.booking_status === 'paid' ? handleCancelAndRefund : () => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
                     disabled={isRefunding}
