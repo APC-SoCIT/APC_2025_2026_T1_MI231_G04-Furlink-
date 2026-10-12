@@ -32,7 +32,10 @@ export default function EditMediaPage() {
   const [newPaymentQr, setNewPaymentQr] = useState<File | null>(null);
   const [newFacilities, setNewFacilities] = useState<File[]>([]);
 
-  // Input Refs for clearing values when the user clicks "Remove" (TS Fix: Added | null)
+  // State to track if they want to use the platform default waiver
+  const [useDefaultWaiver, setUseDefaultWaiver] = useState<boolean>(false);
+
+  // Input Refs for clearing values when the user clicks "Remove"
   const waiverRef = useRef<HTMLInputElement | null>(null);
   const permitRef = useRef<HTMLInputElement | null>(null);
   const qrRef = useRef<HTMLInputElement | null>(null);
@@ -59,6 +62,10 @@ export default function EditMediaPage() {
           setSpId(generalInfo.id);
           setGeneralData(generalInfo);
 
+          // Initialize the checkbox state based on their current database value
+          const isCurrentlyDefault = generalInfo.business_waiver_url === "PLATFORM_DEFAULT_WAIVER" || generalInfo.business_waiver_url?.includes('furlink-standard-waiver.pdf');
+          setUseDefaultWaiver(isCurrentlyDefault);
+
           const { data: imgData } = await supabase
             .from('sp_img_facilities')
             .select('*')
@@ -76,7 +83,7 @@ export default function EditMediaPage() {
     fetchMedia();
   }, [supabase]);
 
-  // Reusable File Validation Helper (Matches Onboarding)
+  // Reusable File Validation Helper
   const validateFile = (file: File, type: 'doc' | 'img', maxMb: number): string | null => {
     const maxSize = maxMb * 1024 * 1024;
     if (type === 'doc' && !DOC_TYPES.includes(file.type)) return "Invalid document type. Please upload a PDF or Word document.";
@@ -85,7 +92,6 @@ export default function EditMediaPage() {
     return null;
   };
 
-  // Handler for Single File Uploads (Waiver, Permit, QR)
   const handleSingleFileSelect = (
     e: React.ChangeEvent<HTMLInputElement>, 
     setFileState: React.Dispatch<React.SetStateAction<File | null>>, 
@@ -99,7 +105,7 @@ export default function EditMediaPage() {
     const error = validateFile(file, type, maxMb);
     if (error) {
       setErrorMessage(error);
-      e.target.value = ""; // Clear invalid file from input
+      e.target.value = ""; 
       setFileState(null);
       return;
     }
@@ -107,12 +113,10 @@ export default function EditMediaPage() {
     setFileState(file);
   };
 
-  // Handler for Multiple Facility Images with strict Max 3 Limit Check
   const handleFacilitySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     setErrorMessage(null);
     const files = Array.from(e.target.files || []);
     
-    // Calculate total images: Existing - Scheduled for Deletion + Already Staged + Newly Selected
     const currentCount = existingFacilities.length - facilitiesToDelete.length;
     
     if (currentCount + newFacilities.length + files.length > 3) {
@@ -123,7 +127,7 @@ export default function EditMediaPage() {
 
     const validFiles: File[] = [];
     for (const file of files) {
-      const error = validateFile(file, 'img', 1); // 1MB Max for facilities
+      const error = validateFile(file, 'img', 1);
       if (error) {
         setErrorMessage(error);
         if (facilitiesRef.current) facilitiesRef.current.value = "";
@@ -133,16 +137,14 @@ export default function EditMediaPage() {
     }
 
     setNewFacilities(prev => [...prev, ...validFiles]);
-    if (facilitiesRef.current) facilitiesRef.current.value = ""; // Clear input to allow accumulating more clicks
+    if (facilitiesRef.current) facilitiesRef.current.value = ""; 
   };
 
-  // Helper to remove a single file from state and reset its corresponding input (TS Fix: Added | null)
   const clearSingleFile = (setFileState: React.Dispatch<React.SetStateAction<File | null>>, ref: React.MutableRefObject<HTMLInputElement | null> | React.RefObject<HTMLInputElement | null>) => {
     setFileState(null);
     if (ref.current) ref.current.value = "";
   };
 
-  // Dynamic Helper to upload a file to a SPECIFIC Supabase Storage bucket
   const uploadFile = async (userId: string, bucketName: string, file: File) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
@@ -164,7 +166,11 @@ export default function EditMediaPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !spId) throw new Error("Authentication error. Please log in again.");
 
-      const waiverUrl = newWaiver ? await uploadFile(user.id, "sp-waiver", newWaiver) : generalData.business_waiver_url;
+      // If the toggle is active, save PLATFORM_DEFAULT_WAIVER. Otherwise proceed normally.
+      const waiverUrl = useDefaultWaiver 
+        ? "PLATFORM_DEFAULT_WAIVER" 
+        : (newWaiver ? await uploadFile(user.id, "sp-waiver", newWaiver) : generalData.business_waiver_url);
+        
       const permitUrl = newPermit ? await uploadFile(user.id, "sp-permit", newPermit) : generalData.business_permit_url;
       const paymentUrl = newPaymentQr ? await uploadFile(user.id, "sp-payment-qr", newPaymentQr) : generalData.business_payment_qr_url;
 
@@ -253,10 +259,44 @@ export default function EditMediaPage() {
                   {generalData.business_waiver_url === "PLATFORM_DEFAULT_WAIVER" || generalData.business_waiver_url?.includes('furlink-standard-waiver.pdf') ? (
                     <a href="/service_provider/waiver" target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>Platform Default</a>
                   ) : (
-                    <a href={generalData.business_waiver_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View Document</a>
+                    <a href={generalData.business_waiver_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0a217a', textDecoration: 'underline' }}>View Custom Document</a>
                   )}
                 </div>
-                <input type="file" ref={waiverRef} accept=".pdf,.doc,.docx" onChange={(e) => handleSingleFileSelect(e, setNewWaiver, 'doc', 1)} style={{ fontSize: '13px', width: '100%' }} />
+
+                {/* Checkbox toggle with zeroed margins for alignment */}
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                  <input 
+                    type="checkbox" 
+                    id="useDefaultWaiver"
+                    checked={useDefaultWaiver}
+                    onChange={(e) => {
+                      setUseDefaultWaiver(e.target.checked);
+                      if (e.target.checked) clearSingleFile(setNewWaiver, waiverRef); 
+                    }}
+                    style={{ cursor: 'pointer', margin: 0 }}
+                  />
+                  <label htmlFor="useDefaultWaiver" style={{ fontSize: '13px', color: '#0E2679', fontWeight: 600, cursor: 'pointer', margin: 0 }}>
+                    Use platform default waiver
+                  </label>
+                  <a href="/service_provider/waiver" target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#0a217a', textDecoration: 'underline', margin: 0 }}>
+                    (View Default)
+                  </a>
+                </div>
+
+                {/* FIX: Removed the wrapper that hid the input. It is now always visible. */}
+                <input 
+                  type="file" 
+                  ref={waiverRef} 
+                  accept=".pdf,.doc,.docx" 
+                  onChange={(e) => {
+                    handleSingleFileSelect(e, setNewWaiver, 'doc', 1);
+                    // Automatically uncheck the default waiver toggle if they select a custom file
+                    if (e.target.files && e.target.files.length > 0) {
+                      setUseDefaultWaiver(false);
+                    }
+                  }} 
+                  style={{ fontSize: '13px', width: '100%' }} 
+                />
                 <span style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'block' }}>Upload a new file to replace the current waiver (.pdf, .doc, .docx | Max 1MB).</span>
                 {newWaiver && (
                   <div style={{ marginTop: '8px', fontSize: '13px', color: '#0E2679', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
