@@ -87,15 +87,17 @@ export default function LoggedInLayout({ children }: { children: React.ReactNode
         // 5. Service Provider pages check
         if (pathname.startsWith("/service_provider")) {
           const isOnboarding = pathname.includes("onboarding");
+          const isWaiver = pathname.includes("waiver"); // Add waiver check
+
+          // Allow any logged-in user to view the standard waiver page
+          if (isWaiver) {
+            setIsLoading(false);
+            return;
+          }
 
           // Allow pet_owner to access the onboarding page to apply
           if (!isOnboarding && role !== "service_provider" && role !== "both_sp_po") {
             router.replace(ROUTES.PET_OWNER.DASHBOARD);
-            return;
-          }
-
-          if (isOnboarding && role === "pet_owner") {
-            setIsLoading(false);
             return;
           }
 

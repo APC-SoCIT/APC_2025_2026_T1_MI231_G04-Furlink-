@@ -339,6 +339,22 @@ body.logged-in-page {
   }
 }
 
+/* Ensure the date input has room on the right for the icon */
+.input-group input[type="date"] {
+  position: relative;
+  padding-right: 38px; /* Creates space so text doesn't type under the icon */
+}
+
+/* Force the native browser calendar picker icon to the far-right edge */
+.input-group input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  padding: 4px;
+}
+
 /* ==========================================================================
     PUBLIC LANDING PAGE GRID LAYOUT
    ========================================================================== */

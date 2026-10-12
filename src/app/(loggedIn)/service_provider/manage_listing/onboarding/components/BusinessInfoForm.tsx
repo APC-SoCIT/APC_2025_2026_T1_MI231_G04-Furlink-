@@ -316,12 +316,14 @@ export default function BusinessInfoForm({
             <strong>Purpose:</strong> This waiver protects both your establishment and the pet owners by outlining liability terms during grooming services. <br/>
             <strong>Instructions:</strong> Please upload your own signed waiver. If you don't have a waiver, the platform has a standard{' '}
             {/* Navigates internally to the dedicated waiver page */}
-            <Link 
+            <a 
               href="/service_provider/waiver" 
+              target="_blank" 
+              rel="noopener noreferrer"
               style={{ color: '#0E2679', textDecoration: 'underline', fontWeight: '600' }}
             >
               waiver
-            </Link>{' '}
+            </a>{' '}
             you can use.
           </p>
           
