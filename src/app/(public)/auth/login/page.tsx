@@ -10,6 +10,8 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "@/app/(public)/auth/auth.css";
 
 const OTP_VALIDITY_SECONDS = 120;
+const LOCKOUT_DURATION_MS = 60 * 1000; // 1 minute lockout
+const MAX_FAILED_ATTEMPTS = 3; // Lock out after 3 failed attempts
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ identifier: "", password: "" });
@@ -17,6 +19,9 @@ export default function LoginPage() {
   const [touched, setTouched] = useState<any>({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Lockout states
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState<number | null>(null);
 
   const [pendingVerification, setPendingVerification] = useState(false);
   const [resolvedEmail, setResolvedEmail] = useState("");
@@ -34,6 +39,53 @@ export default function LoginPage() {
 
   const supabase = createClientComponentClient();
   const router = useRouter();
+
+  // Check lockout on identifier change or tick down
+  useEffect(() => {
+    if (!formData.identifier) {
+      setLockoutSecondsLeft(null);
+      return;
+    }
+    const cleanId = formData.identifier.trim().toLowerCase();
+    const lockoutKey = `login_lockout_${cleanId}`;
+    const rawLockout = localStorage.getItem(lockoutKey);
+
+    if (rawLockout) {
+      const lockoutUntil = parseInt(rawLockout, 10);
+      const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (remaining > 0) {
+        setLockoutSecondsLeft(remaining);
+      } else {
+        localStorage.removeItem(lockoutKey);
+        localStorage.removeItem(`login_fails_${cleanId}`);
+        setLockoutSecondsLeft(null);
+      }
+    }
+  }, [formData.identifier]);
+
+  useEffect(() => {
+    if (lockoutSecondsLeft === null || lockoutSecondsLeft <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSecondsLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          const cleanId = formData.identifier.trim().toLowerCase();
+          localStorage.removeItem(`login_lockout_${cleanId}`);
+          localStorage.removeItem(`login_fails_${cleanId}`);
+          
+          // Automatically clear the lockout error message when timer expires
+          setErrors((currentErrors: any) => {
+            const updated = { ...currentErrors };
+            delete updated.form;
+            return updated;
+          });
+
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSecondsLeft, formData.identifier]);
 
   useEffect(() => {
     if (!pendingVerification || otpTimer <= 0) return;
@@ -81,82 +133,6 @@ export default function LoginPage() {
     setTouched((prev: any) => ({ ...prev, [name]: true }));
     const validation = validateLogin(formData);
     setErrors(validation.errors);
-  };
-
-  const checkLoginRateLimit = (email: string, isResend = false) => {
-    const key = `login_attempts_${email.trim().toLowerCase()}`;
-    const now = Date.now();
-    const windowMs = 10 * 60 * 1000;
-    const lockoutMs = 15 * 60 * 1000;
-
-    const rawData = localStorage.getItem(key);
-    let data: { attempts?: number[]; blockedUntil?: number } = rawData ? JSON.parse(rawData) : {};
-
-    if (data.blockedUntil && now < data.blockedUntil) {
-      const remainingMs = data.blockedUntil - now;
-      const remainingMins = Math.ceil(remainingMs / 60000);
-      setIsRateLimited(true);
-      return {
-        allowed: false,
-        message: `You have reached the maximum requests. Please try again in ${remainingMins} minute(s), or log back in later to request a new verification code.`
-      };
-    }
-
-    let attemptsArray = data?.attempts || [];
-    let validAttempts = attemptsArray.filter(timestamp => now - timestamp < windowMs);
-
-    if (validAttempts.length >= 5) {
-      const blockedUntil = now + lockoutMs;
-      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
-      setIsRateLimited(true);
-      return {
-        allowed: false,
-        message: "You have reached the maximum requests. Please try again in 15 minutes, or log back in later to request a new verification code."
-      };
-    }
-
-    if (isResend) {
-      validAttempts.push(now);
-    }
-
-    if (validAttempts.length > 5) {
-      const blockedUntil = now + lockoutMs;
-      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil }));
-      setIsRateLimited(true);
-    } else {
-      localStorage.setItem(key, JSON.stringify({ attempts: validAttempts, blockedUntil: undefined }));
-      setIsRateLimited(false);
-    }
-
-    return { allowed: true };
-  };
-
-  const triggerVerificationFlow = async (email: string) => {
-    localStorage.removeItem(`login_attempts_${email.trim().toLowerCase()}`);
-        
-    const rateCheck = checkLoginRateLimit(email, true);
-    if (!rateCheck.allowed) {
-      setErrors({ form: rateCheck.message });
-      setLoading(false);
-      return;
-    }
-
-    const { error: resendError } = await supabase.auth.resend({
-      type: "signup",
-      email: email,
-    });
-
-    if (resendError && !resendError.message.toLowerCase().includes("security purposes")) {
-      setErrors({ form: resendError.message });
-      setLoading(false);
-      return;
-    }
-
-    setResolvedEmail(email);
-    setOtpTimer(OTP_VALIDITY_SECONDS);
-    setOtpError(null);
-    setPendingVerification(true);
-    setLoading(false);
   };
 
   const proceedWithRouting = async (userId: string) => {
@@ -211,6 +187,21 @@ export default function LoginPage() {
     e.preventDefault();
     setTouched({ identifier: true, password: true });
 
+    const cleanId = formData.identifier.trim().toLowerCase();
+    const lockoutKey = `login_lockout_${cleanId}`;
+    const failKey = `login_fails_${cleanId}`;
+
+    // Check if currently locked out
+    const rawLockout = localStorage.getItem(lockoutKey);
+    if (rawLockout) {
+      const remaining = Math.ceil((parseInt(rawLockout, 10) - Date.now()) / 1000);
+      if (remaining > 0) {
+        setLockoutSecondsLeft(remaining);
+        setErrors({ form: `Too many failed login attempts. Account is locked due to failed attempts. Please try again after ${remaining} seconds.` });
+        return;
+      }
+    }
+
     const validation = validateLogin(formData);
     setErrors(validation.errors);
     if (!validation.isValid) {
@@ -226,8 +217,7 @@ export default function LoginPage() {
           .rpc("get_email_for_username", { lookup_username: currentResolvedIdentifier });
 
         if (emailError || !emailData) {
-          setErrors({ form: "Invalid email/username or password. Please try again." });
-          setLoading(false);
+          handleFailedAttempt(cleanId, failKey, lockoutKey);
           return;
         }
 
@@ -241,20 +231,24 @@ export default function LoginPage() {
 
       if (error) {
         if (error.message.toLowerCase().includes("email not confirmed")) {
+          localStorage.removeItem(failKey);
+          localStorage.removeItem(lockoutKey);
           await triggerVerificationFlow(currentResolvedIdentifier);
           return;
         }
 
-        setErrors({ form: "Invalid email/username or password. Please try again." });
-        setLoading(false);
+        handleFailedAttempt(cleanId, failKey, lockoutKey);
         return;
       }
 
       if (!data.user) {
-        setErrors({ form: "Invalid email/username or password. Please try again." });
-        setLoading(false);
+        handleFailedAttempt(cleanId, failKey, lockoutKey);
         return;
       }
+
+      // Success: clear failures and lockout
+      localStorage.removeItem(failKey);
+      localStorage.removeItem(lockoutKey);
 
       const user = data.user;
 
@@ -263,14 +257,11 @@ export default function LoginPage() {
         return;
       }
 
-      // Check account status from profiles table
       const { data: userProfile } = await supabase
         .from("profiles")
         .select("role, status")
         .eq("id", user.id)
         .maybeSingle();
-
-      // Suspended accounts may log in (read-only); restrictions are enforced in the app and database.
 
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(user.id);
@@ -284,6 +275,40 @@ export default function LoginPage() {
       setErrors({ form: "Something went wrong. Please try again." });
       setLoading(false);
     }
+  };
+
+  const handleFailedAttempt = (cleanId: string, failKey: string, lockoutKey: string) => {
+    let currentFails = parseInt(localStorage.getItem(failKey) || "0", 10) + 1;
+    localStorage.setItem(failKey, currentFails.toString());
+
+    if (currentFails >= MAX_FAILED_ATTEMPTS) {
+      const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
+      localStorage.setItem(lockoutKey, lockoutUntil.toString());
+      setLockoutSecondsLeft(60);
+      setErrors({ form: "Too many failed login attempts. Account is locked due to failed attempts. Please try again after 60 seconds." });
+    } else {
+      setErrors({ form: "Invalid email/username or password. Please try again." });
+    }
+    setLoading(false);
+  };
+
+  const triggerVerificationFlow = async (email: string) => {
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: email,
+    });
+
+    if (resendError && !resendError.message.toLowerCase().includes("security purposes")) {
+      setErrors({ form: resendError.message });
+      setLoading(false);
+      return;
+    }
+
+    setResolvedEmail(email);
+    setOtpTimer(OTP_VALIDITY_SECONDS);
+    setOtpError(null);
+    setPendingVerification(true);
+    setLoading(false);
   };
 
   const handleConfirmReactivate = async () => {
@@ -328,7 +353,7 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setOtpError("Invalid token. Please check the code or try again after 15 minutes if limit was reached.");
+        setOtpError("Invalid token. Please check the code or try again later.");
         setVerificationLoading(false);
         return;
       }
@@ -347,8 +372,6 @@ export default function LoginPage() {
         .select("role, status")
         .eq("id", data.user.id)
         .maybeSingle();
-        
-      // Suspended accounts may log in (read-only); restrictions are enforced in the app and database.
 
       if (userProfile?.status === "deactivated") {
         setReactivateUserId(data.user.id);
@@ -368,14 +391,6 @@ export default function LoginPage() {
 
   const handleResendOtp = async () => {
     if (otpTimer > 0 || isRateLimited) return;
-
-    const rateCheck = checkLoginRateLimit(resolvedEmail, true);
-    if (!rateCheck.allowed) {
-      setOtpError(rateCheck.message ?? null);
-      setIsRateLimited(true);
-      return;
-    }
-
     setOtpError(null);
     setResendLoading(true);
 
@@ -459,6 +474,8 @@ export default function LoginPage() {
     );
   }
 
+  const isLocked = lockoutSecondsLeft !== null && lockoutSecondsLeft > 0;
+
   return (
     <div className="auth-container">
       <form onSubmit={handleSubmit} className="auth-form" noValidate>
@@ -468,11 +485,17 @@ export default function LoginPage() {
           <input 
               type="text"
               className={touched.identifier && errors.identifier ? "input-error" : ""}
-              placeholder="Email address or username" 
+              placeholder={isLocked ? "Account locked - please wait..." : "Email address or username"} 
               value={formData.identifier}
               onChange={handleIdentifierChange}
               onBlur={handleBlur}
               name="identifier"
+              disabled={isLocked}
+              style={{
+                backgroundColor: isLocked ? "#f1f5f9" : "inherit",
+                cursor: isLocked ? "not-allowed" : "text",
+                opacity: isLocked ? 0.7 : 1
+              }}
           />
           {touched.identifier && errors.identifier && <span className="error-text">{errors.identifier}</span>}
         </div>
@@ -482,17 +505,24 @@ export default function LoginPage() {
             <input 
                 type={showPassword ? "text" : "password"} 
                 className={touched.password && errors.password ? "input-error" : ""}
-                placeholder="Password" 
+                placeholder={isLocked ? "Account locked - please wait..." : "Password"} 
                 value={formData.password}
                 onChange={handlePasswordChange}
                 onBlur={handleBlur}
                 name="password"
                 maxLength={16}
+                disabled={isLocked}
+                style={{
+                  backgroundColor: isLocked ? "#f1f5f9" : "inherit",
+                  cursor: isLocked ? "not-allowed" : "text",
+                  opacity: isLocked ? 0.7 : 1
+                }}
             />
             <button 
               type="button" 
               className="toggle-password" 
               onClick={() => setShowPassword(!showPassword)}
+              disabled={isLocked}
             >
               {showPassword ? <FaEyeSlash /> : <FaEye />}
             </button>
@@ -500,7 +530,13 @@ export default function LoginPage() {
           {touched.password && errors.password && <span className="error-text">{errors.password}</span>}
         </div>
 
-        {errors.form && <p className="auth-form-error">{errors.form}</p>}
+        {isLocked ? (
+          <p className="auth-form-error" style={{ color: "#ef4444", fontWeight: "bold" }}>
+            Too many failed login attempts. Account is locked due to failed attempts. Please try again after {lockoutSecondsLeft}s.
+          </p>
+        ) : (
+          errors.form && <p className="auth-form-error">{errors.form}</p>
+        )}
 
         <div className="auth-links-row">
           <Link href="/auth/forgot_password" className="forgot-password-link">
@@ -508,7 +544,7 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading || isLocked}>
             {loading ? "Logging in..." : "Log In"}
         </button>
 
