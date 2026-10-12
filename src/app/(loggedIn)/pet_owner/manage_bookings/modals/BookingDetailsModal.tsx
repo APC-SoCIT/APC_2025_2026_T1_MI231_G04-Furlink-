@@ -8,6 +8,10 @@ import {
   FaExclamationCircle,
   FaStar,
   FaStore,
+  FaEnvelope,
+  FaPhoneAlt,
+  FaMapMarkerAlt,
+  FaFileSignature,
   FaSync,
 } from 'react-icons/fa';
 import { BookingRecord, BookingTab } from '../types/booking';
@@ -47,6 +51,15 @@ export default function BookingDetailsModal(
   const { isSuspended } = useAccountStatus();
   const lockedBySuspension = isSuspended && LOCKED_WHEN_SUSPENDED.includes(activeTab);
 
+  // Provider contact details + waiver (same default-waiver rule as the booking page)
+  const provider = selectedBooking.sp_general_info;
+  const waiverUrl = provider?.business_waiver_url;
+  const hasOwnWaiver =
+    !!waiverUrl &&
+    waiverUrl !== 'PLATFORM_DEFAULT_WAIVER' &&
+    !waiverUrl.includes('furlink-standard-waiver.pdf');
+  const waiverHref = hasOwnWaiver ? waiverUrl! : '/service_provider/waiver';
+
   return (
     <div className="modal-backdrop">
       <div className="summary-modal-card">
@@ -75,10 +88,36 @@ export default function BookingDetailsModal(
           {/* Service provider the booking was made with (always shown) */}
           <div className="details-provider-row">
             <FaStore className="schedule-banner-icon" />
-            <span>
-              Service Provider:{' '}
-              <strong>{selectedBooking.sp_general_info?.business_name || 'Unknown provider'}</strong>
-            </span>
+            <div className="details-provider-info">
+              <span>
+                Service Provider:{' '}
+                <strong>{provider?.business_name || 'Unknown provider'}</strong>
+              </span>
+              {provider?.business_email && (
+                <span className="details-provider-line">
+                  <FaEnvelope /> Email: {provider.business_email}
+                </span>
+              )}
+              {provider?.business_contact && (
+                <span className="details-provider-line">
+                  <FaPhoneAlt /> Contact: {provider.business_contact}
+                </span>
+              )}
+              {provider?.business_google_map_url && (
+                <span className="details-provider-line">
+                  <FaMapMarkerAlt /> Location:{' '}
+                  <a href={provider.business_google_map_url} target="_blank" rel="noopener noreferrer">
+                    View on Google Maps
+                  </a>
+                </span>
+              )}
+              <span className="details-provider-line">
+                <FaFileSignature /> Waiver:{' '}
+                <a href={waiverHref} target="_blank" rel="noopener noreferrer">
+                  {hasOwnWaiver ? `${provider?.business_name || 'Provider'} waiver` : 'furlink standard waiver'}
+                </a>
+              </span>
+            </div>
           </div>
 
           {selectedBooking.booking_rejection_reason && (
@@ -287,7 +326,6 @@ export default function BookingDetailsModal(
               <span className="amount-bold">₱{Number(selectedBooking.booking_total_amount || 0).toFixed(2)}</span>
             </div>
 
-            {/* Refund tab: show what is being / was returned (booking_info.refund_amount) */}
             {activeTab === 'refund' && (
               <div className="financial-row refund-row">
                 <span>Refund Amount:</span>
@@ -314,14 +352,12 @@ export default function BookingDetailsModal(
             </p>
           )}
 
-          {/* Reschedule: only while awaiting approval, and not while suspended */}
           {RESCHEDULABLE_TABS.includes(activeTab) && !lockedBySuspension && (
             <button className="btn-primary-action" onClick={onReschedule} style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
               <FaSync /> Reschedule
             </button>
           )}
 
-          {/* Cancel: To Pay, Awaiting Approval or Approved; awaiting/approved are locked while suspended */}
           {CANCELLABLE_TABS.includes(activeTab) && !lockedBySuspension && (
             <button className="btn-cancel-booking" onClick={onCancelBooking}>
               Cancel Booking

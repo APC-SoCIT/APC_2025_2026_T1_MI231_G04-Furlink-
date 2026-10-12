@@ -1,4 +1,5 @@
 import { PetFormData, PetFormErrors, ServiceOption, ServiceWeightOption } from './types';
+import { getDobError } from '../../manage_pet/petFormValidation';
 
 /**
  * Highest weight (kg) the provider accepts for this pet's type.
@@ -47,8 +48,9 @@ export const validatePet = (
 
   if (!pet.dob) {
     errors.dob = 'Date of birth is required.';
-  } else if (new Date(pet.dob).getTime() > Date.now()) {
-    errors.dob = 'Date of birth cannot be in the future.';
+  } else {
+    const dobError = getDobError(pet.dob);
+    if (dobError) errors.dob = dobError;
   }
 
   // Weight must exist, stay within the provider's max, and map to a size the
