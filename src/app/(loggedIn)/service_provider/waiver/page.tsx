@@ -10,7 +10,7 @@ export default function PlatformWaiverPage() {
     <>
       <div className="policy-page-wrapper">
         <div className="policy-container">
-          <h1>Furlink Standard Service Provider Liability Waiver</h1>
+          <h1>furlink Standard Service Provider Liability Waiver</h1>
           <p className="policy-date">Last Updated: October 2026</p>
 
           <section className="policy-section">
