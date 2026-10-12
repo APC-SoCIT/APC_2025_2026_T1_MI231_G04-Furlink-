@@ -215,7 +215,11 @@ export default function ManageBookingsPage() {
           booking_total_amount,
           refund_amount,
           sp_general_info (
-            business_name
+            business_name,
+            business_email,
+            business_contact,
+            business_google_map_url,
+            business_waiver_url
           ),
           booking_pet_info (
             id,

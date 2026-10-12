@@ -438,6 +438,26 @@
   font-size: 14px;
 }
 
+.details-provider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.details-provider-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.details-provider-line a {
+  color: var(--btn-dark-blue, #0a217a);
+  text-decoration: underline;
+}
+
 .refund-row {
   color: #166534;
 }

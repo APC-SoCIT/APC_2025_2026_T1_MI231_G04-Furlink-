@@ -13,6 +13,7 @@ import {
   FaFileAlt,
 } from 'react-icons/fa';
 import { PetFormData, PetFormErrors, RegisteredPet, ServiceOption, BEHAVIOR_OPTIONS } from '../types';
+import { getMinDobLocalISO, getTodayLocalISO } from '../../../manage_pet/petFormValidation';
 import { AIHaircutPreview } from './AIHaircutPreview';
 
 // Inline validation message shown under a field
@@ -251,7 +252,8 @@ export const PetFormCard: React.FC<PetFormCardProps> = ({
             <input
               type="date"
               className={`form-control${errCls(errors.dob)}`}
-              max={new Date().toISOString().split('T')[0]}
+              min={getMinDobLocalISO()}
+              max={getTodayLocalISO()}
               value={pet.dob}
               onChange={(e) => onUpdateField(pet.id, 'dob', e.target.value)}
             />

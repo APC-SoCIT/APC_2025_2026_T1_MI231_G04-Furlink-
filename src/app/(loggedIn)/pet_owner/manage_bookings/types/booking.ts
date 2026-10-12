@@ -46,6 +46,13 @@ export interface BookingRecord {
   // Amount returned to the pet owner (set once a cancelled paid booking is refunded); null until computed
   refund_amount?: number | null;
   // Joined from sp_general_info via booking_info.sp_id
-  sp_general_info?: { business_name: string } | null;
+  sp_general_info?: {
+    business_name: string;
+    business_email?: string | null;
+    business_contact?: string | null;
+    business_google_map_url?: string | null;
+    // File URL of the provider's own waiver, or null / 'PLATFORM_DEFAULT_WAIVER' when they use Furlink's
+    business_waiver_url?: string | null;
+  } | null;
   booking_pet_info?: BookingPetInfo[];
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FaPaw, FaPlus, FaTimes, FaFileUpload, FaCheckCircle, FaExclamationCircle } from "react-icons/fa";
 import Footer from "@/components/Footer";
-import { getTodayLocalISO, isFutureDate, validateMedicalFile, MEDICAL_FILE_ACCEPT } from "../petFormValidation";
+import { getTodayLocalISO, getMinDobLocalISO, getDobError, validateMedicalFile, MEDICAL_FILE_ACCEPT } from "../petFormValidation";
 import "./add_pet.css"; // Ensure this path correctly points to your CSS file
 
 type PetBehavior = "friendly" | "aggressive" | "anxious" | "energetic" | "trained";
@@ -95,9 +95,10 @@ export default function AddPetPage() {
   }, [petType]);
 
   const handleDobChange = (value: string) => {
-    if (isFutureDate(value)) {
+    const dobError = getDobError(value);
+    if (dobError) {
       setPetDateOfBirth("");
-      setDobWarning("Date of birth cannot be in the future.");
+      setDobWarning(dobError);
       return;
     }
     setDobWarning("");
@@ -170,9 +171,10 @@ export default function AddPetPage() {
   const handleAddPet = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isFutureDate(petDateOfBirth)) {
-      setDobWarning("Date of birth cannot be in the future.");
-      setErrorMessage("Date of birth cannot be in the future.");
+    const dobError = getDobError(petDateOfBirth);
+    if (dobError) {
+      setDobWarning(dobError);
+      setErrorMessage(dobError);
       setShowErrorModal(true);
       return;
     }
@@ -348,6 +350,7 @@ export default function AddPetPage() {
               <input
                 type="date"
                 required
+                min={getMinDobLocalISO()}
                 max={getTodayLocalISO()}
                 value={petDateOfBirth}
                 onChange={(e) => handleDobChange(e.target.value)}
