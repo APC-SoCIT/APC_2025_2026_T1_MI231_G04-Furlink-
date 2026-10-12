@@ -712,7 +712,7 @@ export default function AdminSignupPage() {
           </div>
           <div className="input-group">
             <label className="field-guide-label">Date of Birth</label>
-            <div className="date-input-container">
+            <div style={{ position: "relative", width: "100%" }}>
               <input
                 type="date"
                 name="dob"
@@ -724,9 +724,8 @@ export default function AdminSignupPage() {
                 onBlur={handleBlur}
                 className={errors.dob ? "input-error" : ""}
               />
-              <span className="date-display">{formData.dob ? formatDobDisplay(formData.dob) : "mm/dd/yyyy"}</span>
             </div>
-            {touched.dob && errors.dob && errors.dob !== "Date of Birth is required." && (
+            {touched.dob && errors.dob && (
               <span className="error-text">{errors.dob}</span>
             )}
           </div>

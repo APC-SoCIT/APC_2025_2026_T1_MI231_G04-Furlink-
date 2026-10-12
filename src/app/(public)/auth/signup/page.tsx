@@ -54,9 +54,17 @@ export default function SignupPage() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  // Max DOB allowed (must be at least 18 years old today)
   const getMaxDob = () => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 13);
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split("T")[0];
+  };
+
+  // Min DOB allowed (cannot be older than 90 years old today)
+  const getMinDob = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 90);
     return d.toISOString().split("T")[0];
   };
 
@@ -462,20 +470,27 @@ export default function SignupPage() {
           </div>
           <div className="input-group">
             <label className="field-guide-label">Date of Birth</label>
-            <div className="date-input-container">
+            <div style={{ position: "relative", width: "100%" }}>
               <input
                 type="date"
                 name="dob"
                 lang="en-US"
+                min={getMinDob()}
                 max={getMaxDob()}
                 value={formData.dob}
                 onChange={handleChange}
                 onBlur={handleBlur}
                 className={errors.dob ? "input-error" : ""}
+                style={{
+                  width: "100%",
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  MozAppearance: "none",
+                  paddingRight: "12px",
+                }}
               />
-              <span className="date-display">{formData.dob ? formatDobDisplay(formData.dob) : "mm/dd/yyyy"}</span>
             </div>
-            {touched.dob && errors.dob && errors.dob !== "Date of Birth is required." && (
+            {touched.dob && errors.dob && (
               <span className="error-text">{errors.dob}</span>
             )}
           </div>
