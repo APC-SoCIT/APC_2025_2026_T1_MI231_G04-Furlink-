@@ -1,9 +1,8 @@
 import { buildHaircutPrompt } from './haircutPrompt';
 
 const PREVIEW_ENDPOINT = '/api/generate-haircut-preview';
-const AI_PREVIEW_DIMENSION = 768;
 
-/** Errors the user caused (e.g. a bad photo). Not logged as console errors. */
+/** Errors the user caused or can fix (e.g. a bad photo). Not logged as console errors. */
 export class ExpectedPreviewError extends Error {
   expected = true;
 }
@@ -30,8 +29,6 @@ export async function requestHaircutPreview({
   const formData = new FormData();
   formData.append('image', sourcePhoto, 'source.jpg');
   formData.append('prompt', buildHaircutPrompt(petType, style));
-  formData.append('model', 'kontext');
-  formData.append('size', `${AI_PREVIEW_DIMENSION}x${AI_PREVIEW_DIMENSION}`);
   formData.append('seed', String(Math.floor(Math.random() * 1_000_000)));
   formData.append('petType', petType.toLowerCase()); // lets the server verify the photo
 
@@ -39,27 +36,28 @@ export async function requestHaircutPreview({
 
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');
+    const serverMessage = extractServerMessage(bodyText);
 
     if (response.status === 422) {
+      throw new ExpectedPreviewError(serverMessage || 'This photo cannot be used for a preview.');
+    }
+    if (response.status === 413) {
+      throw new ExpectedPreviewError('This photo is too large. Please upload one under 4 MB.');
+    }
+
+    if (response.status === 429) {
       throw new ExpectedPreviewError(
-        extractServerMessage(bodyText) || 'This photo cannot be used for a preview.',
+        serverMessage || 'The AI service is busy right now. Please try again in a minute.',
       );
     }
 
     console.error('AI preview error:', response.status, response.statusText, bodyText);
 
     if (response.status === 504) {
-      throw new Error(
-        'Too many requests. Please wait about 15 seconds before generating another preview.',
-      );
-    }
-    if (response.status === 402) {
-      throw new Error('Unable to process your request at this moment. Please try again later.');
+      throw new Error('The preview took too long to generate. Please try again.');
     }
 
-    throw new Error(
-      extractServerMessage(bodyText) || `AI service error (${response.status})`,
-    );
+    throw new Error(serverMessage || `AI service error (${response.status})`);
   }
 
   const blob = await response.blob();
